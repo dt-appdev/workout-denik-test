@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<!-- Pravidla zabezpečení (F0-08): kód a data jen z vlastních souborů, obrázky navíc z GitHubu
+     (náhledy free-exercise-db) a blob: (fotky u cviků uložené v telefonu, F2-05).
+     Nový vnější zdroj je potřeba přidat sem. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self';
+  style-src 'self' 'unsafe-inline'; img-src 'self' blob: https://raw.githubusercontent.com;
+  font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self';
+  object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>Workout deník</title>
+<meta name="description" content="Osobní deník tréninků ve fitku. Funguje offline, data zůstávají v telefonu.">
+<meta name="theme-color" content="#0e1013">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="rest" id="rest" hidden></div>
+<div class="tabs"><nav id="tabs"></nav></div>
+<div id="sheetRoot"></div>
+<div id="toastRoot"></div>
+
+<script src="js/verze.js"></script>
+<script src="js/zaznam.js"></script>
+<script src="js/nativni.js"></script>
+<script src="js/atlas.js"></script>
+<script src="js/cviky.js"></script>
+<script src="js/wdlog.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pwa.js"></script>
+</body>
+</html>
