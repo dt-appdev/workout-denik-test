@@ -1,0 +1,20360 @@
+(function () {
+  "use strict";
+  /* ---------- konstanty (partie, vybavení, druhy sérií, měsíce, ikony) ---------- */
+  const MUSCLES = {
+    chest: "Hrudník",
+    back: "Záda",
+    shoulders: "Ramena",
+    biceps: "Biceps",
+    triceps: "Triceps",
+    forearms: "Předloktí",
+    quads: "Kvadricepsy",
+    hams: "Hamstringy",
+    glutes: "Hýždě",
+    adductors: "Přitahovače",
+    calves: "Lýtka",
+    abs: "Břicho",
+    lowback: "Spodní záda",
+    neck: "Krk",
+    other: "Ostatní",
+  };
+  const EQUIP = {
+    barbell: "Velká činka",
+    dumbbell: "Jednoručky",
+    machine: "Stroj",
+    cable: "Kladka",
+    smith: "Multipress",
+    bodyweight: "Vlastní váha",
+    band: "Guma",
+    kettlebell: "Kettlebell",
+    other: "Jiné",
+  };
+  const GYMDEP_EQUIP = { machine: 1, cable: 1, smith: 1 };
+  const GYM_COLORS = 12; // počet barev fitek (--s1 … --s12 v css/app.css, F3-01)
+  const TYPES = ["n", "w", "d", "f"]; // cycle order
+  const TYPE_NAME = { n: "Pracovní", w: "Zahřívací", d: "Drop set", f: "Do selhání" };
+  // procenta u tlačítka zahřívací série v krokovači (F1-08): výchozí, rozsah a krok posuvníku v Nastavení
+  const WARM_PCT = { def: 60, min: 10, max: 90, step: 10 };
+  // délka pauzy v sekundách (F1-09): rozsah a krok posuvníků v Nastavení a ve formuláři cviku
+  const REST_RANGE = { min: 30, max: 300, step: 30 };
+  // odpočet před startem stopek u série na čas (F1-24): rozsah v s a výchozí hodnota
+  const STW_PRE = { min: 0, max: 15, def: 5 };
+  // návrh progrese (F4-01): meze rozsahu opakování a výchozí rozsah
+  const PROG_REPS = { min: 1, max: 100, defMin: 8, defMax: 12 };
+  // upozornění na stagnaci (F4-06): po kolika trénincích bez zlepšení (volba v Nastavení), výchozí
+  const STAG_N = [3, 4, 5];
+  const STAG_DEF = 4;
+  const MONTHS = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+  const MONTHS_FULL = [
+    "leden",
+    "únor",
+    "březen",
+    "duben",
+    "květen",
+    "červen",
+    "červenec",
+    "srpen",
+    "září",
+    "říjen",
+    "listopad",
+    "prosinec",
+  ];
+  const DAY = 86400000;
+  /* ---------- ikony (F3-20) ----------
+     Jen vlastní SVG, nikdy emoji ani znaky písma jako ikona. Styl: viewBox 24 × 24, obrys bez výplně v barvě
+     textu, zaoblené konce. Kresby, které se používají na víc místech (i na obrázku ke sdílení), jsou tu jen
+     jednou (DUMBBELL = logo, BOOK, MEDAL_RIB). Čára na obrazovce asi 1,6 px. Významy: Historie = kalendář,
+     Tělo = postava obrysem, Nastavení = ozubené kolo, zeměkoule = online databáze. Ikona v textu nebo
+     tlačítku přes icon(název, třída) (třída .ic, 1,2em podle písma), jinde (lišta, .iconbtn, icoBtn)
+     IC.název. Na obrázku ke sdílení SHR_ICONS a shrMedal. Medaile rekordu vždy přes medal(typy): zlatá, když
+     je mezi typy velký rekord (REC_BIG, recGold), jinak stříbrná; barvy --md-* v obou motivech. */
+  const DUMBBELL = "M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"; // činka = logo appky
+  const BOOK =
+    "M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5c-3.5-.5-6.5 0-8.5 1.5zM12 6.5v13";
+  // stuha medaile do V, kotouč = kruh 12,15 r6
+  const MEDAL_RIB = "M8.8 10 5.5 3h4l2.5 5M15.2 10l3.3-7h-4l-1.4 3";
+  // ozubené kolo: 8 zubů spočítaných pravidelně
+  const GEAR = (() => {
+    const pt = (r, deg) => {
+      const a = ((deg - 90) * Math.PI) / 180;
+      return (12 + r * Math.cos(a)).toFixed(2) + " " + (12 + r * Math.sin(a)).toFixed(2);
+    };
+    let d = "";
+    for (let i = 0; i < 8; i++) {
+      const a = i * 45;
+      d +=
+        (i ? "L" : "M") + pt(7, a - 15) + "L" + pt(9.6, a - 9) + "L" + pt(9.6, a + 9) + "L" + pt(7, a + 15);
+    }
+    return d + "Z";
+  })();
+  const IC = {
+    train: `<svg viewBox="0 0 24 24"><path d="${DUMBBELL}"/></svg>`,
+    // Historie: kalendář (Historie se otevírá kalendářem; tři čáry by vypadaly jako nabídka)
+    hist: `<svg viewBox="0 0 24 24">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/>
+      <path d="M3.5 10h17M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/>
+    </svg>`,
+    ex: `<svg viewBox="0 0 24 24"><path d="${BOOK}"/></svg>`,
+    stats: '<svg viewBox="0 0 24 24"><path d="M6 20v-8M12 20V5M18 20v-5M3 20h18"/></svg>',
+    // Tělo: postava obrysem s rukama dolů (rozpažený panáček = symbol přístupnosti)
+    body: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="4.4" r="2.3"/>
+      <path
+          d="M12 8H15c1 0 1.5.3 1.8 1l2.5 4.4a1.2 1.2 0 01-2.1 1.1l-1.6-2.9v8.6a1 1 0 01-1 1h-.7
+            a.8.8 0 01-.8-.8v-4a1.1 1.1 0 00-2.2 0v4a.8.8 0 01-.8.8h-.7a1 1 0 01-1-1v-8.6l-1.6 2.9
+            a1.2 1.2 0 01-2.1-1.1L7.2 9c.3-.7.8-1 1.8-1z"/>
+    </svg>`,
+    set: `<svg viewBox="0 0 24 24"><path d="${GEAR}"/><circle cx="12" cy="12" r="3"/></svg>`,
+    check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    more: `<svg viewBox="0 0 24 24">
+      <circle cx="5" cy="12" r="1.2"/>
+      <circle cx="12" cy="12" r="1.2"/>
+      <circle cx="19" cy="12" r="1.2"/>
+    </svg>`,
+    close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+    // úchyt pro přetažení a změna pořadí (F2-07)
+    grip: `<svg viewBox="0 0 24 24">
+      <circle cx="9" cy="6" r="1.1"/>
+      <circle cx="15" cy="6" r="1.1"/>
+      <circle cx="9" cy="12" r="1.1"/>
+      <circle cx="15" cy="12" r="1.1"/>
+      <circle cx="9" cy="18" r="1.1"/>
+      <circle cx="15" cy="18" r="1.1"/>
+    </svg>`,
+    order: `<svg viewBox="0 0 24 24">
+      <path d="M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5"/>
+    </svg>`,
+    // hledání v online databázi cviků (zeměkoule, lupa patří hledání v seznamu)
+    globe: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.5"/>
+      <path d="M3.5 12h17M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>
+    </svg>`,
+    next: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+    // skupiny Nastavení (F3-09)
+    gym: `<svg viewBox="0 0 24 24">
+      <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0113 0c0 5.4-6.5 11-6.5 11z"/>
+      <circle cx="12" cy="10" r="2.3"/>
+    </svg>`,
+    // obrys medaile (Nastavení); barevná medaile rekordu přes medal()
+    medal: `<svg viewBox="0 0 24 24"><path d="${MEDAL_RIB}"/><circle cx="12" cy="15" r="6"/></svg>`,
+    theme: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"/>
+      <path class="fill" d="M12 4a8 8 0 010 16z"/>
+    </svg>`,
+    backup: '<svg viewBox="0 0 24 24"><path d="M12 3v11M7.5 9.5L12 14l4.5-4.5M4 17v3h16v-3"/></svg>',
+    // cvik vázaný na fitko (F3-22): velký zámek a malý špendlík (špendlík = fitko, jako ikona fitka)
+    gymDep: `<svg viewBox="0 0 24 24">
+      <path d="M6 14.5s-3.5-3-3.5-6.7a3.5 3.5 0 017 0c0 .6-.1 1.2-.3 1.8"/>
+      <circle cx="6" cy="7.8" r="1.1"/>
+      <rect x="9.5" y="12.5" width="12" height="9" rx="2"/>
+      <path d="M12.3 12.5V10a3.2 3.2 0 016.4 0v2.5"/>
+    </svg>`,
+    // poznámka ke cviku (F3-52): list s přehnutým rohem a dvěma řádky textu
+    note: `<svg viewBox="0 0 24 24">
+      <path d="M14 3.5H6.5a2 2 0 00-2 2v13a2 2 0 002 2h11a2 2 0 002-2V9z"/>
+      <path d="M14 3.5V9h5.5M8 13h8M8 16.5h5"/>
+    </svg>`,
+    // návrh progrese (F4-01): šipka stoupající nahoru
+    prog: '<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+    // stagnace (F4-06): vodorovná čára s tečkami = plochý průběh, bez posunu
+    stag: `<svg viewBox="0 0 24 24">
+      <path d="M2 12h20"/>
+      <circle cx="4" cy="12" r="1.8" fill="currentColor"/>
+      <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+      <circle cx="20" cy="12" r="1.8" fill="currentColor"/>
+    </svg>`,
+    info: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M12 11v6M12 7.5v.5"/>
+    </svg>`,
+    // nápověda sekce „Jak to funguje?“ (F3-21); info = O aplikaci
+    help: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.5M12 16.6v.4"/>
+    </svg>`,
+    // týdny v řadě (kalendář)
+    flame: `<svg viewBox="0 0 24 24">
+      <path
+          d="M12 21.2c-3.7 0-6.4-2.6-6.4-6.3 0-3.3 2.2-5.3 3.8-7.5.5 1.9 1.5 3 2.7 3.5.2-3.1 1.3-5.6 3.6-7.6
+            .4 3.1 3.1 5.6 3.1 10 0 4.9-2.8 7.9-6.8 7.9z"/>
+      <path
+          d="M12 21.2c-1.6 0-2.8-1.2-2.8-2.9 0-1.8 1.4-2.8 2.8-4.6 1.4 1.8 2.8 2.8 2.8 4.6
+            0 1.7-1.2 2.9-2.8 2.9z"
+          fill="currentColor" stroke="none" opacity=".35"/>
+    </svg>`,
+    // Napsat (krokovač)
+    kbd: `<svg viewBox="0 0 24 24">
+      <rect x="2.8" y="6.2" width="18.4" height="11.6" rx="2"/>
+      <path d="M6.8 10.2h.01M10.3 10.2h.01M13.7 10.2h.01M17.2 10.2h.01M8 14h8"/>
+    </svg>`,
+    play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z" fill="currentColor"/></svg>',
+    // zastavit stopky (F1-24)
+    stop:
+      '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>',
+    // pauza mezi sériemi (F2-14): ciferník s knoflíkem stopek; stopky u série na čas mají play
+    rest: `<svg viewBox="0 0 24 24">
+      <circle cx="12" cy="13.5" r="7.5"/>
+      <path d="M12 9.5v4l2.6 2.6M10 3h4M12 3v3"/>
+    </svg>`,
+    // zpět na aktuální měsíc (kalendář)
+    today: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 4.5V9H9"/></svg>',
+    // fotka nastavená jako první
+    star: `<svg viewBox="0 0 24 24">
+      <path d="M12 3.8l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z" fill="currentColor"/>
+    </svg>`,
+    // rozbalit / posunout dolů (nahoru = třída .up)
+    down: '<svg viewBox="0 0 24 24"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg>',
+    // odkaz mimo appku
+    ext: `<svg viewBox="0 0 24 24">
+      <path
+          d="M13.5 4.5h6v6M19.5 4.5L11 13M17.5 14v4.5a1.5 1.5 0 01-1.5 1.5H6a1.5 1.5 0 01-1.5-1.5V8
+            A1.5 1.5 0 016 6.5h4.5"/>
+    </svg>`,
+    // přidat fotku: fotoaparát s pluskem (F3-51)
+    photoAdd: `<svg viewBox="0 0 24 24">
+      <path d="M20 12.5V17a2 2 0 01-2 2H6a2 2 0 01-2-2V8.5a2 2 0 012-2h2.2l1.5-2H13"/>
+      <circle cx="12" cy="12.8" r="3.3"/>
+      <path d="M19 2.5v6M16 5.5h6"/>
+    </svg>`,
+    // fotoaparát bez pluska: schválený 17. 10. 2026 u F3-51, zatím nepoužitý (do zásoby pro význam „fotka“)
+    camera: `<svg viewBox="0 0 24 24">
+      <path d="M4 8.5a2 2 0 012-2h2.2l1.5-2h4.6l1.5 2H18a2 2 0 012 2V17a2 2 0 01-2 2H6a2 2 0 01-2-2z"/>
+      <circle cx="12" cy="12.8" r="3.3"/>
+    </svg>`,
+  };
+  // ikona s třídou .ic: v textu a tlačítkách, velikost podle písma (F3-20)
+  const icon = (name, cls) =>
+    IC[name].replace("<svg", `<svg class="ic${cls ? " " + cls : ""}" aria-hidden="true"`);
+  /* ikona „vázáno na fitko“ (F3-22) za názvem cviku nebo za textem „Vázáno na fitko“, v barvě textu
+     vedle ní. tip = klepnutí ukáže vysvětlení (akce gdTip, karta cviku); jinde klepnutí patří řádku kolem. */
+  const GD_TIP = "Vázáno na fitko: progres se počítá zvlášť pro každé fitko.";
+  const gdIcon = (tip) =>
+    `<span class="gd-ic"${tip ? ' data-act="gdTip"' : ""} role="img" aria-label="Vázáno na fitko">` +
+    `${icon("gymDep")}</span>`;
+  // název cviku s ikonami za ním: poslední slovo drží s ikonami na řádku, aby ikona nezůstala sama
+  function nameWithIcons(name, after) {
+    if (!after) return esc(name);
+    const k = name.lastIndexOf(" ") + 1;
+    return `${esc(name.slice(0, k))}<span class="nowrap">${esc(name.slice(k))}${after}</span>`;
+  }
+
+  /* ---------- svalová mapa ----------
+     Anatomické SVG: Ryan Graves, CC BY 4.0 (balíček flutter-body-atlas).
+     Každá svalová vrstva bere barvu z proměnné --f-<klíč>, takže se obarvuje
+     nastavením stylu na obalu, ne přestavbou SVG. */
+  /* ATLAS (anatomické SVG) je v js/atlas.js */
+  const MUSCLE_MAP = (function () {
+    const NAMES = {
+      neck: "Krk",
+      chest: "Hrudník",
+      delts: "Ramena",
+      traps: "Trapézy",
+      upperback: "Horní záda",
+      lats: "Široký sval zádový",
+      lowback: "Spodní záda",
+      biceps: "Biceps",
+      triceps: "Triceps",
+      forearm: "Předloktí",
+      abs: "Přímý sval břišní",
+      oblique: "Šikmé svaly",
+      glutes: "Hýždě",
+      quads: "Kvadricepsy",
+      adductor: "Přitahovače",
+      hams: "Hamstringy",
+      calves: "Lýtka",
+    };
+    const KEYS = Object.keys(NAMES);
+    function svg(view, fillOf, label) {
+      // ramena jsou jedna partie, v atlasu ale tři vrstvy (přední, boční, zadní)
+      const st = KEYS.map((k) => {
+        const f = fillOf(k);
+        return (k === "delts" ? ["delt_f", "delt_s", "delt_r"] : [k])
+          .map((v) => "--f-" + v + ":" + f)
+          .join(";");
+      }).join(";");
+      return `<div class="fig" style="${st}">${ATLAS[view].replace("__L__", esc(label || ""))}</div>`;
+    }
+    function exSvg(view, pri, sec, label) {
+      return svg(
+        view,
+        (k) =>
+          pri.indexOf(k) >= 0 ? "var(--m-pri)" : sec.indexOf(k) >= 0 ? "var(--m-sec)" : "var(--m-idle)",
+        label,
+      );
+    }
+    return { svg, exSvg, NAMES };
+  })();
+  const MKEYS = Object.keys(MUSCLE_MAP.NAMES);
+  /* 6 skupin partií (F3-01): barva --g-<skupina> v css/app.css */
+  const MGRP = { chest: "Hrudník", back: "Záda", sh: "Ramena", arms: "Paže", legs: "Nohy", core: "Břicho" };
+  const MGRP_OF = {
+    neck: "back",
+    chest: "chest",
+    delts: "sh",
+    traps: "back",
+    upperback: "back",
+    lats: "back",
+    lowback: "back",
+    biceps: "arms",
+    triceps: "arms",
+    forearm: "arms",
+    abs: "core",
+    oblique: "core",
+    glutes: "legs",
+    quads: "legs",
+    adductor: "legs",
+    hams: "legs",
+    calves: "legs",
+  };
+  const mgCol = (k) => "var(--g-" + (MGRP_OF[k] || "back") + ")";
+  // skupiny partií shora dolů a partie v nich, pro výběr partií po skupinách (F3-40, F3-41)
+  const MPICK = [
+    ["chest", ["chest"]],
+    ["sh", ["delts"]],
+    ["back", ["traps", "upperback", "lats", "lowback", "neck"]],
+    ["arms", ["biceps", "triceps", "forearm"]],
+    ["core", ["abs", "oblique"]],
+    ["legs", ["glutes", "quads", "hams", "adductor", "calves"]],
+  ];
+  // hodnota filtru partií (F3-41): "all", "g:<skupina>" nebo partie; jiná (i uložená před F3-41) = "all"
+  const mfNorm = (v) =>
+    typeof v === "string" && (v === "all" || MKEYS.includes(v) || (v.startsWith("g:") && !!MGRP[v.slice(2)]))
+      ? v
+      : "all";
+  const GROUP_OF = {
+    neck: "neck",
+    chest: "chest",
+    delts: "shoulders",
+    traps: "back",
+    upperback: "back",
+    lats: "back",
+    lowback: "lowback",
+    biceps: "biceps",
+    triceps: "triceps",
+    forearm: "forearms",
+    abs: "abs",
+    oblique: "abs",
+    glutes: "glutes",
+    quads: "quads",
+    adductor: "adductors",
+    hams: "hams",
+    calves: "calves",
+  };
+  /* Databáze cviků = výchozí EX_DB (js/cviky.js) + odchylky uložené v config/exercises.
+     V config/exercises je {v:2, items:{id: jen změněná pole | celý vlastní cvik}}.
+     Starší data (bez v:2) obsahují celé kopie cviků; při načtení se z nich nechá jen to,
+     co se liší od výchozí databáze. Původní partie (EX_DB_OLD) se nahradí novými,
+     ručně změněné partie zůstanou.
+     partial = položky už jsou jen odchylky (načtené z config/exercises v:2), jinak celé cviky. */
+  const EX_V = 2,
+    DELT = { delt_f: "delts", delt_s: "delts", delt_r: "delts" };
+  const mNorm = (a) =>
+    Array.isArray(a) ? a.map((k) => DELT[k] || k).filter((k, i, x) => x.indexOf(k) === i) : [];
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  /* ---------- odkaz u cviku (F0-09) ----------
+     Jen adresa http(s) s doménou, nejvýš URL_MAX znaků. Adrese bez schématu („youtube.com/…“) se doplní
+     https://. Jiný odkaz (skript, intent://, adresa uvnitř appky…) se neuloží ani neotevře.
+     Funkce: urlNormalize (doplní https://), urlProblem (text hlášky, "" = v pořádku), urlSafe (otevírat jen
+     tohle), exLink / exLinkLabel (odkaz a popisek), exUrlsClean při obnově zálohy (normBackup). */
+  const URL_MAX = 500;
+  // jednotná podoba odkazu: bez mezer okolo, adresa bez schématu dostane https://
+  function urlNormalize(value) {
+    const text = String(value || "").trim();
+    const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(text);
+    const looksLikeHost = /^[^\s/?#]+\.[^\s/?#]+([/?#]|$)/.test(text);
+    if (text && !hasScheme && looksLikeHost) {
+      return "https://" + text;
+    }
+    return text;
+  }
+  // co je na odkazu špatně (text do hlášky), "" = v pořádku; prázdný odkaz je povolený
+  function urlProblem(value) {
+    const text = urlNormalize(value);
+    if (!text) return "";
+    if (text.length > URL_MAX) return "Odkaz může mít nejvýš " + URL_MAX + " znaků";
+    let url = null;
+    try {
+      url = new URL(text);
+    } catch (e) {}
+    if (!url || !/^https?:$/.test(url.protocol) || !url.hostname.includes(".") || /\s/.test(text)) {
+      return "Odkaz musí začínat https:// (nebo http://)";
+    }
+    return "";
+  }
+  // zvýraznit neplatný odkaz v poli a napsat pod něj, co je špatně (zůstane, dokud se neopraví);
+  // bez hlášky nahoře a bez klávesnice, ta by ji na telefonu odsunula mimo obrazovku
+  function urlMark(input) {
+    const msg = urlProblem(input.value);
+    input.classList.toggle("bad", !!msg);
+    const msgEl = document.getElementById(input.id + "-msg");
+    if (msgEl) {
+      msgEl.textContent = msg;
+    }
+    return msg;
+  }
+  // odkaz, který jde bezpečně otevřít, jinak ""
+  const urlSafe = (value) => (urlProblem(value) ? "" : urlNormalize(value));
+  // odkazy u cviků ze zálohy: jednotná podoba, neplatný se zahodí (výchozí cvik dostane zpět svůj z EX_DB)
+  function exUrlsClean(items) {
+    for (const id in items) {
+      const item = items[id];
+      if (!item || typeof item !== "object" || !("url" in item)) continue;
+      if (!urlProblem(item.url)) {
+        item.url = urlNormalize(item.url);
+      } else if (EX_DB[id] && EX_DB[id].url) {
+        item.url = EX_DB[id].url;
+      } else {
+        delete item.url;
+      }
+    }
+    return items;
+  }
+
+  /* ---------- databáze cviků (F0-02) ----------
+     S.exLib = EX_DB + odchylky (exLoad). config/exercises = {v: 2, items} s jen
+     odchylkami od EX_DB a vlastními cviky, zápis vždy přes putEx(items), který uloží jen rozdíly (exPack).
+     Partie jsou klíče MUSCLE_MAP.NAMES, ramena jedna partie delts (staré delt_f/s/r se převádějí). */
+  function exPack(items, legacy, partial) {
+    const out = {};
+    for (const id in items || {}) {
+      const it = items[id],
+        b = EX_DB[id];
+      if (!it || typeof it !== "object") continue;
+      if (!b) {
+        const o = Object.assign({}, it);
+        if (o.pri) {
+          o.pri = mNorm(o.pri);
+        }
+        if (o.sec) {
+          o.sec = mNorm(o.sec);
+        }
+        out[id] = o;
+        continue;
+      }
+      const o = {},
+        old = legacy && EX_DB_OLD[id],
+        oldMus = old && same(it.pri, old[0]) && same(it.sec, old[1]);
+      for (const k in it) {
+        if (k === "muscle" || k === "custom") continue;
+        if ((k === "pri" || k === "sec") && oldMus) continue;
+        const v = k === "pri" || k === "sec" ? mNorm(it[k]) : it[k];
+        if (!v && !b[k]) continue;
+        if (!same(v, b[k])) {
+          o[k] = v;
+        }
+      }
+      // smazaný text (český název, popis, odkaz) u výchozího cviku se uloží jako prázdný
+      if (!partial) {
+        for (const k of ["cz", "desc", "url"]) {
+          if (b[k] && !(k in it)) {
+            o[k] = "";
+          }
+        }
+      }
+      if (Object.keys(o).length) {
+        out[id] = o;
+      }
+    }
+    return out;
+  }
+  function exMerge(packed) {
+    const out = {};
+    for (const id in EX_DB) {
+      const o = Object.assign({}, EX_DB[id], packed[id]);
+      o.muscle = GROUP_OF[(o.pri || [])[0]] || "other";
+      out[id] = o;
+    }
+    for (const id in packed) {
+      if (!EX_DB[id]) {
+        out[id] = Object.assign({}, packed[id]);
+      }
+    }
+    for (const id in out) {
+      const o = out[id];
+      if (o.pri && o.sec) {
+        o.sec = o.sec.filter((k) => !o.pri.includes(k));
+      }
+    }
+    return out;
+  }
+  const exLoad = (items, legacy, partial) => exMerge(exPack(items, legacy, partial));
+  function putEx(items) {
+    put("config/exercises", { v: EX_V, items: exPack(items, false) });
+  }
+  // výchozí cvik s úpravami (nastavení stroje F1-07 a vlastní pauza F1-09 se nepočítají, Vrátit
+  // na výchozí je nechává)
+  function exChanged(id) {
+    if (!EX_DB[id]) return false;
+    const diff = exPack({ [id]: S.exLib[id] }, false)[id];
+    if (diff) {
+      delete diff.machine;
+      delete diff.rest; // vlastní pauza (F1-09) taky ne
+    }
+    return !!(diff && Object.keys(diff).length);
+  }
+  const exOf = (id) => S.exLib[id] || { name: id };
+  const exGroup = (e) => (e.pri && e.pri.length ? GROUP_OF[e.pri[0]] : e.muscle) || "other";
+  const exPri = (e) =>
+    e.pri && e.pri.length
+      ? e.pri
+      : e.muscle
+        ? Object.keys(GROUP_OF)
+            .filter((k) => GROUP_OF[k] === e.muscle)
+            .slice(0, 1)
+        : [];
+  const exLink = (e) =>
+    urlSafe(e.url) ||
+    "https://www.youtube.com/results?search_query=" + encodeURIComponent(e.name + " exercise form");
+  // popisek odkazu u cviku podle toho, kam vede (ikona odkazu ven se přidá u odkazu, IC.ext)
+  function exLinkLabel(e) {
+    const url = urlSafe(e.url);
+    if (!url) return "Hledat video";
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (/(^|\.)hevyapp\.com$/.test(host)) return "Otevřít na Hevy";
+    if (/(^|\.)(youtube\.com|youtu\.be)$/.test(host)) return "Video na YouTube";
+    return "Otevřít odkaz";
+  }
+  // hledání bez ohledu na velikost písmen a diakritiku („tlak" najde „Tlak", „stehna" i „stehná")
+  const fold = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  const isAssisted = (id) => /assisted/.test(id);
+  const isBodyweight = (id) => {
+    const e = S.exLib[id];
+    return !!(e && e.equip === "bodyweight");
+  };
+  function exFigures(e, small) {
+    const pri = exPri(e),
+      sec = e.sec || [];
+    return `<div class="figs${small ? " sm" : ""}">
+      <figure>${MUSCLE_MAP.exSvg("front", pri, sec, "Zepředu")}<figcaption>Zepředu</figcaption></figure>
+      <figure>${MUSCLE_MAP.exSvg("back", pri, sec, "Zezadu")}<figcaption>Zezadu</figcaption></figure>
+    </div>`;
+  }
+  // postava zepředu a zezadu obarvená podle hodnot partií (m: {partie: počet}), sytější = víc;
+  // grp = barva podle skupiny partie (F3-01), jinak červená; weak = {partie: true} jen vedlejší partie
+  // (MUS_WEAK, slabá barva bez ohledu na počet)
+  function musFigs(m, small, grp, weak) {
+    const mx = Math.max(0, ...Object.values(m)) || 1;
+    const heat = (k) => {
+      const v = m[k] || 0;
+      if (!v) return "var(--m-idle)";
+      let a = grp ? 0.4 + (0.6 * v) / mx : 0.25 + (0.75 * v) / mx;
+      if (weak && weak[k]) {
+        a = MUS_WEAK;
+      }
+      return (
+        "color-mix(in srgb, " +
+        (grp ? mgCol(k) : "var(--m-pri)") +
+        " " +
+        Math.round(a * 100) +
+        "%, var(--m-idle))"
+      );
+    };
+    return `<div class="figs${small ? " sm" : ""}">
+      <figure>${MUSCLE_MAP.svg("front", heat, "Zepředu")}<figcaption>Zepředu</figcaption></figure>
+      <figure>${MUSCLE_MAP.svg("back", heat, "Zezadu")}<figcaption>Zezadu</figcaption></figure>
+    </div>`;
+  }
+  // sytost barvy partie, která byla v tréninku jen vedlejší (souhrn a obrázek ke sdílení)
+  const MUS_WEAK = 0.25;
+  // barva pruhu partie v seznamu pod postavou (jen vedlejší = slabší)
+  const mgColWeak = (k, weak) =>
+    weak && weak[k]
+      ? "color-mix(in srgb, " + mgCol(k) + " " + MUS_WEAK * 100 + "%, var(--m-idle))"
+      : mgCol(k);
+  // pruh s poměrem skupin partií a legenda v procentech (F3-01)
+  function mgStack(m) {
+    const g = {};
+    for (const k in m) {
+      const x = MGRP_OF[k];
+      if (x) {
+        g[x] = (g[x] || 0) + m[k];
+      }
+    }
+    const tot = Object.values(g).reduce((a, b) => a + b, 0);
+    if (!tot) return "";
+    const rows = Object.keys(MGRP)
+      .filter((x) => g[x])
+      .sort((a, b) => g[b] - g[a]);
+    return `<div class="gstack" aria-hidden="true">
+      ${rows.map((x) => `<i style="flex:${g[x]};background:var(--g-${x})"></i>`).join("")}
+    </div>
+    <div class="glegend">
+      ${rows
+        .map(
+          (x) =>
+            `<span><i style="background:var(--g-${x})"></i>${MGRP[x]} ` +
+            `<b>${Math.round((g[x] / tot) * 100)} ` +
+            `%</b></span>`,
+        )
+        .join("")}
+    </div>`;
+  }
+  function exTags(e) {
+    const pri = exPri(e),
+      sec = e.sec || [];
+    return (
+      `<div class="mus">
+      ${pri.map((k) => `<span class="tag p">${esc(MUSCLE_MAP.NAMES[k] || k)}</span>`).join("")}` +
+      `${sec.map((k) => `<span class="tag s">${esc(MUSCLE_MAP.NAMES[k] || k)}</span>`).join("")}
+    </div>`
+    );
+  }
+
+  /* =====================================================================
+     DATOVÁ VRSTVA
+     Aplikace mluví jen se Store. Store drží frontu zápisů, lokální cache
+     a rozdělaný trénink; samotné úložiště je vyměnitelný "backend".
+     Backend má rozhraní:
+       name
+       open()                      -> Promise<boolean>   (true = připojeno)
+       watch(onDoc, onReady, onErr) -> posílá onDoc(path, data|null)
+       set(path, data)             -> Promise
+       del(path)                   -> Promise
+       get(path)                   -> Promise<data|null>
+     Dnes: IndexedDbBackend (IndexedDB v prohlížeči, data jen v telefonu).
+     Do verze 9 to byl ClaudeDbBackend (databáze Claude artefaktu),
+     viz puvodni/workout-denik.html (z repa smazáno v F0-12, v gitu commit d491407).
+     Cesty dokumentů zůstávají stejné:
+       config/main, config/exercises, config/templates, config/backup,
+       workouts/RRRR-MM, body/all, state/active; config/plan přibyl v F4-07
+     Fotky u cviků (F2-05) jdou mimo Store rovnou do IndexedDB (úložiště photos).
+     ===================================================================== */
+  /* Verze a kanál appky (F0-04). BUILD doplní při nasazení GitHub Actions do js/verze.js.
+     Testovací verze PR běží na adrese …/workout-denik-test/pr-12/ a má VLASTNÍ data: jiný prefix
+     v localStorage a jinou databázi IndexedDB. Vydaná verze se jí tak nedotkne.
+     Proto data ukládat vždy jen přes Local / Idb / Store, nikdy přímo. */
+  const BUILD = Object.assign(
+    { kanal: "lokal", pr: 0, nazev: "", vetev: "", commit: "", cas: "" },
+    window.APP_BUILD || {},
+  );
+  const TEST_PR = (location.pathname.match(/\/pr-(\d+)\//) || [])[1] || "";
+  /* Nativní appka (F6-01, sekce NATIVNÍ APPKA): NATIVE = běží v APK (js/nativni.js), NATIVE_PR = číslo PR
+     u testovacího APK (kanál „nativni-pr“). Testovací APK má jiné ID aplikace, a tím i vlastní úložiště. */
+  const NATIVE = !!window.NATIVNI;
+  const NATIVE_PR = NATIVE && BUILD.kanal === "nativni-pr" ? String(BUILD.pr || "") : "";
+  const MAIN_P = "zd1:",
+    MAIN_DB = "workout-denik";
+  // začátek názvu staženého souboru
+  const FILE_P =
+    "workout-denik" + (TEST_PR ? "-test-pr" + TEST_PR : "") + (NATIVE_PR ? "-test-apk-pr" + NATIVE_PR : "");
+  const Local = {
+    // drobnosti v zařízení (cache, fronta, nastavení zobrazení)
+    P: TEST_PR ? "zd1-pr" + TEST_PR + ":" : MAIN_P,
+    get(k, d) {
+      try {
+        const v = localStorage.getItem(this.P + k);
+        return v ? JSON.parse(v) : d;
+      } catch (e) {
+        return d;
+      }
+    },
+    /* zápis; plná schránka (F0-19): smazat kopii pro rychlý start (cache) a zkusit znovu, když ani to
+       nepomůže, nastavit full a ukázat varování (storageFull, F0-19); zápis samotné cache při plné schránce cache smaže */
+    full: false,
+    set(k, v) {
+      try {
+        if (v === undefined || v === null) {
+          localStorage.removeItem(this.P + k);
+        } else {
+          const text = JSON.stringify(v);
+          try {
+            localStorage.setItem(this.P + k, text);
+          } catch (e) {
+            if (!lsQuotaErr(e)) throw e;
+            localStorage.removeItem(this.P + "cache");
+            if (k === "cache") return;
+            try {
+              localStorage.setItem(this.P + k, text);
+            } catch (e2) {
+              if (!lsQuotaErr(e2)) throw e2;
+              this.full = true;
+              storageFull();
+            }
+          }
+        }
+      } catch (e) {}
+    },
+  };
+  // chyba „schránka je plná“ (Chrome QuotaExceededError), ne zablokovaný zápis pojistkou F0-18
+  function lsQuotaErr(e) {
+    return !!e && (e.name === "QuotaExceededError" || e.code === 22);
+  }
+  const lsGet = (k, d) => Local.get(k, d),
+    lsSet = (k, v) => Local.set(k, v);
+
+  /* IndexedDB "workout-denik" (testovací verze PR 12: "workout-denik-pr12"):
+       docs   – dokumenty appky, klíč = cesta ("config/main", "workouts/2026-09", …)
+       points – body obnovy, klíč = id, hodnota {id, at, data (JSON text zálohy)}
+       photos – fotky u cviků (F2-05, od verze databáze 2), klíč = id, viz sekce „FOTKY U CVIKU“ */
+  const Idb = {
+    NAME: TEST_PR ? MAIN_DB + "-pr" + TEST_PR : MAIN_DB,
+    VER: 2,
+    db: null,
+    // otevře databázi (poprvé ji založí, starší verzi doplní chybějící úložiště); otevřenou drží v this.db
+    open() {
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((res, rej) => {
+        let rq;
+        try {
+          rq = indexedDB.open(this.NAME, this.VER);
+        } catch (e) {
+          rej(e);
+          return;
+        }
+        rq.onupgradeneeded = () => {
+          const db = rq.result;
+          if (!db.objectStoreNames.contains("docs")) {
+            db.createObjectStore("docs");
+          }
+          if (!db.objectStoreNames.contains("points")) {
+            db.createObjectStore("points");
+          }
+          if (!db.objectStoreNames.contains("photos")) {
+            db.createObjectStore("photos");
+          }
+        };
+        rq.onsuccess = () => {
+          this.db = rq.result;
+          this.db.onversionchange = () => {
+            this.db.close();
+            this.db = null;
+          };
+          res(this.db);
+        };
+        rq.onerror = () => rej(rq.error);
+        rq.onblocked = () => rej(new Error("blocked"));
+      });
+    },
+    // jedna operace nad jedním úložištěm; výsledek až po dokončení transakce (zápis je na disku)
+    async run(store, mode, fn) {
+      const db = await this.open();
+      return new Promise((res, rej) => {
+        const tx = db.transaction(store, mode),
+          rq = fn(tx.objectStore(store));
+        tx.oncomplete = () => res(rq ? rq.result : undefined);
+        tx.onerror = () => rej(Idb.err(tx.error));
+        tx.onabort = () => rej(Idb.err(tx.error));
+      });
+    },
+    // chyba IndexedDB → chyba appky (plné úložiště dostane kód quota_exceeded)
+    err(e) {
+      if (e && e.name === "QuotaExceededError") {
+        const x = new Error("Úložiště v telefonu je plné.");
+        x.code = "quota_exceeded";
+        return x;
+      }
+      return e || new Error("IndexedDB");
+    },
+    get(store, key) {
+      return this.run(store, "readonly", (s) => s.get(key));
+    },
+    put(store, key, val) {
+      return this.run(store, "readwrite", (s) => s.put(val, key));
+    },
+    del(store, key) {
+      return this.run(store, "readwrite", (s) => s.delete(key));
+    },
+    async all(store) {
+      return idbAll(await this.open(), store);
+    },
+  };
+  // všechny položky úložiště jako [[klíč, hodnota], …]
+  function idbAll(db, store) {
+    return new Promise((res, rej) => {
+      if (!db.objectStoreNames.contains(store)) {
+        res([]);
+        return;
+      }
+      const out = [],
+        tx = db.transaction(store, "readonly"),
+        rq = tx.objectStore(store).openCursor();
+      rq.onsuccess = () => {
+        const c = rq.result;
+        if (c) {
+          out.push([c.key, c.value]);
+          c.continue();
+        }
+      };
+      tx.oncomplete = () => res(out);
+      tx.onerror = () => rej(tx.error);
+    });
+  }
+  // otevře cizí existující databázi (vydaná / testovací verze); neexistující nevytváří
+  function idbOpenExisting(name) {
+    return new Promise((res, rej) => {
+      const rq = indexedDB.open(name);
+      rq.onupgradeneeded = () => {
+        try {
+          rq.transaction.abort();
+        } catch (e) {} // už zrušila pojistka F0-18
+      };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error || new Error("Databáze neexistuje."));
+      rq.onblocked = () => rej(new Error("blocked"));
+    });
+  }
+
+  /* ---------- POJISTKA DAT VYDANÉ VERZE (F0-18) ----------
+     Testovací verze PR běží na stejné doméně jako vydaná verze, prohlížeč je tedy nijak neodděluje: oddělení
+     dat je jen jiný název databáze a jiný prefix v localStorage (Idb.NAME, Local.P). Tahle pojistka hlídá,
+     aby chyba v kódu PR nepřepsala skutečná data v telefonu. Běží jen v testovací verzi (TEST_PR):
+       - databáze vydané verze (MAIN_DB a její záznam událostí MAIN_DB-log, F0-21) jde otevřít jen ke čtení: zápisová transakce, smazání databáze
+         a změna její verze (upgrade) se odmítnou; neexistující databázi otevření nezaloží,
+       - localStorage: zápis a mazání klíčů vydané verze (MAIN_P) a localStorage.clear() se odmítnou,
+       - při startu kontrola, že Idb.NAME a Local.P nejsou ty vydané verze.
+     Zabraná pojistka (guardStop) vyhodí chybu, zastaví ukládání (Store.backend = null) a ukáže červený pruh
+     nahoře (.guard-stop), dokud se appka nezavře. Vydané verzi se nemění nic.
+     Číst data vydané verze smí jen copyFromMain (Nastavení → O aplikaci). Úloha „kontrola“ v GitHub Actions
+     navíc odmítne přímé indexedDB.open / deleteDatabase / zápis do localStorage mimo Local, Idb a schválené
+     funkce (seznam POVOLENO v .github/kontrola-uloziste.sh, i logDb záznamu událostí v js/zaznam.js); test tools/testy/oddeleni-dat.js ověří, že průchod
+     testovací verzí data vydané verze nezmění. */
+  function guardStop(what) {
+    try {
+      Store.backend = null; // nic dalšího neukládat (jako copyFromMain při kopírování)
+    } catch (e) {} // Store ještě není (kontrola při startu)
+    if (!document.querySelector(".guard-stop")) {
+      const bar = document.createElement("div");
+      bar.className = "guard-stop";
+      bar.setAttribute("role", "alert");
+      bar.textContent =
+        "Testovací verze se pokusila zapsat do dat vydané verze (" +
+        what +
+        "). Zápis se odmítl a ukládání se zastavilo. Zavři appku a nahlas chybu v PR.";
+      document.body.appendChild(bar);
+    }
+    return new Error("Pojistka dat vydané verze (F0-18): " + what);
+  }
+  function guardInstall() {
+    const isMainKey = (key) => String(key).startsWith(MAIN_P);
+    const setItem = Storage.prototype.setItem,
+      removeItem = Storage.prototype.removeItem,
+      clear = Storage.prototype.clear;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === window.localStorage && isMainKey(key)) throw guardStop("localStorage " + key);
+      return setItem.call(this, key, value);
+    };
+    Storage.prototype.removeItem = function (key) {
+      if (this === window.localStorage && isMainKey(key)) throw guardStop("localStorage " + key);
+      return removeItem.call(this, key);
+    };
+    Storage.prototype.clear = function () {
+      if (this === window.localStorage) throw guardStop("localStorage.clear");
+      return clear.call(this);
+    };
+    if (!window.indexedDB) return;
+    const open = IDBFactory.prototype.open,
+      deleteDatabase = IDBFactory.prototype.deleteDatabase,
+      transaction = IDBDatabase.prototype.transaction;
+    IDBFactory.prototype.open = function (name, version) {
+      const rq = version === undefined ? open.call(this, name) : open.call(this, name, version);
+      if (name === MAIN_DB || name === MAIN_DB + "-log") {
+        // neexistující databáze (oldVersion 0) se jen nezaloží, změna verze existující je chyba
+        rq.addEventListener("upgradeneeded", (ev) => {
+          try {
+            rq.transaction.abort();
+          } catch (e) {}
+          if (ev.oldVersion > 0) {
+            guardStop("změna databáze " + MAIN_DB);
+          }
+        });
+      }
+      return rq;
+    };
+    IDBFactory.prototype.deleteDatabase = function (name) {
+      if (name === MAIN_DB || name === MAIN_DB + "-log") throw guardStop("smazání databáze " + name);
+      return deleteDatabase.call(this, name);
+    };
+    IDBDatabase.prototype.transaction = function (stores, mode, options) {
+      if ((this.name === MAIN_DB || this.name === MAIN_DB + "-log") && mode && mode !== "readonly") {
+        throw guardStop("zápis do " + this.name);
+      }
+      return transaction.apply(this, arguments);
+    };
+  }
+  function guardInit() {
+    if (!TEST_PR) return;
+    guardInstall();
+    if (Idb.NAME === MAIN_DB || Local.P === MAIN_P) {
+      throw guardStop("testovací verze používá úložiště vydané verze");
+    }
+  }
+  guardInit();
+
+  // backend pro Store: dokumenty v úložišti docs databáze IndexedDB
+  function IndexedDbBackend() {
+    return {
+      name: "indexeddb",
+      async open() {
+        if (!window.indexedDB) return false;
+        try {
+          await Idb.open();
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      watch(onDoc, onReady, onErr) {
+        // IndexedDB je jen v tomto zařízení, nic jiného ho nemění: stačí načíst jednou při startu
+        Idb.all("docs").then((rows) => {
+          const months = [];
+          for (const [path, data] of rows) {
+            if (path.startsWith("workouts/")) {
+              months.push(path.slice(9));
+            }
+            if (path !== "state/active") {
+              onDoc(path, data);
+            }
+          }
+          onDoc("workouts/*", { present: months });
+          onReady();
+        }, onErr);
+      },
+      set(path, data) {
+        return Idb.put("docs", path, data);
+      },
+      del(path) {
+        return Idb.del("docs", path);
+      },
+      async get(path) {
+        const d = await Idb.get("docs", path);
+        return d === undefined ? null : d;
+      },
+    };
+  }
+
+  /* body obnovy v IndexedDB (dřív assets artefaktu) — stejné rozhraní, jaké používal kód zálohy */
+  const LocalPoints = {
+    async upload(blob) {
+      const data = await blob.text(),
+        id = "pt" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      try {
+        await Idb.put("points", id, { id, at: Date.now(), data });
+      } catch (e) {
+        const x = new Error(e.message);
+        x.code = e.code === "quota_exceeded" ? "quota_or_state" : "write_failed";
+        throw x;
+      }
+      return { id, sizeBytes: blob.size };
+    },
+    delete(id) {
+      return Idb.del("points", id);
+    },
+    async read(id) {
+      const p = await Idb.get("points", id);
+      if (!p) throw new Error("Bod obnovy už v telefonu není.");
+      return p.data;
+    },
+  };
+
+  /* stažení souboru do telefonu (dřív downloads artefaktu) — Chrome ho uloží do složky Stažené */
+  const LocalDownloads = {
+    // data = text zálohy, nebo soubor / Blob (obrázek souhrnu, F4-08)
+    async save({ filename, data, type }) {
+      // F6-01: zabudovaný prohlížeč nativní appky odkaz s download neumí, soubor uloží js/nativni.js
+      if (window.NATIVNI) return window.NATIVNI.save({ filename, data, type });
+      const url = URL.createObjectURL(new Blob([data], { type: type || "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
+  };
+
+  /* Store: jediné místo, přes které appka čte a zapisuje data.
+     Q = fronta zápisů {cesta: data | null (smazat)}, uložená v Local "queue", aby přežila zavření appky. */
+  const Store = {
+    backend: null,
+    state: "connecting",
+    Q: Local.get("queue", {}),
+    flushing: false,
+    onDoc: null,
+    onChange: null,
+    pending() {
+      return Object.keys(this.Q).length;
+    },
+    // připojí backend, načte z něj všechny dokumenty (onDoc) a odešle frontu; false = úložiště nejde otevřít
+    async init(backend, onDoc, onChange) {
+      this.onDoc = onDoc;
+      this.onChange = onChange;
+      const ok = await backend.open();
+      if (!ok) {
+        evLog("uložení: databáze se neotevřela, appka jede jen z kopie v zařízení"); // F0-21
+        this.state = "off";
+        onChange();
+        return false;
+      }
+      this.backend = backend;
+      this.state = "connecting";
+      onChange();
+      backend.watch(
+        (path, data) => {
+          if (path === "workouts/*") {
+            for (const mk of Object.keys(S.months)) {
+              const p = "workouts/" + mk;
+              if (!data.present.includes(mk) && !(p in this.Q)) {
+                onDoc(p, null);
+              }
+            }
+            return;
+          }
+          if (path in this.Q) return; // lokální změna ještě čeká na odeslání
+          onDoc(path, data);
+        },
+        () => {
+          this.state = "ok";
+          onChange();
+        },
+        (e) => {
+          evLog("uložení: načtení dat selhalo (" + ((e && (e.code || e.name || e.message)) || "chyba") + ")");
+          if (e && e.code === "revoked") {
+            this.state = "off";
+            onChange();
+          }
+        },
+      );
+      this.flush();
+      return true;
+    },
+    // zápis dokumentu (null = smazat): nejdřív do fronty v zařízení, pak do backendu
+    put(path, data) {
+      this.Q[path] = data === null ? null : JSON.parse(JSON.stringify(data));
+      Local.set("queue", this.Q);
+      this.onChange && this.onChange();
+      this.flush();
+    },
+    // odešle frontu do backendu; co se zapsalo, z fronty zmizí
+    async flush() {
+      const b = this.backend;
+      if (!b || this.flushing) return;
+      this.flushing = true;
+      let failed = false;
+      try {
+        for (const p of Object.keys(this.Q)) {
+          const d = this.Q[p];
+          try {
+            if (d === null) {
+              await b.del(p);
+            } else {
+              await b.set(p, d);
+            }
+            if (this.Q[p] === d) {
+              delete this.Q[p];
+            }
+            Local.set("queue", this.Q);
+          } catch (e) {
+            if (e && (e.code === "invalid_argument" || e.code === "transform_error")) {
+              delete this.Q[p];
+              Local.set("queue", this.Q);
+              toast("Zápis se nepodařil: " + (e.message || e.code));
+            } else if (e && e.code === "quota_exceeded") {
+              toast("Databáze je plná — smaž staré záznamy.");
+              failed = true;
+            } else {
+              failed = true;
+            }
+            // záznam událostí (F0-21): cesta dokumentu a chyba, ne data
+            evLog("uložení selhalo: " + p + " (" + ((e && (e.code || e.name || e.message)) || "chyba") + ")");
+            if (failed) break;
+          }
+        }
+      } finally {
+        this.flushing = false;
+        this.onChange && this.onChange();
+      }
+      // chyba spojení: zkusit za 6 s; nové změny přidané během odesílání: odeslat hned
+      if (this.pending() && this.backend) {
+        setTimeout(() => this.flush(), failed ? 6000 : 50);
+      }
+    },
+    // cache celé databáze v zařízení (rychlý start, offline)
+    loadCache() {
+      return Local.get("cache", null);
+    },
+    // uloží cache se zpožděním 0,8 s (víc změn rychle po sobě = jeden zápis)
+    saveCache(snap) {
+      clearTimeout(this._ct);
+      this._ct = setTimeout(() => Local.set("cache", snap()), 800);
+    },
+    // rozdělaný trénink
+    loadActive() {
+      return Local.get("active", null);
+    },
+    /* rozdělaný trénink hned do Local, do databáze (state/active) se zpožděním 2,5 s; čas změny d.upd
+       rozhoduje při startu, která kopie je novější (F0-19). Konec tréninku (null) jde do databáze hned,
+       jinak by se po zavření appky do 2,5 s vrátil už uložený trénink. */
+    saveActive(draft) {
+      if (draft) {
+        draft.upd = Date.now();
+      }
+      Local.set("active", draft);
+      clearTimeout(this._at);
+      const write = () => {
+        if (this.backend) {
+          this.backend
+            .set("state/active", { draft: draft ? JSON.stringify(draft) : "" })
+            .catch((e) =>
+              evLog("uložení selhalo: state/active (" + ((e && (e.code || e.name)) || "chyba") + ")"),
+            );
+        }
+      };
+      if (draft) {
+        this._at = setTimeout(write, 2500);
+      } else {
+        write();
+      }
+    },
+    // rozdělaný trénink z databáze (při startu, porovná se s kopií v Local)
+    async fetchActive() {
+      if (!this.backend) return null;
+      try {
+        const a = await this.backend.get("state/active");
+        return a && a.draft ? JSON.parse(a.draft) : null;
+      } catch (e) {
+        return null;
+      }
+    },
+  };
+
+  /* ---------- HLEDÁNÍ CVIKŮ (F1-06) ----------
+     Hledání ve výběru cviků i v záložce Cviky (exMatch). Dotaz se bez diakritiky rozdělí na slova (exWords),
+     jednopísmenná slova (s, v, z, k…) se vynechají. Cvik musí obsahovat všechna slova v libovolném pořadí,
+     každé v anglickém nebo českém názvu, i uvnitř jiného slova („tah kladky“ najde „Stahování kladky“).
+     Slova se zkracují o koncovku (exStem: „jednoručky“ najde „jednoručkami“, „dřepy“ najde „Dřep“).
+     Synonyma EX_SYN: skupiny stejných výrazů (český ↔ anglický); slovo nebo fráze ze skupiny v dotazu najde
+     cvik s kterýmkoli výrazem skupiny („tlak na lavici“ najde Bench Press). Rozložený dotaz = seznam
+     podmínek, podmínka = seznam možností, možnost = seznam kmenů slov (exQuery, poslední dotaz v paměti).
+     Pořadí výsledků (exRel): necvičené cviky (zbytek) mají nahoře ty, jejichž název napsaným slovem začíná
+     („squat“: Squat před Assisted Pistol Squats), pak ty, jejichž název začíná synonymem, pak ty, kde všechna
+     slova začínají slovo názvu, pak ostatní; uvnitř podle abecedy. Výběr cviků řadí navíc do sekcí podle
+     fitka (pickerRows, sekce výběr cviků). */
+  // skupiny synonym: každý výraz ve skupině najde i cviky s ostatními výrazy (diakritika a koncovky nevadí)
+  const EX_SYN = [
+    ["bench", "tlak na lavici", "tlak vleže"],
+    ["squat", "dřep"],
+    ["deadlift", "mrtvý tah", "mrtvák"],
+    ["pull up", "pullup", "shyby"],
+    ["chin up", "chinup", "shyby podhmatem"],
+    ["push up", "pushup", "kliky"],
+    ["dips", "kliky na bradlech", "bradla"],
+    ["row", "veslování"],
+    ["pulldown", "stahování"],
+    ["cable", "kladka"],
+    ["dumbbell", "jednoručky"],
+    ["barbell", "velká činka"],
+    ["smith", "multipress"],
+    ["machine", "stroj"],
+    ["band", "guma"],
+    ["lunge", "výpady"],
+    ["calf", "výpony", "lýtka"],
+    ["fly", "rozpažování"],
+    ["lateral raise", "upažování"],
+    ["front raise", "předpažování"],
+    ["reverse fly", "zapažování"],
+    ["overhead press", "shoulder press", "military press", "tlak nad hlavu", "tlak na ramena"],
+    ["leg extension", "předkopávání"],
+    ["leg curl", "zakopávání"],
+    ["curl", "zdvih"],
+    ["crunch", "zkracovačky", "sklapovačky"],
+    ["shrug", "krčení ramen"],
+    ["plank", "prkno"],
+    ["hyperextension", "hyperextenze", "zakláňění"],
+    ["leg press", "nožní lis"],
+    ["hip thrust", "zvedání pánve"],
+  ];
+  // kmen slova: bez jedné koncovky (pády a množné číslo), aspoň 3 písmena; slovo už je bez diakritiky
+  function exStem(w) {
+    if (w.length < 4) return w;
+    const m = w.match(/(ami|ach|ich|emi|ou|em|a|e|i|o|u|y|s)$/);
+    if (!m || w.length - m[1].length < 3) return w;
+    return w.slice(0, -m[1].length);
+  }
+  // text rozdělený na slova bez diakritiky (jednopísmenná slova pryč)
+  const exWords = (t) =>
+    fold(t)
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 1);
+  // synonyma jako kmeny: skupina = seznam výrazů, výraz = seznam kmenů
+  let exSynStems = null;
+  function exSyn() {
+    if (!exSynStems) {
+      exSynStems = EX_SYN.map((g) => g.map((x) => exWords(x).map(exStem)));
+    }
+    return exSynStems;
+  }
+  // rozložený dotaz: [podmínka], podmínka = [možnost], možnost = [kmen]; poslední dotaz v paměti
+  let exQ = { q: null, terms: [] };
+  function exQuery(q) {
+    if (exQ.q === q) return exQ.terms;
+    const stems = exWords(q).map(exStem);
+    const terms = [];
+    let i = 0;
+    while (i < stems.length) {
+      // nejdelší výraz ze synonym, který v dotazu začíná na pozici i (slovo dotazu může být delší)
+      let best = null,
+        len = 0;
+      for (const g of exSyn()) {
+        for (const x of g) {
+          if (x.length > len && x.every((st, k) => stems[i + k] && stems[i + k].startsWith(st))) {
+            best = g;
+            len = x.length;
+          }
+        }
+      }
+      if (best) {
+        terms.push([stems.slice(i, i + len)].concat(best));
+        i += len;
+      } else {
+        terms.push([[stems[i]]]);
+        i++;
+      }
+    }
+    exQ = { q, terms };
+    return terms;
+  }
+  // anglický a český název bez diakritiky, slova oddělená mezerou (i na začátku, kvůli hledání začátku slova)
+  const exText = (e) => " " + exWords((e.name || "") + " " + (e.cz || "")).join(" ");
+  // odpovídá cvik dotazu q? (všechny podmínky, každá aspoň jednou možností)
+  function exMatch(e, q) {
+    const terms = exQuery(q || "");
+    if (!terms.length) return true;
+    const text = exText(e);
+    return terms.every((alts) => alts.some((x) => x.every((st) => text.includes(st))));
+  }
+  /* jak dobře cvik odpovídá dotazu: 3 = název začíná napsaným slovem, 2 = název začíná synonymem napsaného,
+     1 = slova dotazu začínají slova názvu, 0 = jinak */
+  function exRel(e, q) {
+    const terms = exQuery(q || "");
+    if (!terms.length) return 0;
+    const names = [e.name, e.cz].map((t) => " " + exWords(t || "").join(" "));
+    const starts = (x) => names.some((t) => t.startsWith(" " + x.join(" ")));
+    if (starts(terms[0][0])) return 3;
+    if (terms[0].some(starts)) return 2;
+    const text = exText(e);
+    return terms.every((alts) => alts.some((x) => x.every((st) => text.includes(" " + st)))) ? 1 : 0;
+  }
+
+  /* ---------- stav appky (S) a zápis dat (applyDoc, put) ---------- */
+  const S = {
+    cfg: {
+      gyms: [],
+      defaultGymId: null,
+      restOn: true,
+      restSec: 120,
+      restSs: 180,
+      restWarm: 60,
+      stwPre: 5,
+      stwView: "bar",
+      restAlert: "both",
+      restOver: true,
+      restNotify: true,
+      screenOn: false,
+      screenDim: true,
+      recCelEx: true,
+      recCelW: true,
+      recSnd: "fanfara",
+      stagOn: true,
+      stagN: STAG_DEF,
+      stepper: true,
+      warmPct: WARM_PCT.def,
+      progOn: true, // F4-15
+      progAll: false,
+      progMin: PROG_REPS.defMin,
+      progMax: PROG_REPS.defMax,
+      progSets: "all",
+    },
+    exLib: exLoad({}),
+    exV: 0,
+    exLegacy: null,
+    templates: {},
+    months: {},
+    body: {},
+    bk: { last: null, points: [] }, // config/backup: datum poslední zálohy do souboru + body obnovy
+    photos: {}, // fotky u cviků (F2-05): popisy bez obrázku, klíč = id fotky
+    photosOn: false, // úložiště fotek je dostupné (načtené z IndexedDB)
+    active: Store.loadActive(),
+    editDraft: null,
+    route: lsGet("route", "train"),
+    setPage: lsGet("setPage", ""), // otevřená podstránka Nastavení, "" = rozcestník (F3-09)
+    nav: [], // kam se vrátit ze stránky cviku / úpravy (F0-06), viz navBack
+    exDetail: null,
+    wDetail: null, // otevřená stránka tréninku {id, mk, saved} (F3-19)
+    exPart: "info",
+    exlQ: "",
+    exlM: mfNorm(lsGet("exlM", "all")),
+    exlEq: EQUIP[lsGet("exlEq", "all")] ? lsGet("exlEq", "all") : "all",
+    exlSort: lsGet("exlSort", "last"),
+    exlHid: false,
+    histGym: "all",
+    statsGym: "all",
+    statsMetric: "count",
+    statsRange: lsGet("statsRange", "30d"),
+    // otevřená část Statistik (F3-13): over = Přehled, mus = Partie, ex = Cviky
+    statsPart: ["over", "mus", "ex"].includes(lsGet("statsPart")) ? lsGet("statsPart") : "over",
+    sumPeriod: "month",
+    exSearch: "",
+    exMuscle: "all",
+    exSort: lsGet("exSort", "last") === "prog" ? "prog" : "last", // řazení Statistiky → Cviky (F3-26)
+    detailMetric: "e1rm",
+    detailRange: "1y",
+    detailGym: "all",
+    bodyMetric: "weight",
+    bodyRange: "all",
+    histView: lsGet("histView", "cal") === "list" ? "list" : "cal",
+    calM: 0, // Historie: kalendář (výchozí) / seznam (F3-06), zobrazený měsíc kalendáře (0 = aktuální)
+    selGym: null,
+    plan: {}, // config/plan: plánované tréninky {dayKey: {tplId, gymId}} (F4-07)
+    replan: null, // stránka Přeplánovat: den plánu (F4-07)
+    planNew: null, // stránka Naplánovat z panelu šablony: {tplId, gymId} (F2-13)
+  };
+  let downloads = null,
+    pointsApi = null;
+
+  (function loadCache() {
+    const c = Store.loadCache();
+    if (!c) return;
+    S.cfg = cfgNorm(c.cfg || S.cfg);
+    S.exLib = exLoad(c.exLib, c.exV !== EX_V);
+    S.templates = tplNorm(c.templates);
+    S.plan = planNorm(c.plan);
+    S.months = c.months || {};
+    S.body = c.body || {};
+    if (c.bk) {
+      S.bk = c.bk;
+    }
+  })();
+  // všechna data appky pro cache v zařízení (Store.saveCache)
+  const snapshot = () => ({
+    cfg: S.cfg,
+    exLib: S.exLib,
+    exV: EX_V,
+    templates: S.templates,
+    plan: S.plan,
+    months: S.months,
+    body: S.body,
+    bk: S.bk,
+  });
+  function saveCache() {
+    Store.saveCache(snapshot);
+  }
+
+  // načtený nebo změněný dokument (cesta jako "workouts/2026-09") promítne do stavu S
+  function applyDoc(path, data) {
+    const [col, id] = path.split("/");
+    if (col === "config") {
+      if (id === "main") {
+        S.cfg = cfgNorm(data);
+      } else if (id === "exercises") {
+        const items = (data && data.items) || {};
+        S.exV = (data && data.v) || 0;
+        S.exLegacy = S.exV !== EX_V && Object.keys(items).length ? items : null;
+        S.exLib = exLoad(items, S.exV !== EX_V, S.exV === EX_V);
+      } else if (id === "templates") {
+        S.templates = tplNorm(data && data.items);
+      } else if (id === "plan") {
+        S.plan = planNorm(data && data.items);
+      } else if (id === "backup") {
+        S.bk = Object.assign({ last: null, points: [] }, data || {});
+      }
+    } else if (col === "workouts") {
+      if (data) {
+        S.months[id] = data.items || {};
+      } else {
+        delete S.months[id];
+      }
+    } else if (col === "body" && id === "all") {
+      S.body = (data && data.items) || {};
+    }
+    dirty();
+    saveCache();
+  }
+  // změna dat: hned do stavu S, pak přes Store do úložiště (jediný správný způsob zápisu)
+  function put(path, data) {
+    applyDoc(path, data);
+    Store.put(path, data);
+    pbSchedule(); // záloha se zálohou telefonu (F6-03)
+  }
+  // ukazatel uložení v horní liště (Uloženo / Ukládám… / Jen v zařízení)
+  function updSync() {
+    const el = document.getElementById("sync");
+    if (!el) return;
+    const n = Store.pending(),
+      st = Store.state;
+    el.className = "sync" + (st === "off" ? " off" : n ? " pending" : "");
+    el.innerHTML = `<i></i>
+    ${st === "off" ? "Jen v zařízení" : n ? "Ukládám…" : st === "connecting" ? "Připojuji" : "Uloženo"}`;
+  }
+  function saveActive() {
+    Store.saveActive(S.active);
+  }
+
+  /* ---------- pomocné funkce (formát čísel a dat, escapování, fitka) ---------- */
+  const esc = (s) =>
+    String(s == null ? "" : s).replace(
+      /[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    );
+  const uid = (p) => (p || "") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const num = (v) => {
+    if (v === "" || v == null) return NaN;
+    const n = parseFloat(String(v).replace(",", "."));
+    return isFinite(n) ? n : NaN;
+  };
+  const fmtKg = (v) => {
+    if (!isFinite(v)) return "–";
+    return (Math.round(v * 100) / 100).toLocaleString("cs-CZ", { maximumFractionDigits: 2 });
+  };
+  const fmtInt = (v) => Math.round(v).toLocaleString("cs-CZ");
+  const d2 = (n) => String(n).padStart(2, "0");
+  const fmtDate = (t) => {
+    const d = new Date(t);
+    return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear();
+  };
+  const fmtDateS = (t) => {
+    const d = new Date(t);
+    return d.getDate() + ". " + (d.getMonth() + 1) + ".";
+  };
+  const fmtDay = (t) => {
+    const d = new Date(t);
+    return (
+      ["ne", "po", "út", "st", "čt", "pá", "so"][d.getDay()] +
+      " " +
+      d.getDate() +
+      ". " +
+      (d.getMonth() + 1) +
+      "."
+    );
+  };
+  const fmtTime = (t) => {
+    const d = new Date(t);
+    return d.getHours() + ":" + d2(d.getMinutes());
+  };
+  const fmtDur = (ms) => {
+    const m = Math.max(0, Math.round(ms / 60000));
+    return m >= 60 ? Math.floor(m / 60) + " h " + (m % 60) + " min" : m + " min";
+  };
+  const fmtDurS = (ms) => {
+    const m = Math.max(0, Math.round(ms / 60000));
+    return m >= 60 ? Math.floor(m / 60) + ":" + d2(m % 60) + " h" : m + " min";
+  };
+  // odpočet a délka tréninku: 5:07, od hodiny 1:07:39 (F1-11)
+  const fmtClock = (s) => {
+    s = Math.max(0, Math.round(s));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor(s / 60) % 60;
+    return (h ? h + ":" + d2(m) : m) + ":" + d2(s % 60);
+  };
+  const monthKey = (t) => {
+    const d = new Date(t);
+    return d.getFullYear() + "-" + d2(d.getMonth() + 1);
+  };
+  const e1rm = (kg, r) => (kg > 0 && r > 0 && r <= 20 ? (r === 1 ? kg : kg * (1 + r / 30)) : 0);
+  const isWork = (t) => t !== "w";
+  const exName = (id) => (S.exLib[id] && S.exLib[id].name) || id;
+  const gymName = (id) => {
+    const g = S.cfg.gyms.find((g) => g.id === id);
+    if (g) return g.name;
+    return id ? "Smazané fitko" : "Bez fitka"; // trénink ze smazaného fitka / bez fitka (F3-24)
+  };
+  // fitka, která jdou vybrat: bez archivovaných (F2-06, sekce ARCHIVACE A SMAZÁNÍ FITKA)
+  const gymsOn = () => S.cfg.gyms.filter((g) => !g.archived);
+  const gymOn = (id) => !!id && gymsOn().some((g) => g.id === id);
+  const gymIdx = (id) => {
+    const i = S.cfg.gyms.findIndex((g) => g.id === id);
+    return i < 0 ? 0 : i;
+  };
+  /* ---------- barva fitka (F0-07) ----------
+     Uložená v g.col (číslo 1–GYM_COLORS = proměnná --sN), nezávislá na pořadí.
+     Nikdy ji nepočítat z pořadí fitek (pořadí = S.cfg.gyms, mění se přetažením). Chybějící barvu doplní
+     cfgNorm, nové fitko dostane freeGymCol, výběr v sheetGym (akce gymCol, F3-01). */
+  const gymColor = (id) => {
+    const g = S.cfg.gyms.find((g) => g.id === id);
+    return "var(--s" + (g && g.col ? g.col : (gymIdx(id) % GYM_COLORS) + 1) + ")";
+  };
+  // štítek fitka u tréninku; smazané fitko bez barevné tečky (F3-24), trénink bez fitka štítek nemá
+  const gymPill = (id) => {
+    const dot = gymExists(id) ? `<span class="sw" style="background:${gymColor(id)}"></span>` : "";
+    return `<span class="pill">${dot}${esc(gymName(id))}</span>`;
+  };
+  /* doplní výchozí hodnoty nastavení; fitkům bez barvy dá barvu podle pořadí (= barva, kterou měla dřív) */
+  function cfgNorm(c) {
+    c = Object.assign(
+      {
+        gyms: [],
+        defaultGymId: null,
+        restOn: true,
+        restSec: 120,
+        restSs: 180,
+        restWarm: 60,
+        stwPre: 5,
+        stwView: "bar",
+        restAlert: "both",
+        restOver: true,
+        restNotify: true,
+        screenOn: false,
+        screenDim: true,
+        recCelEx: true,
+        recCelW: true,
+        recSnd: "fanfara",
+        stagOn: true,
+        stagN: STAG_DEF,
+        stepper: true,
+        warmPct: WARM_PCT.def,
+        progOn: true, // hlavní vypínač návrhu progrese (F4-15)
+        progAll: false,
+        progMin: PROG_REPS.defMin,
+        progMax: PROG_REPS.defMax,
+        progSets: "all",
+        effort: "off",
+        coach: false,
+        height: null, // výška v cm pro BMI (F3-33), prázdná = nezadaná
+      },
+      c && typeof c === "object" ? c : {},
+    );
+    c.restSec = restNorm(c.restSec) || 120;
+    c.restSs = restNorm(c.restSs) || 180;
+    c.restWarm = restNorm(c.restWarm) || 60;
+    c.stwPre = stwNorm(c.stwPre);
+    c.stwView = c.stwView === "full" ? "full" : "bar";
+    const pct = Math.round(+c.warmPct / WARM_PCT.step) * WARM_PCT.step;
+    c.warmPct = pct >= WARM_PCT.min && pct <= WARM_PCT.max ? pct : WARM_PCT.def;
+    if (!progValid([c.progMin, c.progMax])) {
+      c.progMin = PROG_REPS.defMin;
+      c.progMax = PROG_REPS.defMax;
+    }
+    c.progOn = c.progOn !== false; // F4-15: starší data = zapnuto
+    c.stagN = STAG_N.includes(+c.stagN) ? +c.stagN : STAG_DEF;
+    c.height = +c.height >= 100 && +c.height <= 250 ? Math.round(+c.height) : null;
+    c.effort = c.effort === "rir" || c.effort === "rpe" ? c.effort : "off"; // RIR/RPE (F4-04)
+    c.gyms = (Array.isArray(c.gyms) ? c.gyms : [])
+      .filter((g) => g && g.id)
+      .map((g, i) =>
+        Object.assign({}, g, {
+          col: g.col >= 1 && g.col <= GYM_COLORS ? g.col : (i % GYM_COLORS) + 1,
+          archived: g.archived === true, // archivované fitko (F2-06), starší data false
+        }),
+      );
+    return c;
+  }
+  /* barva pro nové fitko: první nepoužitá, jinak nejméně používaná */
+  function freeGymCol(gyms) {
+    const n = {};
+    for (const g of gyms) {
+      n[g.col] = (n[g.col] || 0) + 1;
+    }
+    let b = 1;
+    for (let c = 2; c <= GYM_COLORS; c++) {
+      if ((n[c] || 0) < (n[b] || 0)) {
+        b = c;
+      }
+    }
+    return b;
+  }
+  const toDateInput = (t) => {
+    const d = new Date(t);
+    return d.getFullYear() + "-" + d2(d.getMonth() + 1) + "-" + d2(d.getDate());
+  };
+  const toTimeInput = (t) => {
+    const d = new Date(t);
+    return d2(d.getHours()) + ":" + d2(d.getMinutes());
+  };
+
+  /* ---------- TYPY CVIKŮ (F4-16) ----------
+     Určují, co se u série zapisuje a jak se počítá zátěž.
+     wr     opakování × váha          zátěž = váha
+     bw     vlastní váha              zátěž = tělesná hmotnost
+     bwplus vlastní váha + zátěž      zátěž = hmotnost + přidané kg
+     assist s dopomocí                zátěž = hmotnost − dopomoc
+     time   na čas                    bez objemu, rekord nejdelší výdrž
+     timew  na čas se zátěží          bez objemu, rekordy nejdelší výdrž a max. zátěž (F4-14)
+     dist   vzdálenost a čas          rekordy vzdálenost, čas a tempo
+     distw  vzdálenost se zátěží      zátěž = váha, bez objemu (práce kg × m jen u cviku, F4-16)
+     Pořadí políček f (F3-39): opakování / čas před váhou, stejně jako text série „12×40kg“ (setStr). Platí
+     pro tabulku sérií (trénink, úprava tréninku, šablona), krokovač i Enter na klávesnici. Data se ukládají
+     podle názvu políčka, pořadí na ně nemá vliv.
+     Vzdálenost se zátěží (F4-16, saně): políčka m (celé metry, s.m) a kg, série „20m×90kg“, aby šla zapsat
+     i nedotlačená dráha. Obdobně jako opakování a váha: rekordy max. zátěž, nejlepší série (nejvíc kg × m),
+     práce cviku (kg × m) a nejdelší vzdálenost, bez odhadu 1RM; grafy cviku Max zátěž, Práce série, Práce
+     tréninku, Nejdelší; v souhrnu tréninku Nejlepší a Práce. Práce se nepočítá do objemu tréninku (setVol 0),
+     kg × m a kg × opakování nejdou sčítat. Návrh progrese (PROG_KINDS) zatím ne (F4-17), stopky taky ne.
+     Délka dráhy podle fitka patří do nastavení stroje (cvik vázaný na fitko). */
+  const KIND = {
+    wr: { l: "Opakování a váha", f: ["reps", "kg"], ex: "Bench press, bicepsový zdvih" },
+    bw: { l: "Vlastní váha", f: ["reps"], ex: "Shyby, kliky, sedy-lehy" },
+    bwplus: { l: "Vlastní váha se zátěží", f: ["reps", "plus"], ex: "Shyby a kliky na bradlech se zátěží" },
+    assist: { l: "S dopomocí", f: ["reps", "minus"], ex: "Shyby a kliky s dopomocí stroje" },
+    time: { l: "Na čas", f: ["sec"], ex: "Plank, výdrž, vis" },
+    timew: { l: "Na čas se zátěží", f: ["sec", "kg"], ex: "Plank se zátěží, farmářská chůze" },
+    dist: { l: "Vzdálenost a čas", f: ["km", "sec"], ex: "Běh, veslovací trenažér" },
+    distw: { l: "Vzdálenost se zátěží", f: ["m", "kg"], ex: "Tlačení a tažení saní" },
+  };
+  const KIND_ORDER = ["wr", "bw", "bwplus", "assist", "time", "timew", "dist", "distw"];
+  const FLD = {
+    kg: { lab: "kg", mode: "decimal" },
+    plus: { lab: "+kg", mode: "decimal" },
+    minus: { lab: "−kg", mode: "decimal" },
+    reps: { lab: "Opak.", mode: "numeric" },
+    sec: { lab: "Čas", mode: "numeric" },
+    km: { lab: "km", mode: "decimal" },
+    m: { lab: "m", mode: "numeric" },
+  };
+  const kindOf = (id) => {
+    const e = S.exLib[id];
+    return e && KIND[e.kind] ? e.kind : "wr";
+  };
+  const kFields = (k) => KIND[k].f;
+  const hasReps = (k) => KIND[k].f.includes("reps");
+  const isTimed = (k) => KIND[k].f.includes("sec");
+  const usesKg = (k) => KIND[k].f.some((f) => f === "kg" || f === "plus" || f === "minus");
+  /* tělesná hmotnost k datu: nejbližší dřívější měření, jinak hodnota z nastavení */
+  function bodyWeightAt(t) {
+    const xs = Object.values(S.body || {})
+      .filter((b) => isFinite(+b.weight) && +b.weight > 0)
+      .sort((a, b) => a.date - b.date);
+    if (!xs.length) return +S.cfg.bodyWeight || 80;
+    let best = xs[0];
+    for (const x of xs) {
+      if (x.date <= t) {
+        best = x;
+      } else {
+        break;
+      }
+    }
+    return +best.weight;
+  }
+  function setLoad(kind, s, t) {
+    const kg = +s.kg || 0;
+    if (kind === "wr" || kind === "timew" || kind === "distw") return kg;
+    if (kind === "bw") return bodyWeightAt(t);
+    if (kind === "bwplus") return bodyWeightAt(t) + kg;
+    if (kind === "assist") return Math.max(0, bodyWeightAt(t) - kg);
+    return 0;
+  }
+  const setVol = (kind, s, t) => (hasReps(kind) ? setLoad(kind, s, t) * (+s.reps || 0) : 0);
+  const fmtSec = (v) => {
+    v = Math.max(0, Math.round(v));
+    const h = Math.floor(v / 3600);
+    return h
+      ? h + ":" + d2(Math.floor((v % 3600) / 60)) + ":" + d2(v % 60)
+      : Math.floor(v / 60) + ":" + d2(v % 60);
+  };
+  const parseSec = (v) => {
+    if (v == null || v === "") return NaN;
+    v = String(v).trim().replace(",", ":");
+    if (/^\d+$/.test(v)) return +v;
+    const p = v.split(":").map((x) => +x);
+    if (p.some((x) => !isFinite(x))) return NaN;
+    return p.length >= 3 ? p[0] * 3600 + p[1] * 60 + (p[2] || 0) : p[0] * 60 + (p[1] || 0);
+  };
+  const fmtPace = (sec, km) => (km > 0 ? fmtSec(sec / km) + " /km" : "–");
+  /* zápis jedné série textem */
+  /* série jako text (F3-38): opakování × váha s jednotkou, bez mezer („12×20kg“, „8×+10kg“, „8×−20kg“,
+     „1:00×20kg“), aby se váha nepletla s opakováním. Stejný tvar mají rekordy (recFmt), návrh progrese
+     a text pro coache (WDLOG v js/wdlog.js, F4-18). Obrázek ke sdílení má vlastní formát (shrSetStr). */
+  function setStr(kind, s) {
+    if (kind === "time") return fmtSec(s.sec || 0);
+    if (kind === "timew") return fmtSec(s.sec || 0) + (s.kg ? "×" + fmtKg(s.kg) + "kg" : "");
+    if (kind === "dist") return (s.km ? fmtKg(s.km) + " km · " : "") + fmtSec(s.sec || 0);
+    if (kind === "distw") return (s.m || 0) + "m" + (s.kg ? "×" + fmtKg(s.kg) + "kg" : "");
+    if (kind === "bw") return (s.reps || 0) + "×";
+    if (kind === "bwplus") return (s.reps || 0) + (s.kg ? "×+" + fmtKg(s.kg) + "kg" : "×");
+    if (kind === "assist") return (s.reps || 0) + (s.kg ? "×−" + fmtKg(s.kg) + "kg" : "×");
+    return (s.reps || 0) + (s.kg ? "×" + fmtKg(s.kg) + "kg" : "×");
+  }
+
+  /* ---------- KONTROLA ČÍSEL (F1-10) ----------
+     Číselné políčko má atribut data-num="<pravidlo z NUM_RULES>". Nepovolený znak se do něj vůbec
+     nedostane (numFilter), hodnota, která i tak nedává smysl (moc desetinných míst, nad limitem, 1:75),
+     dostane červený rámeček (třída bad) a uložit ji nejde (numCheck). Prázdné políčko je v pořádku,
+     povinné hodnoty (opakování, čas, km u odškrtnuté série) hlídá setProblem.
+     Pravidla:  dec = počet desetinných míst (0 = jen celé číslo), min/max = rozsah,
+                unit = jednotka do nápovědy,
+                time = čas (45, 1:30, 1:02:30; čárka a tečka se při psaní mění na dvojtečku).
+     Pravidla NUM_RULES: kg, reps, sec, km, m (metry, F4-16), min, body, pct, kcal, bw, height (F3-33).
+     Při vykreslení dostane políčko třídu numCls(pravidlo, hodnota). Znaky filtruje numInput (globální
+     posluchač input; číslici navíc podle numFits nepřijme, „,5“ → „0,5“), jednotnou podobu po opuštění
+     políčka a při ✓ dá numNormalize (čas „85“ → „1:25“, „1:5“ → „1:05“, „82.5“ → „82,5“). Před uložením
+     setProblem / draftProblem (série) a inputProblem(id) (políčka ve formulářích). Uložené číslo do políčka
+     vždy přes numStr (nejvýš 2 desetinná místa). ✓ série = toggleSetDone. Nové číselné pole (F1-03, F1-08…)
+     vždy přes stejná pravidla. */
+  const NUM_RULES = {
+    kg: { lab: "Váha", dec: 2, max: 999, unit: "kg" },
+    reps: { lab: "Opakování", dec: 0, max: 999 },
+    sec: { lab: "Čas", time: true, max: 86399 },
+    km: { lab: "Vzdálenost", dec: 2, max: 999, unit: "km" },
+    m: { lab: "Vzdálenost", dec: 0, max: 9999, unit: "m" },
+    min: { lab: "Délka", dec: 0, max: 1439, unit: "min" },
+    body: { lab: "Hodnota", dec: 2, max: 999 },
+    pct: { lab: "Hodnota", dec: 2, max: 100, unit: "%" },
+    kcal: { lab: "Hodnota", dec: 2, max: 9999 },
+    bw: { lab: "Tělesná hmotnost", dec: 2, min: 20, max: 300, unit: "kg" },
+    height: { lab: "Výška", dec: 0, min: 100, max: 250, unit: "cm" },
+  };
+  // pravidlo pro pole série (kg, +kg a −kg se ukládají do s.kg)
+  const setRule = (f) => (f === "plus" || f === "minus" ? "kg" : f);
+  // uložené číslo jako text do políčka: nejvýš 2 desetinná místa (starší data z Hevy mohou mít víc), čárka
+  function numStr(v) {
+    const n = +String(v).replace(",", ".");
+    if (!isFinite(n)) return String(v);
+    return String(Math.round(n * 100) / 100).replace(".", ",");
+  }
+  // nechá jen povolené znaky: číslice, u desetinných čísel jednu čárku/tečku, u času nejvýš 2 dvojtečky;
+  // čárka nebo dvojtečka na začátku dostane před sebe nulu („,5“ → „0,5“)
+  function numFilter(rule, text) {
+    const r = NUM_RULES[rule];
+    let out = "";
+    let seps = 0;
+    for (const ch of String(text)) {
+      if (ch >= "0" && ch <= "9") {
+        out += ch;
+        continue;
+      }
+      const isSep = ch === ":" || ch === "," || ch === ".";
+      const zero = out === "" ? "0" : "";
+      if (r.time && isSep && seps < 2) {
+        out += zero + ":";
+        seps++;
+      } else if (!r.time && r.dec > 0 && ch !== ":" && isSep && seps === 0) {
+        out += zero + ch;
+        seps++;
+      }
+    }
+    return out;
+  }
+  // vejde se text do políčka? Nejvýš tolik číslic před čárkou, kolik má
+  // hranice (999 → 3), a dec desetinných míst;
+  // u času nejvýš 5 číslic na začátku a 2 za každou dvojtečkou
+  function numFits(rule, text) {
+    const r = NUM_RULES[rule];
+    if (r.time) {
+      const parts = text.split(":");
+      return parts[0].length <= 5 && parts.slice(1).every((p) => p.length <= 2);
+    }
+    const [whole, decimals = ""] = text.split(/[.,]/);
+    return whole.length <= String(r.max).length && decimals.length <= r.dec;
+  }
+  // jednotná podoba po opuštění políčka a při ✓: čas „85“ → „1:25“, „1:5“ → „1:05“; číslo „5,“ → „5“,
+  // „082“ → „82“, „82.5“ → „82,5“. Prázdnou nebo neplatnou hodnotu nechá, jak je.
+  function numNormalize(rule, value) {
+    const text = String(value == null ? "" : value).trim();
+    const res = numCheck(rule, text);
+    if (text === "" || !res.ok) return text;
+    if (NUM_RULES[rule].time) return fmtSec(res.v);
+    return String(res.v).replace(".", ",");
+  }
+  // je hodnota platná? {ok, v: číslo (NaN u prázdné), msg: co je špatně}
+  function numCheck(rule, value) {
+    const r = NUM_RULES[rule];
+    const text = String(value == null ? "" : value).trim();
+    if (text === "") return { ok: true, v: NaN };
+    if (r.time) return timeCheck(r, text);
+    if (!/^(\d+([.,]\d*)?|[.,]\d+)$/.test(text)) {
+      return { ok: false, msg: r.dec ? "zapiš číslo, např. 82,5" : "zapiš celé číslo" };
+    }
+    const decimals = (text.split(/[.,]/)[1] || "").length;
+    if (decimals > r.dec) {
+      return { ok: false, msg: r.dec ? "nejvýš " + r.dec + " desetinná místa" : "jen celé číslo" };
+    }
+    const v = num(text);
+    const unit = r.unit ? " " + r.unit : "";
+    if (v > r.max) return { ok: false, msg: "nejvýš " + fmtInt(r.max) + unit };
+    if (r.min && v < r.min) return { ok: false, msg: "aspoň " + fmtInt(r.min) + unit };
+    return { ok: true, v };
+  }
+  function timeCheck(r, text) {
+    text = text.replace(/[.,]/g, ":");
+    // „1:“ během psaní ještě není chyba (= 1:00)
+    if (!/^\d+(:\d{0,2}){0,2}$/.test(text)) return { ok: false, msg: "zapiš jako 45, 1:30 nebo 1:02:30" };
+    if (
+      text
+        .split(":")
+        .slice(1)
+        .some((p) => +p > 59)
+    ) {
+      return { ok: false, msg: "minuty a sekundy nejvýš 59" };
+    }
+    const v = parseSec(text);
+    if (v > r.max) return { ok: false, msg: "nejvýš 23:59:59" };
+    return { ok: true, v };
+  }
+  // třída pro vykreslení políčka: " bad", když uložená hodnota neprojde kontrolou
+  const numCls = (rule, value) => (numCheck(rule, value).ok ? "" : " bad");
+  // při psaní: vyhodí nepovolené znaky a číslici navíc (3. desetinné místo, 4. číslice u 999) vůbec nepřijme,
+  // kurzor zůstane na místě; obnoví červený rámeček. input.numLast = poslední přijatá hodnota.
+  function numInput(input) {
+    const rule = input.dataset.num;
+    const text = input.value;
+    const last = input.numLast != null ? input.numLast : input.defaultValue;
+    let clean = numFilter(rule, text);
+    const caret = input.selectionStart == null ? text.length : input.selectionStart;
+    let pos = numFilter(rule, text.slice(0, caret)).length;
+    if (!numFits(rule, clean) && numFits(rule, last)) {
+      pos = Math.max(0, pos - (clean.length - last.length));
+      clean = last;
+    }
+    input.numLast = clean;
+    if (clean !== text) {
+      input.value = clean;
+      try {
+        input.setSelectionRange(pos, pos);
+      } catch (e) {}
+    }
+    input.classList.toggle("bad", !numCheck(rule, clean).ok);
+  }
+  // krátká nápověda k políčku s červeným rámečkem (po opuštění políčka a při ukládání)
+  function numMsg(input) {
+    const rule = input.dataset.num;
+    const res = numCheck(rule, input.value);
+    if (res.ok) return "";
+    return (input.dataset.lab || NUM_RULES[rule].lab) + ": " + res.msg;
+  }
+  // první problém v sérii: neplatná hodnota, u odškrtávané série (required) i chybějící povinná hodnota
+  function setProblem(kind, s, required) {
+    for (const f of kFields(kind)) {
+      const rule = setRule(f);
+      const res = numCheck(rule, s[rule]);
+      if (!res.ok) {
+        return { f, msg: "Oprav zvýrazněnou hodnotu. " + NUM_RULES[rule].lab + ": " + res.msg + "." };
+      }
+    }
+    if (!required) return null;
+    if (hasReps(kind) && !(num(s.reps) > 0)) return { f: "reps", msg: "Zadej počet opakování." };
+    if (isTimed(kind) && !(parseSec(s.sec) > 0)) return { f: "sec", msg: "Zadej čas (např. 45 nebo 1:30)." };
+    if (kind === "dist" && !(num(s.km) > 0)) return { f: "km", msg: "Zadej vzdálenost." };
+    if (kind === "distw" && !(num(s.m) > 0)) return { f: "m", msg: "Zadej vzdálenost." };
+    return null;
+  }
+  // první problém v tréninku nebo šabloně: {e, j, f, msg}; onlyDone =
+  // jen odškrtnuté série (i povinné hodnoty)
+  function draftProblem(d, onlyDone) {
+    for (const e of d.ex) {
+      const kind = kindOf(e.exId);
+      for (let j = 0; j < e.sets.length; j++) {
+        const s = e.sets[j];
+        if (onlyDone && !s.done) continue;
+        const problem = setProblem(kind, s, onlyDone);
+        if (problem) return Object.assign({ e, j }, problem);
+      }
+    }
+    return null;
+  }
+  // ukáže problém a skočí do políčka série (po vykreslení, render drží fokus podle id)
+  function showProblem(e, j, problem) {
+    toast(problem.msg);
+    focusInput("in-" + e.k + "-" + j + "-" + problem.f);
+  }
+  // políčko s červeným rámečkem v panelu nebo formuláři: ukáže nápovědu, skočí do něj a vrátí true
+  function inputProblem(id) {
+    const input = document.getElementById(id);
+    if (!input || !input.dataset.num) return false;
+    const msg = numMsg(input);
+    if (!msg) return false;
+    toast("Oprav zvýrazněnou hodnotu. " + msg + ".");
+    focusInput(id);
+    return true;
+  }
+  function focusInput(id) {
+    setTimeout(() => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      if (input.dataset.act === "kk") {
+        // políčko série s krokovačem (F1-03): místo klávesnice panel s +/−
+        sheetStepper(+input.dataset.i, +input.dataset.j, input.dataset.v);
+        return;
+      }
+      input.scrollIntoView({ block: "center" });
+      input.focus();
+    }, 80);
+  }
+
+  /* ---------- odvozená data: seznam tréninků a souhrny po cvicích (derive) ---------- */
+  let D = null; // výsledek derive(), null = spočítat znovu
+  // data se změnila: zahodit odvozená data a překreslit
+  function dirty() {
+    D = null;
+    scheduleRender();
+  }
+  /* všechny tréninky od nejnovějšího (all) a pro každý cvik jeho výskyty s hodnotami (byEx);
+     počítá se jen jednou po každé změně dat */
+  function derive() {
+    if (D) return D;
+    const all = [];
+    for (const mk in S.months) {
+      const items = S.months[mk];
+      for (const id in items) {
+        all.push(Object.assign({ id, mk }, items[id]));
+      }
+    }
+    all.sort((a, b) => b.start - a.start);
+    const byEx = {};
+    for (const w of all) {
+      for (const e of w.ex || []) {
+        (byEx[e.exId] = byEx[e.exId] || []).push(exSum(w, e));
+      }
+    }
+    D = { all, byEx };
+    return D;
+  }
+  /* souhrn jednoho cviku v tréninku w: hodnoty pracovních sérií (objem, max, odh. 1RM, čas, vzdálenost…);
+     setVol = největší objem jedné série, totReps = opakování celkem (F3-42), maxKg i u cviku na čas se zátěží;
+     u vzdálenosti se zátěží (F4-16) maxM, work (práce kg × m v tréninku) a setWork (největší práce série) */
+  function exSum(w, e) {
+    const kind = kindOf(e.exId);
+    let vol = 0,
+      maxKg = 0,
+      best = 0,
+      bestSet = null,
+      maxReps = 0,
+      setVol = 0,
+      totReps = 0,
+      nWork = 0,
+      maxSec = 0,
+      totSec = 0,
+      maxKm = 0,
+      totKm = 0,
+      speed = 0,
+      maxM = 0,
+      work = 0,
+      setWork = 0;
+    for (const s of e.sets) {
+      if (!isWork(s.t)) continue;
+      nWork++;
+      if (hasReps(kind)) {
+        const L = setLoad(kind, s, w.start),
+          reps = +s.reps || 0;
+        vol += L * reps;
+        totReps += reps;
+        if (L * reps > setVol) {
+          setVol = L * reps;
+        }
+        if (L > maxKg) {
+          maxKg = L;
+        }
+        if (reps > maxReps) {
+          maxReps = reps;
+        }
+        const r = e1rm(L, reps);
+        if (r > best) {
+          best = r;
+          bestSet = Object.assign({}, s, { load: L });
+        }
+      }
+      if (isTimed(kind)) {
+        const sec = +s.sec || 0;
+        totSec += sec;
+        if (sec > maxSec) {
+          maxSec = sec;
+        }
+        if (kind === "timew" && sec > 0) {
+          maxKg = Math.max(maxKg, setLoad(kind, s, w.start));
+        }
+      }
+      // vzdálenost se zátěží (F4-16): práce = kg × m
+      if (kind === "distw") {
+        const meters = +s.m || 0;
+        const L = setLoad(kind, s, w.start);
+        if (meters > maxM) {
+          maxM = meters;
+        }
+        if (meters > 0 && L > maxKg) {
+          maxKg = L;
+        }
+        work += L * meters;
+        if (L * meters > setWork) {
+          setWork = L * meters;
+        }
+      }
+      if (kind === "dist") {
+        const km = +s.km || 0,
+          sec = +s.sec || 0;
+        totKm += km;
+        if (km > maxKm) {
+          maxKm = km;
+        }
+        const v = sec > 0 ? km / (sec / 3600) : 0;
+        if (v > speed) {
+          speed = v;
+        }
+      }
+    }
+    return {
+      w,
+      e,
+      kind,
+      vol,
+      maxKg,
+      best,
+      bestSet,
+      maxReps,
+      setVol,
+      totReps,
+      nWork,
+      maxSec,
+      totSec,
+      maxKm,
+      totKm,
+      speed,
+      maxM,
+      work,
+      setWork,
+    };
+  }
+  // fitko, ve kterém se cvik porovnává: u cviku vázaného na fitko gymId, jinak null (všechna fitka)
+  function exCtxGym(exId, gymId) {
+    const ex = S.exLib[exId];
+    return ex && ex.gymDep ? gymId : null;
+  }
+  // poslední trénink s cvikem (vázaný na fitko: jen v tomto fitku; anyGym = v kterémkoli), před časem before
+  function lastSession(exId, gymId, excludeId, before, anyGym) {
+    const list = derive().byEx[exId] || [];
+    const g = anyGym ? null : exCtxGym(exId, gymId);
+    for (const s of list) {
+      if (s.w.id === excludeId || s.w.start >= (before || Infinity)) continue;
+      if (g && s.w.gymId !== g) continue;
+      return s;
+    }
+    return null;
+  }
+  // při úpravě uloženého tréninku se „minule“ bere jen z tréninků před ním
+  const draftBefore = (d) => (d.mode === "edit" ? d.start : 0);
+  // „minule“ pro cvik v rozdělaném / upravovaném tréninku d
+  function draftLast(d, exId) {
+    return lastSession(exId, d.gymId, d.id, draftBefore(d));
+  }
+  /* ---------- MINULE A PŘEDVYPLNĚNÍ (F1-01, F1-13) ----------
+     Série se párují podle druhu: zahřívací zvlášť, ostatní (pracovní, drop set, do selhání) spolu, v pořadí.
+     Předvyplnění je šedé (placeholder), klepnutím na ✓ se převezme. Zdroj: odpovídající série z minula,
+     jinak s.ph (hodnoty ze šablony u nikdy necvičeného cviku). Když ani jedno není, ukáže se „–“
+     v políčkách (sloupec Minule je od F1-19 schovaný, viz prevLine).
+     Předvyplnění ze série nad (F1-13, jen v rozdělaném tréninku, v draftHints): série bez minula, šablony
+     i návrhu progrese dostane hodnoty nejbližší série nad ní ve stejném cviku, která má zapsané hodnoty
+     (odškrtnutá i neodškrtnutá; aboveHint, setVals). Zahřívací bere jen ze zahřívací, ostatní (pracovní,
+     drop set, do selhání) jen z pracovní. Převezmou se jen vyplněná políčka. Sloupec Minule zůstane „–“
+     (nejde o historii), kontrola velkého skoku (F1-10) a zahřívací 60 % (F1-08) dál jen podle minula.
+     Změna hodnoty psaním nebo krokovačem hned obnoví šedé hodnoty sérií pod ní (hintsRefresh), aby ✓
+     nepřevzal něco jiného, než je vidět. Supersérie nic nemění (jen v rámci jednoho cviku).
+     Úprava uloženého tréninku a šablona předvyplnění ze série nad nemají.
+     Předvyplnění jen ze šablony nebo z tréninku (F2-11): série s s.phTpl bere šedé hodnoty jen ze s.ph (hodnoty
+     zdroje, exEntryFor s fromOnly), minule do nich nepřidá nic, ani když zdroj hodnotu nemá (vše nebo nic;
+     prázdné políčko, nebo „–“, když zdroj nemá nic). Platí pro trénink ze šablony, která má t.hints === "tpl"
+     (přepínač „Předvyplnění hodnot: Z minula / Ze šablony“ v úpravě šablony, tplHintsPick, akce tplHints,
+     d.hints; chybějící pole = „z minula“, výchozí u nových i starých šablon), a vždy pro Cvičit znovu
+     (hodnoty zvoleného tréninku). Při „z minula“ platí dosavadní pravidlo (s.ph jen u nikdy necvičeného cviku).
+     Sloupec/řádek Minule, návrh progrese (F4-01), kontrola velkého skoku (F1-10) a zahřívací 60 % (F1-08)
+     dál berou minule z historie. Série přidaná v tréninku navíc nemá s.phTpl, bere minule jako dřív.
+     „Minule“ = lastSession: cvik vázaný na fitko jen v tomtéž fitku, při úpravě uloženého tréninku jen
+     tréninky před ním (draftLast). exHints vrátí pro každou sérii minulou sérii (sloupec Minule) a
+     předvyplnění. Nový cvik v tréninku má prázdné hodnoty; s.ph = hodnoty ze šablony jen u nikdy necvičeného
+     cviku a jen v rozdělaném tréninku. V rozdělaném tréninku se předvyplnění bere vždy přes draftHints (návrh
+     progrese, F4-01). */
+  const setGrp = (t) => (t === "w" ? "w" : "n");
+  const HINT_F = ["kg", "reps", "sec", "km", "m"];
+  // ke každé sérii cviku e: p = odpovídající série z minula (sloupec Minule), h = šedé předvyplnění
+  function exHints(e, last) {
+    const prev = { w: [], n: [] };
+    if (last) {
+      for (const q of last.e.sets) {
+        prev[setGrp(q.t)].push(q);
+      }
+    }
+    const cnt = { w: 0, n: 0 };
+    return e.sets.map((s) => {
+      const g = setGrp(s.t),
+        p = prev[g][cnt[g]++] || null;
+      // série „jen ze šablony“ (s.phTpl, F2-11) minule do předvyplnění nebere, ani když šablona hodnotu nemá
+      return { p, h: s.phTpl ? s.ph || null : p || s.ph || null };
+    });
+  }
+  // exHints pro cvik e rozdělaného tréninku d, u pracovních sérií s použitým návrhem progrese (F4-01),
+  // série bez předvyplnění ze série nad (F1-13)
+  function draftHints(d, e) {
+    let hints = exHints(e, draftLast(d, e.exId));
+    const prog = e.progUse ? progInfo(d, e) : null;
+    if (prog) {
+      let work = -1; // pořadí pracovní série (jako číslo série v kartě, od 0)
+      hints = hints.map((x, j) => {
+        if (e.sets[j].t !== "n") return x;
+        work++;
+        const hit = prog.sets.find((p) => p.set === work);
+        if (!hit) return x;
+        return { p: x.p, h: Object.assign({}, x.h, { kg: hit.kg, reps: prog.reps }) };
+      });
+    }
+    if (d.mode !== "active") return hints;
+    return hints.map((x, j) => (x.h ? x : { p: x.p, h: aboveHint(e, j) }));
+  }
+  // zapsané hodnoty série s jako předvyplnění ({kg, reps, sec, km}, jen platná čísla > 0), jinak null
+  function setVals(kind, s) {
+    const out = {};
+    for (const f of kFields(kind)) {
+      const rule = setRule(f);
+      const res = numCheck(rule, s[rule]);
+      if (res.ok && res.v > 0) {
+        out[rule] = res.v;
+      }
+    }
+    return Object.keys(out).length ? out : null;
+  }
+  // předvyplnění série j ze série nad (F1-13): nejbližší zahřívací nad zahřívací, jinak nejbližší pracovní
+  // se zapsanými hodnotami; null = žádná taková není
+  function aboveHint(e, j) {
+    const kind = kindOf(e.exId);
+    const from = e.sets[j].t === "w" ? "w" : "n";
+    for (let k = j - 1; k >= 0; k--) {
+      if (e.sets[k].t !== from) continue;
+      const vals = setVals(kind, e.sets[k]);
+      if (vals) return vals;
+    }
+    return null;
+  }
+  // šedé předvyplnění do políčka: bez předvyplnění „–“, chybějící hodnota prázdně
+  function hintStr(h, f) {
+    if (!h) return "–";
+    if (f === "sec") return h.sec ? fmtSec(h.sec) : "";
+    if (f === "km") return String(h.km || "");
+    if (f === "m") return String(h.m || "");
+    if (f === "reps") return String(h.reps || "");
+    return h.kg ? fmtKg(h.kg).replace(/\s/g, "") : "";
+  }
+  // po změně hodnoty v cviku i rozdělaného tréninku d obnoví šedé předvyplnění v jeho políčkách
+  // (bez překreslení, série pod ní ho můžou brát ze série nad, F1-13)
+  function hintsRefresh(d, i) {
+    const e = d && d.mode === "active" ? d.ex[i] : null;
+    if (!e) return;
+    const hints = draftHints(d, e);
+    const flds = kFields(kindOf(e.exId));
+    e.sets.forEach((s, j) => {
+      for (const f of flds) {
+        const input = document.getElementById(kkInputId(e, j, f));
+        if (input) {
+          input.placeholder = hintStr(hints[j].h, setRule(f));
+        }
+      }
+    });
+  }
+
+  /* ---------- NÁVRH PROGRESE (F4-01) ----------
+     Double progression: cvik má rozsah opakování (např. 8–12). Když minule („minule“ jako F1-01, draftLast)
+     měly všechny pracovní série (typ „n“, bez zahřívacích, drop setů a do selhání) aspoň horní hranici,
+     navrhne rozdělaný trénink přidat váhu o krok krokovače cviku (kkStep, výchozí 2,5 kg) k nejtěžší sérii
+     a opakování od dolní hranice. U cviku s dopomocí naopak ubrat dopomoc (od nejmenší dopomoci).
+     Série s menší váhou než nejtěžší se nejdřív dorovnávají (oprava F4-01): lehčí série, která dala horní
+     hranici, dostane o krok víc (nejvýš váhu nejtěžší), i když nejtěžší série horní hranici nedala. Nad
+     nejtěžší váhu se přidává, až mají všechny pracovní série stejnou váhu a horní hranici. S.cfg.progSets
+     „all“ = všechny takové série najednou, „first“ = jen první z nich (přidání nad nejtěžší jen 1. série).
+     Návrh je zelený řádek pod názvem cviku (progLine), dokud jsou pracovní série nedotčené (progTouched).
+     Klepnutí na řádek návrh použije (e.progUse): šedé předvyplnění pracovních sérií = návrh (draftHints,
+     ✓ i krokovač ho převezmou) a řádek zmizí. Změna pracovních sérií (hodnota, ✓, + Série, smazání,
+     změna druhu série; progTouch → e.progNo) řádek schová bez použití, zahřívací série návrh nechají.
+     e.progUse a e.progNo jsou jen v rozdělaném tréninku (draftToWorkout je neukládá). Sloupec Minule
+     a kontrola velkého skoku zůstávají podle minula.
+     Rozsah: u cviku pole prog ([min, max] = zapnuto, "off" = vypnuto, bez pole = podle nastavení), jinak
+     S.cfg.progAll (výchozí vypnuto) s rozsahem S.cfg.progMin–progMax. Jen typy PROG_KINDS.
+     progInfo(d, e) vrací {sets: [{set, kg}], reps, up}: set = pořadí pracovní série, up = přidání nad
+     nejtěžší váhu. Předvyplnění v rozdělaném tréninku vždy přes draftHints(d, e) (✓, krokovač, karta), ne
+     rovnou exHints (sloupec Minule a setJump dál z exHints(...).p). Rozsah opakování je i v nadpisu sloupce
+     Opak. (repsRange, F3-22). Vysvětlení jen v progSettings, ve formuláři cviku jen volba.
+     Hlavní vypínač S.cfg.progOn (F4-15, výchozí zapnuto, i u starších dat): vypnuto = návrh nikde,
+     ani u cviku s vlastním rozsahem; zbytek karty v Nastavení a volba v Upravit cvik zešednou (depAttr:
+     .dep.off + inert, F3-23). S vypnutým U všech cviků zešedne jen Výchozí rozsah (Přidat váhu platí
+     i pro cviky zapnuté u cviku). */
+  const PROG_KINDS = { wr: true, bwplus: true, assist: true };
+  // platný rozsah opakování [min, max]
+  function progValid(range) {
+    if (!Array.isArray(range) || range.length !== 2) return false;
+    const [min, max] = range;
+    const ok = (n) => Number.isInteger(n) && n >= PROG_REPS.min && n <= PROG_REPS.max;
+    return ok(min) && ok(max) && min <= max;
+  }
+  // rozsah opakování cviku pro návrh progrese [min, max], nebo null (návrh u cviku není)
+  function progRange(exId) {
+    if (!PROG_KINDS[kindOf(exId)] || !S.cfg.progOn) return null;
+    const prog = exOf(exId).prog;
+    if (prog === "off") return null;
+    if (progValid(prog)) return prog;
+    return S.cfg.progAll ? [S.cfg.progMin, S.cfg.progMax] : null;
+  }
+  // výčet „1.“, „1. a 2.“, „1., 2. a 3.“
+  function listAnd(items) {
+    if (items.length < 2) return items.join("");
+    return items.slice(0, -1).join(", ") + " a " + items[items.length - 1];
+  }
+  const progSpan = (range) => range[0] + (range[1] > range[0] ? "–" + range[1] : "");
+  const progStr = (range) => progSpan(range) + " opak.";
+  /* návrh pro cvik e rozdělaného tréninku d: {sets, reps, range, kind, up}, nebo null;
+     sets = [{set, kg}] (set = pořadí pracovní série od 0), up = přidání nad nejtěžší váhu (jinak dorovnání) */
+  function progInfo(d, e) {
+    if (d.mode !== "active") return null;
+    const range = progRange(e.exId);
+    if (!range) return null;
+    const last = draftLast(d, e.exId);
+    if (!last) return null;
+    const work = last.e.sets.filter((s) => s.t === "n");
+    if (!work.length) return null;
+    const kind = kindOf(e.exId);
+    const assist = kind === "assist"; // s dopomocí: méně dopomoci = těžší
+    const step = kkStep(d, e, "kg");
+    const kgs = work.map((s) => +s.kg || 0);
+    const best = assist ? Math.min(...kgs) : Math.max(...kgs); // nejtěžší série z minula
+    const atTop = (s) => +s.reps >= range[1];
+    const round = (kg) => Math.round(kg * 100) / 100;
+    const first = S.cfg.progSets === "first";
+    const info = (sets, up) => ({ sets, reps: range[0], range, kind, up });
+    // nejdřív dorovnat: lehčí série s horní hranicí se přiblíží nejtěžší (o krok, nejvýš na její váhu)
+    const even = [];
+    work.forEach((s, n) => {
+      if (kgs[n] === best || !atTop(s)) return;
+      const kg = assist ? Math.max(best, kgs[n] - step) : Math.min(best, kgs[n] + step);
+      even.push({ set: n, kg: round(kg) });
+    });
+    if (even.length) return info(first ? even.slice(0, 1) : even, false);
+    // všechny série se stejnou váhou na horní hranici: přidat (všem, nebo jen 1. sérii)
+    if (!work.every(atTop)) return null;
+    if (assist && !(best > 0)) return null; // bez dopomoci už není co ubrat
+    if (kind === "wr" && !(best > 0)) return null;
+    const kg = round(assist ? Math.max(0, best - step) : best + step);
+    const sets = work.map((s, n) => ({ set: n, kg }));
+    return info(first ? sets.slice(0, 1) : sets, true);
+  }
+  // pracovní série cviku už upravené (hodnota, ✓, přidání, smazání, změna druhu): návrh se nenabízí
+  function progTouched(e) {
+    if (e.progNo) return true;
+    return e.sets.some((s) => s.t !== "w" && (s.done || s.kg !== "" || s.reps !== ""));
+  }
+  // změna pracovních sérií v rozdělaném tréninku: návrh zmizí (i po smazání hodnot)
+  function progTouch(d, e) {
+    if (d.mode === "active" && e) {
+      e.progNo = true;
+    }
+  }
+  // řádek s návrhem pod názvem cviku v kartě: jen dokud není použitý a série jsou nedotčené,
+  // klepnutí ho použije (progUse)
+  function progLine(d, e, i) {
+    if (e.progUse || progTouched(e)) return "";
+    const prog = progInfo(d, e);
+    if (!prog) return "";
+    const sign = prog.kind === "assist" ? "−" : prog.kind === "bwplus" ? "+" : "";
+    const verb =
+      prog.kind === "assist" ? "uber dopomoc" : prog.kind === "bwplus" ? "přidej zátěž" : "přidej váhu";
+    // různé váhy vedle sebe („7×42,5kg · 7×45kg“, F3-38), stejné jen jednou
+    const kgs = [...new Set(prog.sets.map((p) => p.kg))];
+    const vals = kgs.map((kg) => `<b>${prog.reps}×${sign}${esc(numStr(kg))}kg</b>`).join(" · ");
+    // které série: nic = všechny najednou (přidání ve volbě Všem sériím)
+    const all = prog.up && S.cfg.progSets !== "first";
+    const which = all ? "" : ` (${listAnd(prog.sets.map((p) => p.set + 1 + "."))} série)`;
+    const what = verb + " " + vals;
+    return `<button class="exc-prog" data-act="progUse" data-i="${i}"
+        title="Klepnutím návrh použiješ">
+      ${IC.prog}
+      <span>Návrh: ${what}${which}</span>
+    </button>`;
+  }
+  // rozsah u cviků ze zálohy: neplatný se zahodí (platí nastavení)
+  function exProgClean(items) {
+    for (const id in items) {
+      const item = items[id];
+      if (!item || typeof item !== "object" || !("prog" in item)) continue;
+      if (item.prog !== "off" && !progValid(item.prog)) {
+        delete item.prog;
+      }
+    }
+    return items;
+  }
+  // série jako text „8×80kg · 7×80kg“ (onlyWork = jen pracovní, bez zahřívacích)
+  function setsStr(sets, onlyWork, kind) {
+    kind = kind || "wr";
+    return sets
+      .filter((s) => !onlyWork || isWork(s.t))
+      .map((s) => setStr(kind, s))
+      .join(" · ");
+  }
+
+  /* ---------- UPOZORNĚNÍ NA VELKÝ SKOK (F1-10) ----------
+     Při ✓ v rozdělaném tréninku porovná hodnoty série se sérií z minula (sloupec Minule), a když
+     minulá hodnota chybí, s nejvyšší hodnotou cviku v historii (vázaný cvik jen v tomto fitku).
+     U úplně nového cviku se neporovnává nic. Ptá se jen při nárůstu (pokles bývá záměrný):
+     kg víc než 1,5× a aspoň o 20 kg, opakování víc než 2× a aspoň o 10, čas, km a metry víc než 2×.
+     Potvrzení platí pro sérii, dokud se v ní nezmění hodnota (s.jumpOk, do uloženého tréninku
+     se nedostane).
+     Hranice v JUMP, výpočet setJump, dotaz sheetJump. */
+  const JUMP = {
+    kg: { x: 1.5, add: 20 },
+    reps: { x: 2, add: 10 },
+    sec: { x: 2, add: 0 },
+    km: { x: 2, add: 0 },
+    m: { x: 2, add: 0 },
+  };
+  // nejvyšší kg, opakování, čas a km cviku v historii (vázaný cvik jen v daném fitku)
+  function exMaxes(exId, gymId) {
+    const gym = exCtxGym(exId, gymId);
+    const out = { kg: 0, reps: 0, sec: 0, km: 0, m: 0 };
+    for (const x of derive().byEx[exId] || []) {
+      if (gym && x.w.gymId !== gym) continue;
+      for (const s of x.e.sets) {
+        for (const f of HINT_F) {
+          if (+s[f] > out[f]) {
+            out[f] = +s[f];
+          }
+        }
+      }
+    }
+    return out;
+  }
+  // velký skok v sérii j cviku i: {f, v, ref, refTxt}, jinak null; s = hodnoty série (výchozí ta v tréninku,
+  // F1-14 kontroluje kopii s doplněným předvyplněním)
+  function setJump(d, i, j, s = d.ex[i].sets[j]) {
+    const e = d.ex[i];
+    const prev = exHints(e, draftLast(d, e.exId))[j].p;
+    let maxes = null;
+    for (const f of kFields(kindOf(e.exId))) {
+      const rule = setRule(f);
+      const v = rule === "sec" ? parseSec(s.sec) : num(s[rule]);
+      if (!(v > 0)) continue;
+      let ref = prev ? +prev[rule] || 0 : 0;
+      let refTxt = "Minule";
+      if (!ref) {
+        maxes = maxes || exMaxes(e.exId, d.gymId);
+        ref = maxes[rule];
+        refTxt = "Zatím nejvíc";
+      }
+      if (!(ref > 0)) continue;
+      if (v > ref * JUMP[rule].x && v - ref >= JUMP[rule].add) return { f, v, ref, refTxt };
+    }
+    return null;
+  }
+  // hodnota pro text upozornění (+kg / −kg se znaménkem)
+  function jumpFmt(f, v) {
+    if (f === "reps") return fmtInt(v) + " opak.";
+    if (f === "sec") return fmtSec(v);
+    if (f === "km") return fmtKg(v) + " km";
+    if (f === "m") return fmtInt(v) + " m";
+    const sign = f === "plus" ? "+" : f === "minus" ? "−" : "";
+    return sign + fmtKg(v) + " kg";
+  }
+  // okAct = akce tlačítka „Ano, je to správně“ (Označit v okně Dokončit trénink má vlastní, F1-14)
+  function sheetJump(i, j, jump, okAct = "jumpOk") {
+    const body = `
+    <p>${esc(jump.refTxt)}: <b>${esc(jumpFmt(jump.f, jump.ref))}</b></p>
+    <p>Není to překlep?</p>`;
+    const foot = `<button class="btn grow" data-act="jumpFix" data-i="${i}" data-j="${j}"
+        data-v="${esc(jump.f)}">
+      Opravit
+    </button>
+    <button class="btn primary grow" data-act="${okAct}" data-i="${i}" data-j="${j}">
+      Ano, je to správně
+    </button>`;
+    openSheet("Opravdu " + jumpFmt(jump.f, jump.v) + "?", body, foot);
+  }
+
+  // doplní do série s (j-tá série cviku e) chybějící hodnoty ze šedého předvyplnění a upraví zápis čísel
+  function setFill(d, e, j, s) {
+    const hint = draftHints(d, e)[j].h;
+    if (hint) {
+      if (s.kg === "" && hint.kg) {
+        s.kg = numStr(hint.kg);
+      }
+      if (s.reps === "" && hint.reps) {
+        s.reps = String(hint.reps);
+      }
+      if (!s.sec && hint.sec) {
+        s.sec = fmtSec(hint.sec);
+      }
+      if (!s.km && hint.km) {
+        s.km = numStr(hint.km);
+      }
+      if (!s.m && hint.m) {
+        s.m = String(hint.m);
+      }
+    }
+    for (const f of kFields(kindOf(e.exId))) {
+      const rule = setRule(f);
+      s[rule] = numNormalize(rule, s[rule]); // „85“ → „1:25“, „5,“ → „5“
+    }
+  }
+  // jsou v tréninku odškrtnuté všechny série? (po poslední se pauza nespouští)
+  const allSetsDone = (d) => d.ex.every((e) => e.sets.every((s) => s.done));
+  /* ✓ u série: odškrtnutí (převezme šedé předvyplnění, zkontroluje hodnoty a velký skok),
+     nebo jeho zrušení */
+  function toggleSetDone(d, i, j) {
+    const e = d.ex[i];
+    const s = e.sets[j];
+    const kind = kindOf(e.exId);
+    if (d === S.active) {
+      stwCancel(); // odškrtnutí ukončí stopky bez zápisu (F1-24)
+    }
+    if (s.done) {
+      s.done = false;
+      delete s.at;
+      delete s.atEnd; // označená v okně Dokončit trénink (F1-14)
+      touchDraft();
+      scheduleRender();
+      return;
+    }
+    setFill(d, e, j, s);
+    const problem = setProblem(kind, s, true);
+    if (problem) {
+      touchDraft();
+      scheduleRender();
+      showProblem(e, j, problem);
+      return;
+    }
+    if (d === S.active && !s.jumpOk) {
+      const jump = setJump(d, i, j);
+      if (jump) {
+        touchDraft();
+        scheduleRender();
+        sheetJump(i, j, jump);
+        return;
+      }
+    }
+    s.done = true;
+    s.at = Date.now();
+    delete s.atEnd;
+    // pauza (v úpravě staršího tréninku bez časovače); v supersérii podle kola (F4-05), po zahřívací sérii
+    // Časovač po zahřívací sérii (F1-22), jinak podle cviku (F1-09); s vypnutým časovačem pauzy
+    // (S.cfg.restOn) žádná, po poslední sérii tréninku taky žádná
+    if (d === S.active) {
+      const rest = ssRest(d, i, j);
+      if (allSetsDone(d)) {
+        restStop();
+      } else if (rest === "none") {
+        restStop();
+        toast(restNext());
+      } else if (S.cfg.restOn === false) {
+        restStop();
+      } else {
+        restStart(restAfter(d, i, s, rest));
+      }
+    }
+    const lr = liveRecords(d, i);
+    const types = lr.sets[j];
+    if (S.cfg.recCelEx && d === S.active) {
+      celExercise(e, lr); // oslava až po dokončení cviku (F3-02)
+    } else if (types && types.length) {
+      toast("Nový rekord: " + types.map(recLow).join(", "), "", null, medal(types));
+    }
+    touchDraft();
+    scheduleRender();
+  }
+
+  /* ---------- KROKOVAČ (F1-03) ----------
+     Velká tlačítka +/− pro ovládání jednou rukou. V rozdělaném tréninku (se zapnutým S.cfg.stepper)
+     jsou políčka série jen ke čtení, takže se neotevře klávesnice, a klepnutí na ně otevře spodní panel
+     s hodnotami série pod sebou. Tlačítko − / + mění hodnotu o krok, podržení ji mění dál.
+     Počáteční hodnota = hodnota v políčku, u prázdného políčka šedé předvyplnění (z minula, F1-01, nebo ze
+     série nad, F1-13), jinak u cviku vázaného na fitko hodnota z posledního tréninku v jiném fitku (kkOther,
+     jen start pro každé políčko zvlášť, ✓ ji nepřevezme; panel ji ukáže místo „bez záznamu z minula“),
+     jinak 0.
+     Krok u kg (i +kg a −kg), času, km a metrů (F4-16) se mění jedním tlačítkem dokola (STEPS) a pamatuje se
+     v Local "kkStep" pro každý cvik (cvik vázaný na fitko zvlášť pro každé fitko). Opakování po 1.
+     „Napsat“ zavře panel a otevře klávesnici v políčku. Klávesnicí se pak píše do všech políček té série
+     (kg i opakování, bez krokovače), dokud uživatel sérii neopustí (klepne jinam, na tlačítko nebo na ✓).
+     kkKbd = začátek id políček série (kkSetId), focusout uvnitř série režim neukončí.
+     „Série hotová“ zavře panel a odškrtne sérii přes toggleSetDone (kontrola čísel, velký skok, rekord,
+     pauza). Nic nového se neukládá do dat tréninku, jen se zapnutým RIR/RPE (F4-04) je pod hodnotami řádek
+     jeho tlačítek (effRow), klepnutí ho zapíše do s.rpe bez zavření panelu.
+     Políčka jsou readonly s data-act="kk", panel sheetStepper(i, j, f) (třída kk přes openSheet(…, nav.cls),
+     stav kk, řádek tr.kk-on). − / + mají data-kk (kkPress, podržení opakuje), základ kkBase, meze z
+     NUM_RULES. „Napsat“ = kkKeyboard. focusInput u políčka s krokovačem otevře panel místo klávesnice.
+     Výchozí S.cfg.stepper = zapnuto. */
+  const STEPS = {
+    kg: [0.5, 1, 1.25, 2, 2.5, 5, 10],
+    sec: [1, 5, 30],
+    km: [0.1, 0.5, 1],
+    m: [1, 5, 10],
+  };
+  const STEP_DEF = { kg: 2.5, sec: 5, km: 0.1, m: 5 };
+  const STEP_UNIT = { kg: " kg", sec: " s", km: " km", m: " m" };
+  const KK_REPEAT_DELAY = 450; // ms: podržení tlačítka − / +, než se hodnota začne měnit sama
+  const KK_REPEAT_EVERY = 90; // ms: další krok při podržení
+  let kk = null; // otevřený krokovač: {i, j, f} (cvik, série, pole, na které se klepnulo)
+  let kkKbd = null; // začátek id políček série, do které se právě píše klávesnicí (přes „Napsat“)
+  let kkHold = null; // časovač podrženého tlačítka
+
+  // krokovač místo klávesnice? jen v rozdělaném tréninku a se zapnutým nastavením
+  const kkOn = (d) => d.mode === "active" && S.cfg.stepper !== false;
+  const kkInputId = (e, j, f) => "in-" + e.k + "-" + j + "-" + f;
+  // začátek id všech políček série j cviku e („in-<k>-<j>-“)
+  const kkSetId = (e, j) => kkInputId(e, j, "");
+  // píše se do políčka (id) klávesnicí přes „Napsat“?
+  const kkTyping = (id) => !!kkKbd && typeof id === "string" && id.startsWith(kkKbd);
+
+  // klíč uloženého kroku: cvik, u cviku vázaného na fitko i fitko, a pravidlo (kg, sec, km)
+  function kkStepKey(d, e, rule) {
+    const ex = S.exLib[e.exId];
+    const gym = ex && ex.gymDep ? d.gymId || "" : "";
+    return e.exId + "|" + gym + "|" + rule;
+  }
+  // aktuální krok pro pole série (opakování vždy 1)
+  function kkStep(d, e, rule) {
+    if (!STEPS[rule]) return 1;
+    const saved = Local.get("kkStep", {})[kkStepKey(d, e, rule)];
+    return STEPS[rule].includes(saved) ? saved : STEP_DEF[rule];
+  }
+  // další krok dokola (0,5 → 1 → 1,25 → 2 → 2,5 → 5 → 10 → 0,5 …) a uložení
+  function kkStepNext(d, e, rule) {
+    const list = STEPS[rule];
+    const next = list[(list.indexOf(kkStep(d, e, rule)) + 1) % list.length];
+    const all = Local.get("kkStep", {});
+    all[kkStepKey(d, e, rule)] = next;
+    Local.set("kkStep", all);
+    return next;
+  }
+  const kkStepStr = (rule, step) => numStr(step) + STEP_UNIT[rule];
+
+  // hodnota z minula (šedé předvyplnění) pro pole série, jinak NaN
+  function kkHint(d, i, j, rule) {
+    const e = d.ex[i];
+    const hint = draftHints(d, e)[j].h;
+    return hint && +hint[rule] > 0 ? +hint[rule] : NaN;
+  }
+  /* série z posledního tréninku cviku vázaného na fitko v jiném fitku pro start krokovače u políčka série j
+     bez předvyplnění (F1-13): odpovídající série jako ve sloupci Minule, když tam bylo sérií méně, poslední
+     zahřívací (u zahřívací), jinak poslední pracovní; null = cvik není vázaný na fitko nebo záznam není */
+  function kkOther(d, e, j) {
+    const ex = S.exLib[e.exId];
+    if (!ex || !ex.gymDep) return null;
+    const before = draftBefore(d) || Infinity;
+    const other = (derive().byEx[e.exId] || []).find(
+      (x) => x.w.id !== d.id && x.w.gymId !== d.gymId && x.w.start < before,
+    );
+    if (!other) return null;
+    const pair = exHints(e, other)[j].p;
+    if (pair) return pair;
+    const from = e.sets[j].t === "w" ? "w" : "n";
+    const same = other.e.sets.filter((q) => q.t === from);
+    return same.length ? same[same.length - 1] : null;
+  }
+  // číslo, od kterého se krokuje: hodnota v políčku, jinak předvyplnění, jinak z jiného fitka, jinak 0
+  function kkBase(d, i, j, rule) {
+    const text = d.ex[i].sets[j][rule];
+    const res = numCheck(rule, text);
+    if (res.ok && isFinite(res.v)) return res.v;
+    const hint = kkHint(d, i, j, rule);
+    if (isFinite(hint)) return hint;
+    const other = kkOther(d, d.ex[i], j);
+    return other && +other[rule] > 0 ? +other[rule] : 0;
+  }
+  // číslo jako text do políčka: čas „1:05“, opakování celé číslo, kg a km s čárkou
+  function kkText(rule, value) {
+    if (rule === "sec") return fmtSec(value);
+    if (rule === "reps") return String(Math.round(value));
+    return numStr(value);
+  }
+  // hodnota v panelu: zapsaná normálně, z minula šedě, bez hodnoty „–“
+  function kkValue(d, i, j, rule) {
+    const text = d.ex[i].sets[j][rule];
+    if (text !== "") return `<b>${esc(text)}</b>`;
+    const hint = kkHint(d, i, j, rule);
+    if (isFinite(hint)) return `<b class="ph">${esc(kkText(rule, hint))}</b>`;
+    return '<b class="ph">–</b>';
+  }
+
+  // otevře krokovač pro sérii j cviku i (f = pole, na které se klepnulo: kg, plus, minus, reps, sec, km)
+  function sheetStepper(i, j, f) {
+    const d = S.active;
+    const e = d && d.ex[i];
+    const s = e && e.sets[j];
+    if (!s) return;
+    const kind = kindOf(e.exId);
+    const flds = kFields(kind);
+    if (document.activeElement) {
+      document.activeElement.blur();
+    }
+    const label = setLabel(e, j);
+    const prev = exHints(e, draftLast(d, e.exId))[j].p;
+    const steps = flds
+      .map(setRule)
+      .filter((rule) => STEPS[rule])
+      .map(
+        (rule) =>
+          `<button class="btn sm" data-act="kkStep" data-v="${rule}">
+            <span>krok</span> ${esc(kkStepStr(rule, kkStep(d, e, rule)))}
+          </button>`,
+      )
+      .join("");
+    // bez minula a s políčkem bez předvyplnění: hodnota z jiného fitka, od které začne krokovač (F1-13)
+    const hint = draftHints(d, e)[j].h;
+    const bare = flds.some((fld) => !(hint && +hint[setRule(fld)] > 0));
+    const other = !prev && bare ? kkOther(d, e, j) : null;
+    let prevText = "bez záznamu z minula";
+    if (prev) {
+      prevText = `minule <b class="num">${esc(setStr(kind, prev))}</b>`;
+    } else if (other) {
+      prevText = `v jiném fitku <b class="num">${esc(setStr(kind, other))}</b>`;
+    }
+    const warm = warmInfo(d, i, j);
+    let body = `<div class="kk-sub">
+      <span class="grow">${esc(label)} · ${prevText}</span>
+      ${steps}
+      ${
+        warm
+          ? `<button class="btn sm" id="kk-warm" data-act="kkWarm"
+              aria-label="Nastavit ${warm.pct} % nejtěžší série z minula">${warmLabel(warm)}</button>`
+          : ""
+      }
+    </div>`;
+    for (const fld of flds) {
+      const rule = setRule(fld);
+      body += `<div class="kk-row">
+        <button class="btn kk-b" data-kk="-1" data-kf="${rule}" aria-label="Ubrat">−</button>
+        <div class="kk-v">
+          <span id="kk-${rule}">${kkValue(d, i, j, rule)}</span>
+          <small>${esc(FLD[fld].lab)}</small>
+        </div>
+        <button class="btn kk-b" data-kk="1" data-kf="${rule}" aria-label="Přidat">+</button>
+      </div>`;
+    }
+    if (effCol(d)) {
+      body += effRow(i, j, s); // RIR/RPE (F4-04)
+    }
+    const foot = `<button class="btn grow" data-act="kkKbd">${icon("kbd")}Napsat</button>
+      ${
+        s.done
+          ? '<button class="btn primary grow" data-act="closeSheet">Hotovo</button>'
+          : `<button class="btn primary grow" data-act="kkDone">${icon("check")}Série hotová</button>`
+      }`;
+    openSheet(exName(e.exId), body, foot, false, {
+      cls: "kk",
+      re: () => sheetStepper(i, j, f),
+    });
+    kk = { i, j, f };
+    kkMark();
+    kkScroll();
+  }
+  // název série jako ve sloupci Série: pracovní se číslují, ostatní podle druhu
+  function setLabel(e, j) {
+    const s = e.sets[j];
+    if (s.t !== "n") return TYPE_NAME[s.t];
+    return "Série " + e.sets.slice(0, j + 1).filter((x) => x.t === "n").length;
+  }
+  // zvýrazní v tabulce řádek série, kterou krokovač upravuje (bez překreslení)
+  function kkMark() {
+    for (const row of document.querySelectorAll(".sets tr.kk-on")) {
+      row.classList.remove("kk-on");
+    }
+    const input = kk && S.active ? document.getElementById(kkInputId(S.active.ex[kk.i], kk.j, kk.f)) : null;
+    if (input) {
+      input.closest("tr").classList.add("kk-on");
+    }
+  }
+  // zavření krokovače (i když ho nahradí jiný panel): zrušit zvýraznění řádku
+  function kkEnd() {
+    if (!kk) return;
+    kk = null;
+    kkHoldStop();
+    kkMark();
+    // místo navíc pod stránkou (kkScroll) až po zavření; když panel nahradí krokovač jiné série, zůstane
+    requestAnimationFrame(() => {
+      if (!kk) {
+        document.documentElement.style.removeProperty("--kk-room");
+      }
+    });
+  }
+  /* posune stránku, aby upravovaná série byla vidět nad panelem a pod horní lištou. U posledního cviku pod řádkem
+     není dost stránky na posun (F1-27): chybějící místo se přidá pod stránku (--kk-room, css .wrap), kkEnd ho
+     po zavření krokovače zase odebere */
+  function kkScroll() {
+    const row = document.querySelector(".sets tr.kk-on");
+    const sheet = document.querySelector("#sheetRoot .sheet");
+    if (!row || !sheet) return;
+    const box = row.getBoundingClientRect();
+    const top = document.querySelector("#app .top");
+    const minTop = (top ? top.getBoundingClientRect().bottom : 0) + 8;
+    const maxBottom = window.innerHeight - sheet.offsetHeight - 12;
+    if (box.bottom > maxBottom) {
+      const need = box.bottom - maxBottom;
+      const root = document.documentElement;
+      const left = root.scrollHeight - window.innerHeight - window.scrollY;
+      if (need > left) {
+        const room = parseFloat(root.style.getPropertyValue("--kk-room")) || 0;
+        root.style.setProperty("--kk-room", Math.ceil(room + need - left) + "px");
+      }
+      window.scrollBy(0, need);
+    } else if (box.top < minTop) {
+      window.scrollBy(0, box.top - minTop);
+    }
+  }
+  // klepnutí na − / +: změní hodnotu o krok (nejméně 0, nejvýš hranice z NUM_RULES)
+  function kkPress(btn) {
+    const d = S.active;
+    if (!kk || !d || !d.ex[kk.i] || !d.ex[kk.i].sets[kk.j]) return;
+    const e = d.ex[kk.i];
+    const rule = btn.dataset.kf;
+    const step = rule === "reps" ? 1 : kkStep(d, e, rule);
+    let value = kkBase(d, kk.i, kk.j, rule) + +btn.dataset.kk * step;
+    value = Math.min(NUM_RULES[rule].max, Math.max(0, value));
+    kkSet(rule, value);
+  }
+  // zapíše hodnotu do pole série v otevřeném krokovači a ukáže ji v panelu i v tabulce (bez překreslení)
+  function kkSet(rule, value) {
+    const d = S.active;
+    const e = d.ex[kk.i];
+    const s = e.sets[kk.j];
+    value = Math.round(value * 100) / 100; // bez chyb zaokrouhlení (0,1 + 0,2)
+    s[rule] = kkText(rule, value);
+    delete s.jumpOk; // změněná hodnota = znovu zkontrolovat velký skok
+    touchDraft();
+    const shown = document.getElementById("kk-" + rule);
+    if (shown) {
+      shown.innerHTML = kkValue(d, kk.i, kk.j, rule);
+    }
+    // políčko v tabulce nad panelem ukazuje hodnotu hned
+    for (const fld of kFields(kindOf(e.exId))) {
+      if (setRule(fld) !== rule) continue;
+      const input = document.getElementById(kkInputId(e, kk.j, fld));
+      if (input) {
+        input.value = s[rule];
+        input.numLast = s[rule];
+        input.className = "cell" + numCls(rule, s[rule]);
+      }
+    }
+    hintsRefresh(d, kk.i); // F1-13: série pod ní můžou brát předvyplnění z této
+  }
+  function kkHoldStop() {
+    clearTimeout(kkHold);
+    clearInterval(kkHold);
+    kkHold = null;
+  }
+  // − / + reaguje hned na dotyk, podržením se hodnota mění dál
+  document.addEventListener("pointerdown", (ev) => {
+    const btn = ev.target.closest("[data-kk]");
+    if (!btn) return;
+    ev.preventDefault();
+    kkHoldStop();
+    kkPress(btn);
+    kkHold = setTimeout(() => {
+      kkHold = setInterval(() => kkPress(btn), KK_REPEAT_EVERY);
+    }, KK_REPEAT_DELAY);
+  });
+  for (const type of ["pointerup", "pointercancel", "pointerleave", "blur"]) {
+    window.addEventListener(type, kkHoldStop);
+  }
+  // podržení tlačítka nemá otevřít kontextovou nabídku
+  document.addEventListener("contextmenu", (ev) => {
+    if (ev.target.closest && ev.target.closest("[data-kk]")) {
+      ev.preventDefault();
+    }
+  });
+  // „Napsat“: zavře panel a otevře klávesnici v políčku (musí být ve stejném klepnutí, jinak Chrome
+  // klávesnici neukáže); ostatní políčka série jdou taky psát klávesnicí
+  function kkKeyboard() {
+    const d = S.active;
+    if (!kk || !d || !d.ex[kk.i]) return;
+    const e = d.ex[kk.i];
+    const j = kk.j; // closeSheet krokovač zavře (kk = null)
+    const id = kkInputId(e, j, kk.f);
+    closeSheet();
+    const input = document.getElementById(id);
+    if (!input) return;
+    kkKbd = kkSetId(e, j);
+    for (const fld of kFields(kindOf(e.exId))) {
+      const other = document.getElementById(kkInputId(e, j, fld));
+      if (other) {
+        other.readOnly = false;
+        other.removeAttribute("data-act");
+      }
+    }
+    input.focus();
+    input.select();
+  }
+  // po opuštění série (ne přechodu na její další políčko) zase krokovač
+  document.addEventListener("focusout", (ev) => {
+    if (!kkTyping(ev.target.id)) return;
+    if (ev.relatedTarget && kkTyping(ev.relatedTarget.id)) return;
+    kkKbd = null;
+    scheduleRender();
+  });
+
+  /* ---------- NÁROČNOST SÉRIE RIR/RPE (F4-04) ----------
+     Volitelné: Nastavení → Trénink → Náročnost série (S.cfg.effort: "off" výchozí, "rir", "rpe").
+     RIR = kolik opakování ještě zbývalo (0–4 a 5+, celá čísla), RPE = náročnost do 10 (6–10 po půl bodu),
+     platí RPE = 10 − RIR. Ukládá se vždy jako RPE do s.rpe (číslo; pole znal už původní artefakt, data
+     z Hevy ho můžou mít), takže přepnutí RIR ↔ RPE nic nemění. Text hodnoty effVal (RIR ze 5 a víc = „5+“).
+     Zadání: se zapnutou volbou (effCol: ne v šabloně) má karta cviku sloupec RIR/RPE před ✓ (effCell,
+     tlačítko s id effId). Klepnutí otevře panel sheetEffort s tlačítky hodnot (effRow, akce effSet)
+     a Smazat (effDel). Stejný řádek tlačítek je v krokovači pod hodnotami série; tam se panel nezavře a
+     tlačítka i buňka v tabulce se změní bez překreslení (effShow). Klepnutí na vybranou hodnotu ji zruší.
+     V rozdělaném tréninku se zapnutým krokovačem (kkOn) otevře klepnutí na buňku místo sheetEffort celý
+     krokovač série (sheetStepper), stejně jako klepnutí na kg nebo opakování; RIR se tam ruší opětovným
+     klepnutím na vybranou hodnotu. U hotové série (tr.done) má buňka průhledné pozadí jako políčka série,
+     u série otevřené v krokovači (tr.kk-on) červený rámeček (kromě série do selhání).
+     Hodnota je nepovinná, ✓ série ji nevyžaduje.
+     Druh série: zahřívací série hodnotu nemá (prázdná buňka, při uložení se zahodí). Série do selhání (F)
+     má vždy RIR 0 / RPE 10 (effOf), změnit nejde (klepnutí = hláška effFix), při uložení se zapíše
+     (effSave). Přepnutí na F hodnotu série smaže, takže po přepnutí dál je prázdná. Opačně RIR 0 druh
+     série nemění: pracovní série na doraz zůstane pracovní (číslo série, návrh progrese F4-01).
+     S vypnutou volbou se s.rpe nemění ani při úpravě uloženého tréninku.
+     RIR/RPE nevstupuje do předvyplnění (F1-01, F1-13), Cvičit znovu, šablon, rekordů, objemu ani obrázku ke
+     sdílení; nové série (newSetFrom) ho nepřenášejí. Uložená hodnota za zápisem série effTxt („RIR 2“,
+     s RPE nebo vypnutou volbou „RPE 8“): stránka tréninku a historie na stránce cviku. F4-09 (CSV) má přidat
+     sloupec RPE. */
+  const EFF_NAME = { rir: "RIR", rpe: "RPE" };
+  const EFF_VALUES = {
+    rir: [10, 9, 8, 7, 6, 5], // uložené RPE pro RIR 0, 1, 2, 3, 4, 5+
+    rpe: [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10],
+  };
+  // vysvětlení do panelu (jedna věta)
+  const EFF_HINT = {
+    rir: "Kolik opakování by ještě šlo (0 = už ani jedno).",
+    rpe: "Náročnost série do 10 (10 = už ani jedno opakování, 8 = zbývala 2).",
+  };
+  // zvolený zápis: "rir", "rpe", nebo "" (vypnuto)
+  const effMode = () => (S.cfg.effort === "rir" || S.cfg.effort === "rpe" ? S.cfg.effort : "");
+  // má karta cviku sloupec RIR/RPE? (rozdělaný trénink a úprava uloženého tréninku, ne šablona)
+  const effCol = (d) => !!effMode() && d.mode !== "template";
+  const effId = (e, j) => "eff-" + e.k + "-" + j;
+  // platné RPE (nad 0, nejvýš 10), jinak null
+  function effNum(value) {
+    const n = +value;
+    return value != null && isFinite(n) && n > 0 && n <= 10 ? n : null;
+  }
+  // RPE série v rozdělaném tréninku: zahřívací žádné, do selhání vždy 10
+  function effOf(s) {
+    if (s.t === "w") return null;
+    if (s.t === "f") return 10;
+    return effNum(s.rpe);
+  }
+  // RPE k uložení (draftToWorkout): s vypnutou volbou beze změny
+  function effSave(s) {
+    if (!effMode()) return s.rpe;
+    return effOf(s);
+  }
+  // RPE jako text podle zápisu: RIR (10 − RPE, od 5 výš „5+“), nebo RPE
+  function effVal(rpe, mode) {
+    if (mode === "rir") {
+      const rir = 10 - rpe;
+      return rir >= 5 ? "5+" : numStr(rir);
+    }
+    return numStr(rpe);
+  }
+  // uložená hodnota za zápisem série: „RIR 2“, jinak „RPE 8“; bez hodnoty ""
+  function effTxt(s) {
+    const rpe = effNum(s.rpe);
+    if (rpe == null) return "";
+    return effMode() === "rir" ? "RIR " + effVal(rpe, "rir") : "RPE " + effVal(rpe, "rpe");
+  }
+  // buňka sloupce RIR/RPE v kartě cviku; delBtn = tlačítko Smazat, když je buňka poslední (úprava tréninku)
+  function effCell(e, i, j, s, delBtn) {
+    const mode = effMode();
+    const rpe = effOf(s);
+    let btn = "";
+    if (s.t === "f") {
+      const est = coachEst(s); // odhad před selháním (F4-12)
+      btn = `<button class="effb fix${est ? " est" : ""}" id="${effId(e, j)}" data-act="effFix" data-i="${i}"
+          data-j="${j}" aria-label="${EFF_NAME[mode]} ${effVal(10, mode)}">${effVal(10, mode)}${
+            est ? `<small class="eff-est">${esc(est)}</small>` : ""
+          }</button>`;
+    } else if (s.t !== "w") {
+      const text = rpe != null ? effVal(rpe, mode) : "–";
+      btn = `<button class="effb${rpe != null ? " on" : ""}" id="${effId(e, j)}" data-act="eff"
+          data-i="${i}" data-j="${j}" aria-label="${EFF_NAME[mode]}">${text}</button>`;
+    }
+    return `<td class="c-eff${delBtn ? " sw-cell" : ""}">${btn}${delBtn}</td>`;
+  }
+  // tlačítka hodnot RIR/RPE série (panel sheetEffort i krokovač); zahřívací nic, do selhání jen text
+  function effRow(i, j, s) {
+    const mode = effMode();
+    if (s.t === "w") return "";
+    if (s.t === "f") {
+      return `<div class="eff">
+        <small>${EFF_NAME[mode]}</small>
+        <span class="xs muted">
+          Série do selhání má vždy ${EFF_NAME[mode]} ${effVal(10, mode)}.${
+            coachEst(s) ? " Uložený " + esc(coachEst(s)) + "." : ""
+          }
+        </span>
+      </div>`;
+    }
+    const cur = effOf(s);
+    const btns = EFF_VALUES[mode]
+      .map(
+        (rpe) =>
+          `<button class="btn sm" data-act="effSet" data-i="${i}" data-j="${j}" data-v="${rpe}"
+              aria-pressed="${cur === rpe}">${effVal(rpe, mode)}</button>`,
+      )
+      .join("");
+    return `<div class="eff">
+      <small>${EFF_NAME[mode]}</small>
+      <div class="eff-row ${mode}" role="group" aria-label="${EFF_NAME[mode]}">${btns}</div>
+    </div>`;
+  }
+  // panel po klepnutí na buňku RIR/RPE: tlačítka hodnot, vysvětlení a Smazat
+  function sheetEffort(i, j) {
+    const d = curDraft();
+    const e = d && d.ex[i];
+    const s = e && e.sets[j];
+    const mode = effMode();
+    if (!s || !mode) return;
+    const body = `<div class="kk-sub"><span class="grow">${esc(setLabel(e, j))}</span></div>
+      ${effRow(i, j, s)}
+      <p class="xs muted">${EFF_HINT[mode]}</p>`;
+    const foot =
+      effOf(s) != null
+        ? `<button class="btn grow" data-act="effDel" data-i="${i}" data-j="${j}">Smazat</button>`
+        : "";
+    openSheet(exName(e.exId), body, foot, false, { re: () => sheetEffort(i, j) });
+  }
+  // nastaví RPE série (null nebo vybraná hodnota znovu = smazat); v krokovači bez zavření panelu
+  function effSet(d, i, j, rpe) {
+    const s = d && d.ex[i] && d.ex[i].sets[j];
+    if (!s || s.t === "w" || s.t === "f") return;
+    if (rpe == null || effOf(s) === rpe) {
+      delete s.rpe;
+    } else {
+      s.rpe = rpe;
+    }
+    touchDraft();
+    if (kk) {
+      effShow(d, i, j);
+      return;
+    }
+    closeSheet();
+    scheduleRender();
+  }
+  // krokovač: vybraná hodnota v panelu a v buňce tabulky bez překreslení
+  function effShow(d, i, j) {
+    const e = d.ex[i];
+    const cur = effOf(e.sets[j]);
+    for (const btn of document.querySelectorAll('#sheetRoot [data-act="effSet"]')) {
+      btn.setAttribute("aria-pressed", String(+btn.dataset.v === cur));
+    }
+    const cell = document.getElementById(effId(e, j));
+    if (cell) {
+      cell.textContent = cur != null ? effVal(cur, effMode()) : "–";
+      cell.classList.toggle("on", cur != null);
+    }
+  }
+  /* Nastavení → Trénink → Náročnost série */
+  function effortSettings() {
+    const cur = effMode() || "off";
+    const opts = [
+      ["off", "Vypnuto"],
+      ["rir", "RIR"],
+      ["rpe", "RPE"],
+    ];
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Náročnost série</h2>
+        ${helpBtn("effort")}
+      </div>
+      <div class="card stack">
+        <div class="seg seg-wide">
+          ${opts
+            .map(
+              ([k, l]) => `<button data-act="effort" data-v="${k}" aria-pressed="${cur === k}">${l}</button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    </section>`;
+  }
+
+  /* ---------- KOPÍROVAT PRO COACHE (F4-12) ----------
+     Osobní funkce vlastníka appky: údaje tréninku pro AI coache a jejich export (WD-LOG v2, F4-18).
+     Skrytá, dokud se nezapne: Nastavení → O aplikaci, 7× rychle klepnout na kartu Verze aplikace (verTap) zapne S.cfg.coach
+     (výchozí false, coachOn). Vypíná se v Nastavení → Trénink → Pro coache (coachSettings, HELP.coach). Bez
+     zapnutí appka nic z této sekce neukazuje. Uložená data zůstanou i po vypnutí.
+     - Na konci tréninku (okno Dokončit, finishAsk) a v Upravit trénink (vEditor) je část „Pro coache“
+       (coachPart, otevřená, hlavičkou jde sbalit): posuvníky Pocit 1–10, Energie 1–10, Spánek 0–12 h (po 1 h) a
+       bolest (místo textem, intenzita posuvníkem 0–10, 0 = bez bolesti = „Bolest: ne“, cvik z tréninku).
+       Poznámka k tréninku sem od F1-26 nepatří (obecný údaj tréninku, sekce POZNÁMKA K TRÉNINKU). Posuvník
+       začíná nevyplněný (šedý, „–“), hodnotu dostane až posunutím nebo klepnutím (coachSlide), křížek ji
+       smaže (coachClr). Změny jen v draftu bez překreslení; při uložení coachApply zapíše do tréninku pole
+       feel, energy, sleep a pain {where, level, exId}. Nevyplněné pole v tréninku není.
+     - Odhad u série do selhání: RIR/RPE zadané před přepnutím druhu série na F (cycType) se při zapnuté funkci
+       přesune do s.rpeEst (RPE jako s.rpe, F4-04) a ukáže se pod 0 v tabulce (effCell) a na stránce tréninku.
+       Přepnutí z F na jiný druh odhad maže. Nové a kopírované série ho nepřenášejí.
+     - Text pro coache je export WD-LOG v2 za období (F4-18, sekce EXPORT PRO COACHE a js/wdlog.js),
+       nahradil WD-LOG v1 jednoho tréninku a tlačítko Kopírovat pro coache na stránce tréninku. */
+  const coachOn = () => S.cfg.coach === true;
+  // posuvníky: popisek, rozsah, výchozí poloha nevyplněného posuvníku, text hodnoty
+  const COACH_SL = {
+    feel: { l: "Pocit", min: 1, max: 10, def: 5, txt: (v) => v + "/10" },
+    energy: { l: "Energie", min: 1, max: 10, def: 5, txt: (v) => v + "/10" },
+    sleep: { l: "Spánek předchozí noc", min: 0, max: 12, def: 7, txt: (v) => v + " h" },
+    pain: { l: "Intenzita", min: 0, max: 10, def: 3, txt: (v) => (v === 0 ? "žádná" : v + "/10") },
+  };
+  // platná hodnota posuvníku (celé číslo v rozsahu), jinak null
+  function coachNum(k, value) {
+    const c = COACH_SL[k];
+    const n = +value;
+    if (value == null || value === "" || !isFinite(n)) return null;
+    return n >= c.min && n <= c.max ? Math.round(n) : null;
+  }
+  // hodnota posuvníku v draftu nebo tréninku (pain = intenzita bolesti)
+  const coachGet = (d, k) => coachNum(k, k === "pain" ? d.pain && d.pain.level : d[k]);
+  // bolest k uložení: {where, level, exId} jen s vyplněnými údaji, bez místa i intenzity nic
+  function coachPain(d) {
+    const p = d.pain || {};
+    const o = {};
+    const where = String(p.where || "").trim();
+    if (where) {
+      o.where = where;
+    }
+    const level = coachNum("pain", p.level);
+    if (level != null) {
+      o.level = level;
+    }
+    if (!o.where && o.level == null) return null;
+    if (p.exId && (d.ex || []).some((e) => e.exId === p.exId)) {
+      o.exId = p.exId;
+    }
+    return o;
+  }
+  function coachSet(d, k, value) {
+    if (k === "pain") {
+      d.pain = Object.assign({}, d.pain);
+      if (value == null) {
+        delete d.pain.level;
+      } else {
+        d.pain.level = value;
+      }
+    } else if (value == null) {
+      delete d[k];
+    } else {
+      d[k] = value;
+    }
+    touchDraft();
+  }
+  // zapíše údaje pro coache z draftu do ukládaného tréninku (jen se zapnutou funkcí)
+  function coachApply(w, d) {
+    if (!coachOn()) return;
+    for (const k of ["feel", "energy", "sleep"]) {
+      const value = coachGet(d, k);
+      if (value == null) {
+        delete w[k];
+      } else {
+        w[k] = value;
+      }
+    }
+    const pain = coachPain(d);
+    if (pain) {
+      w.pain = pain;
+    } else {
+      delete w.pain;
+    }
+  }
+  // krátký přehled vyplněného (hlavička sbalené části)
+  function coachSum(d) {
+    const parts = [];
+    for (const [k, l] of [
+      ["feel", "Pocit"],
+      ["energy", "Energie"],
+      ["sleep", "Spánek"],
+      ["pain", "Bolest"],
+    ]) {
+      const value = coachGet(d, k);
+      if (value != null) {
+        parts.push(l + " " + COACH_SL[k].txt(value));
+      }
+    }
+    return parts.length ? parts.join(" · ") : "Nevyplněno";
+  }
+  function coachSlider(d, k) {
+    const c = COACH_SL[k];
+    const value = coachGet(d, k);
+    const unset = value == null;
+    return `<div class="coach-sl${unset ? " unset" : ""}">
+      <div class="row">
+        <b class="grow">${c.l}</b>
+        <b class="num" data-cv>${unset ? "–" : c.txt(value)}</b>
+        <button class="btn sm coach-clr" data-act="coachClr" data-v="${k}" aria-label="Smazat: ${c.l}"
+            ${unset ? "hidden" : ""}>${icon("close")}</button>
+      </div>
+      <input type="range" class="range" data-f="coach" data-act="coachTap" data-v="${k}" min="${c.min}"
+          max="${c.max}" step="1" value="${unset ? c.def : value}" aria-label="${c.l}">
+    </div>`;
+  }
+  // část „Pro coache“ v okně Dokončit a v Upravit trénink
+  function coachPart(d) {
+    if (!coachOn() || d.mode === "template") return "";
+    const pain = d.pain || {};
+    const seen = new Set();
+    let opts = `<option value="">Bez vazby na cvik</option>`;
+    for (const e of d.ex) {
+      if (seen.has(e.exId)) continue;
+      seen.add(e.exId);
+      opts += `<option value="${esc(e.exId)}"${pain.exId === e.exId ? " selected" : ""}>
+        ${esc(coachCz(e.exId))}
+      </option>`;
+    }
+    return `<div class="card coach">
+      <button class="coach-h" data-act="coachFold" aria-expanded="true">
+        <span class="grow">
+          <b>Pro coache</b>
+          <span class="small muted" data-csum>${esc(coachSum(d))}</span>
+        </span>
+        ${icon("down", "coach-ic")}
+      </button>
+      <div class="coach-b">
+        ${coachSlider(d, "feel")}
+        ${coachSlider(d, "energy")}
+        ${coachSlider(d, "sleep")}
+        <div class="stack tight">
+          <b>Bolest</b>
+          <input class="inp" data-f="coachWhere" value="${esc(pain.where || "")}"
+              placeholder="Kde (např. pravé koleno)" aria-label="Kde bolí">
+          ${coachSlider(d, "pain")}
+          <select class="inp" data-f="coachEx" aria-label="Cvik, u kterého bolí">${opts}</select>
+        </div>
+      </div>
+    </div>`;
+  }
+  // obnoví přehled v hlavičce části po změně
+  function coachSumRefresh(d) {
+    const el = document.querySelector("[data-csum]");
+    if (el) {
+      el.textContent = coachSum(d);
+    }
+  }
+  // posunutí nebo klepnutí na posuvník: uloží hodnotu a obnoví popisek bez překreslení
+  function coachSlide(t) {
+    const d = curDraft();
+    if (!d) return;
+    const k = t.dataset.v;
+    const value = coachNum(k, t.value);
+    coachSet(d, k, value);
+    const box = t.closest(".coach-sl");
+    box.classList.remove("unset");
+    box.querySelector("[data-cv]").textContent = COACH_SL[k].txt(value);
+    box.querySelector(".coach-clr").hidden = false;
+    coachSumRefresh(d);
+  }
+  function coachClear(t) {
+    const d = curDraft();
+    if (!d) return;
+    const k = t.dataset.v;
+    coachSet(d, k, null);
+    const box = t.closest(".coach-sl");
+    box.classList.add("unset");
+    box.querySelector("[data-cv]").textContent = "–";
+    box.querySelector("input").value = COACH_SL[k].def;
+    t.hidden = true;
+    coachSumRefresh(d);
+  }
+  function coachSettings() {
+    if (!coachOn()) return "";
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Pro coache</h2>
+        ${helpBtn("coach")}
+      </div>
+      <div class="card stack">
+        <label class="switch">
+          <input type="checkbox" data-act="coach" checked>
+          <span>Kopírovat pro coache</span>
+        </label>
+      </div>
+    </section>`;
+  }
+  // 7 rychlých klepnutí na kartu Verze aplikace zapne funkci
+  function verTap() {
+    const now = Date.now();
+    verTap.n = now - (verTap.t || 0) < 1500 ? (verTap.n || 0) + 1 : 1;
+    verTap.t = now;
+    if (verTap.n < 7) return;
+    verTap.n = 0;
+    if (coachOn()) {
+      toast("Kopírování pro coache už je zapnuté.");
+      return;
+    }
+    put("config/main", Object.assign({}, S.cfg, { coach: true }));
+    toast("Kopírování pro coache je zapnuté. Vypnout jde v Nastavení → Trénink.");
+  }
+  // odhad u série do selhání jako text („odhad RIR 2“), jinak ""
+  function coachEst(s) {
+    if (!coachOn() || s.t !== "f") return "";
+    const est = effNum(s.rpeEst);
+    return est == null ? "" : "odhad " + effTxt({ rpe: est });
+  }
+
+  // český název cviku (výběr cviku u bolesti)
+  const coachCz = (id) => {
+    const e = S.exLib[id];
+    return (e && (e.cz || e.name)) || id;
+  };
+
+  /* ---------- EXPORT PRO COACHE (F4-18) ----------
+     Text WD-LOG v2 za zvolené období pro AI coache (nahradil WD-LOG v1 jednoho tréninku z F4-12). Nastavení →
+     Data a záloha → Pro coache (cxSettings, jen se zapnutou funkcí coachOn, F4-12) otevře panel Export pro
+     coache (cxOpen). Text skládá WDLOG.text v js/wdlog.js, pravidla textu jsou tam.
+     - Čipy Dnes / 7 dní (dnešek a 6 dní před ním) / Tento týden / Minulý týden (po–ne, CX_PER) nastaví Od
+       a Do (WDLOG.period). Ruční změna data (cxDate) čipy odznačí, žádný čip „Vlastní“ není. Volba se pamatuje
+       v Local cxPer (klíč čipu, ručně zvolené období jako {from, to}).
+     - Pod daty souhrn (tréninky, měření, nové cviky) a náhled textu ke kontrole; obnoví se bez překreslení
+       (cxRefresh).
+     - Kopírovat (cxCopy): text do schránky, když to prohlížeč nedovolí, text v náhledu se označí. Sdílet
+       (cxShare): soubor wd-log-OD_DO.md přes sdílení Androidu; Chrome soubor .md sdílet nemusí povolit, pak
+       se sdílí jako .txt, a kde sdílení souborů nejde vůbec, soubor .md se stáhne.
+     - Data: všechny uložené tréninky (derive().all, kvůli novým cvikům), měření S.body, cviky S.exLib (typ přes
+       kindOf), fitka gymName, šablona jen existující. Rozdělaný trénink se neexportuje. */
+  const CX_PER = [
+    ["today", "Dnes"],
+    ["7d", "7 dní"],
+    ["week", "Tento týden"],
+    ["lastweek", "Minulý týden"],
+  ];
+  let cx = null; // otevřený panel: { per (klíč čipu, "" = ručně zvolené období), from, to, text }
+  function cxSettings() {
+    if (!coachOn()) return "";
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Pro coache</h2>
+        ${helpBtn("coachExp")}
+      </div>
+      <div class="card stack">
+        <button class="btn" data-act="cxOpen">Exportovat pro coache</button>
+      </div>
+    </section>`;
+  }
+  const cxPreset = (k) => Object.assign({ per: k }, WDLOG.period(k, Date.now()));
+  // data pro WDLOG.text
+  function cxData() {
+    return {
+      workouts: derive().all,
+      body: Object.values(S.body || {}),
+      from: cx.from,
+      to: cx.to,
+      now: Date.now(),
+      ex: (id) => (S.exLib[id] ? Object.assign({}, S.exLib[id], { kind: kindOf(id) }) : null),
+      gymName: (id) => gymName(id),
+      tplName: (id) => (S.templates[id] && S.templates[id].name) || "",
+      muscle: (k) => MUSCLE_MAP.NAMES[k] || k,
+      equip: (k) => EQUIP[k] || "",
+    };
+  }
+  function cxOpen() {
+    const saved = lsGet("cxPer", "7d");
+    if (saved && saved.from && saved.to) {
+      cx = { per: "", from: saved.from, to: saved.to };
+    } else {
+      cx = cxPreset(CX_PER.some(([k]) => k === saved) ? saved : "7d");
+    }
+    const chips = CX_PER.map(
+      ([k, l]) =>
+        `<button class="chip" data-act="cxPer" data-v="${k}" aria-pressed="${cx.per === k}">${l}</button>`,
+    ).join("");
+    openSheet(
+      "Export pro coache",
+      `<div class="chips fwrap" id="cx-chips">${chips}</div>
+      <div class="stack tight mt-in">
+        <label class="frow">
+          <span class="grow">Od</span>
+          <input class="inp" type="date" id="cx-from" value="${cx.from}">
+        </label>
+        <label class="frow">
+          <span class="grow">Do</span>
+          <input class="inp" type="date" id="cx-to" value="${cx.to}">
+        </label>
+      </div>
+      <div class="small muted mt-in" id="cx-sum"></div>
+      <textarea class="inp cx-txt mt-in" id="cx-txt" rows="14" readonly aria-label="Text pro coache"></textarea>`,
+      `<button class="btn grow" data-act="cxCopy">Kopírovat</button>
+      <button class="btn primary grow" data-act="cxShare">Sdílet</button>`,
+      false,
+      { re: cxOpen },
+    );
+    cxRefresh();
+  }
+  // obnoví čipy, data, souhrn a náhled textu v otevřeném panelu
+  function cxRefresh() {
+    if (!cx) return;
+    const o = cxData();
+    cx.text = WDLOG.text(o);
+    const n = WDLOG.counts(o);
+    const parts = [
+      n.w + " " + plural(n.w, "trénink", "tréninky", "tréninků"),
+      n.b + " " + plural(n.b, "měření", "měření", "měření"),
+    ];
+    if (n.fresh) {
+      parts.push(n.fresh + " " + plural(n.fresh, "nový cvik", "nové cviky", "nových cviků"));
+    }
+    const el = (id) => document.getElementById(id);
+    if (!el("cx-txt")) return;
+    el("cx-from").value = cx.from;
+    el("cx-to").value = cx.to;
+    el("cx-sum").textContent = parts.join(" · ");
+    el("cx-txt").value = cx.text;
+    for (const b of document.querySelectorAll('#cx-chips [data-act="cxPer"]')) {
+      b.setAttribute("aria-pressed", String(b.dataset.v === cx.per));
+    }
+  }
+  function cxPer(k) {
+    cx = cxPreset(k);
+    lsSet("cxPer", k);
+    cxRefresh();
+  }
+  // ručně změněné datum Od nebo Do: čipy se odznačí, prázdné datum vrátí původní hodnotu
+  function cxDate() {
+    const a = document.getElementById("cx-from").value;
+    const b = document.getElementById("cx-to").value;
+    if (a && b) {
+      cx = { per: "", from: a <= b ? a : b, to: a <= b ? b : a };
+      lsSet("cxPer", { from: cx.from, to: cx.to });
+    }
+    cxRefresh();
+  }
+  function cxCopy() {
+    const text = cx.text;
+    const n = [...text].length;
+    const manual = () => {
+      const t = document.getElementById("cx-txt");
+      if (t) {
+        t.focus();
+        t.select();
+      }
+      toast("Text je označený, zkopíruj ho ručně.");
+    };
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      manual();
+      return;
+    }
+    navigator.clipboard
+      .writeText(text)
+      .then(
+        () => toast(`Zkopírováno pro coache (${fmtInt(n)} ${plural(n, "znak", "znaky", "znaků")})`),
+        manual,
+      );
+  }
+  async function cxShare() {
+    const name = WDLOG.fileName(cx.from, cx.to);
+    const can = (f) => !!(navigator.canShare && navigator.canShare({ files: [f] }));
+    let file = new File([cx.text], name, { type: "text/markdown" });
+    if (!can(file)) {
+      file = new File([cx.text], name.replace(/\.md$/, ".txt"), { type: "text/plain" });
+    }
+    if (!can(file)) {
+      await LocalDownloads.save({ filename: name, data: cx.text, type: "text/markdown" });
+      toast("Sdílení tady nejde, soubor " + name + " se stáhl.");
+      return;
+    }
+    try {
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      if (!e || e.name !== "AbortError") {
+        toast("Sdílení se nepovedlo (" + ((e && e.name) || "chyba") + ")");
+      }
+    }
+  }
+
+  /* ---------- ZAHŘÍVACÍ SÉRIE Z MINULA (F1-08) ----------
+     V krokovači u zahřívací série cviku „Opakování a váha“ je tlačítko „60 % → 50 kg“. Nastaví váhu
+     na S.cfg.warmPct procent (posuvník v Nastavení → Trénink) nejtěžší série z minula bez zahřívacích
+     („minule“ jako F1-01: draftLast, cvik vázaný na fitko jen z tohoto fitka), zaokrouhleno na krok
+     krokovače cviku. Hodnota se zapíše stejně jako napsaná, další úpravy zůstanou a tlačítko jde použít
+     znovu. Bez záznamu z minula se tlačítko neukáže. Nic nového se neukládá do dat tréninku.
+     Výpočet (warmKg) může převzít generátor rozcvičkových sérií (F4-02).
+     Tlačítko kk-warm (akce kkWarm, warmInfo), procento WARM_PCT / posuvník #warmPct ve stepperSettings,
+     nejtěžší série warmMax, výsledek warmKg, zápis přes kkSet (stejně jako − / +). Jen typ wr. */
+
+  // nejtěžší série cviku e z minula bez zahřívacích (0 = bez záznamu)
+  function warmMax(d, e) {
+    const last = draftLast(d, e.exId);
+    if (!last) return 0;
+    let max = 0;
+    for (const q of last.e.sets) {
+      if (q.t !== "w" && +q.kg > max) {
+        max = +q.kg;
+      }
+    }
+    return max;
+  }
+  // pct procent z max, zaokrouhleno na krok (aspoň jeden krok, nejvýš max)
+  function warmKg(max, pct, step) {
+    let kg = Math.round((max * pct) / 100 / step) * step;
+    kg = Math.min(max, Math.max(step, kg));
+    return Math.round(kg * 100) / 100;
+  }
+  // tlačítko pro sérii j cviku i v rozdělaném tréninku d: {pct, kg}, nebo null (tlačítko se neukáže)
+  function warmInfo(d, i, j) {
+    const e = d.ex[i];
+    const s = e && e.sets[j];
+    if (!s || s.t !== "w" || kindOf(e.exId) !== "wr") return null;
+    const max = warmMax(d, e);
+    if (!max) return null;
+    const pct = S.cfg.warmPct;
+    return { pct, kg: warmKg(max, pct, kkStep(d, e, "kg")) };
+  }
+  const warmLabel = (warm) => `${warm.pct} % <span>→</span> ${esc(numStr(warm.kg))} kg`;
+
+  /* Nastavení → Trénink → Zadávání hodnot v tréninku */
+  function stepperSettings() {
+    const on = S.cfg.stepper !== false;
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Zadávání hodnot v tréninku</h2>
+        ${helpBtn("input")}
+      </div>
+      <div class="card stack">
+        <label class="switch">
+          <input type="checkbox" data-act="stepper" ${on ? "checked" : ""}>
+          <span>Tlačítka +/−</span>
+        </label>
+        <div class="warm-set${on ? "" : " off"}">
+          <div class="row">
+            <span class="grow">Zahřívací série</span>
+            <span class="num" id="warmPctV">${S.cfg.warmPct} %</span>
+          </div>
+          <input type="range" class="range" id="warmPct" min="${WARM_PCT.min}" max="${WARM_PCT.max}"
+              step="${WARM_PCT.step}" value="${S.cfg.warmPct}" aria-label="Zahřívací série v procentech"
+              ${on ? "" : "disabled"}>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  /* Nastavení → Trénink → Návrh progrese (F4-01) */
+  // závislá volba (F3-23): s vypnutým vypínačem zešedne a nejde ovládat; cls = další třídy
+  const depAttr = (on, cls) => `class="${cls ? cls + " " : ""}dep${on ? "" : " off"}"${on ? "" : " inert"}`;
+  function progSettings() {
+    const master = S.cfg.progOn;
+    const on = !!S.cfg.progAll;
+    const sets = [
+      ["all", "Všem sériím"],
+      ["first", "Postupně od 1. série"],
+    ];
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Návrh progrese</h2>
+        ${helpBtn("prog")}
+      </div>
+      <div class="card stack">
+        <label class="switch">
+          <input type="checkbox" data-act="progOn" ${master ? "checked" : ""}>
+          <span>Navrhovat progresi</span>
+        </label>
+        <div ${depAttr(master, "stack")}>
+          <label class="switch">
+            <input type="checkbox" data-act="progAll" ${on ? "checked" : ""}>
+            <span>U všech cviků</span>
+          </label>
+          <div ${depAttr(on, "stack")}>
+            <div class="row">
+              <span class="grow">Výchozí rozsah opakování</span>
+              ${progRangeInputs("progMin", "progMax", [S.cfg.progMin, S.cfg.progMax], "prog")}
+            </div>
+            <span class="fmsg" id="prog-msg"></span>
+          </div>
+          <div class="stack tight">
+            <span>Přidat váhu</span>
+            <div class="seg seg-wide">
+              ${sets
+                .map(
+                  ([k, l]) =>
+                    `<button data-act="progSets" data-v="${k}" aria-pressed="${S.cfg.progSets === k}">${l}` +
+                    `</button>`,
+                )
+                .join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>`;
+  }
+  // dvě políčka rozsahu opakování „od – do“ (Nastavení i Upravit cvik)
+  function progRangeInputs(idMin, idMax, range, dataF) {
+    const f = dataF ? ` data-f="${dataF}"` : "";
+    return `<span class="prog-rng">
+      <input class="inp${numCls("reps", range[0])}" id="${idMin}" data-num="reps"${f}
+          inputmode="numeric" enterkeyhint="next" value="${esc(range[0])}" aria-label="Opakování od">
+      <span>–</span>
+      <input class="inp${numCls("reps", range[1])}" id="${idMax}" data-num="reps"${f}
+          inputmode="numeric" enterkeyhint="done" value="${esc(range[1])}" aria-label="Opakování do">
+    </span>`;
+  }
+  // rozsah z textů políček od – do: {range}, nebo {msg} s důvodem, proč neplatí
+  function progRangeCheck(minText, maxText) {
+    minText = String(minText).trim();
+    maxText = String(maxText).trim();
+    const range = [+minText, +maxText];
+    if (!minText || !maxText) return { msg: "Vyplň rozsah opakování od – do." };
+    if (!progValid(range)) {
+      if (range[0] > range[1]) return { msg: "Dolní hranice opakování je vyšší než horní." };
+      return { msg: `Rozsah opakování jen ${PROG_REPS.min}–${PROG_REPS.max}.` };
+    }
+    return { range };
+  }
+
+  /* ---------- REKORDY (F3-02, F3-25) ----------
+     Počítají se chronologicky z celé historie (zpětně i pro importovaná data), nic se neukládá.
+     Kontext: cvik vázaný na fitko -> zvlášť pro každé fitko, jinak globálně.
+     Typy: maxKg (max. váha), e1rm (odh. 1RM), bestSet (kg × opak. nejvyšší součin),
+           vol (objem cviku v tréninku), reps (max. opakování bez zátěže u cviků s vlastní vahou).
+     Rekord jako skutečná událost (F3-25): dřív se počítal každý překonaný typ zvlášť (78 rekordů za 30 dní
+     na 13 tréninků). Teď:
+     - zlepšení = překonaná nejlepší hodnota libovolného typu, až od REC_FROM. tréninku cviku v kontextu
+       (první trénink zakládá výchozí hodnoty, druhý je hledání správné váhy, hlavně u nového stroje),
+     - rekord = zlepšení velkého typu (REC_BIG, zlatá medaile), nejvýš 1 na cvik a trénink: hlavní je první
+       podle REC_ORDER, ostatní velké typy téhož cviku jsou v r.also (v oslavě a souhrnu drobně pod ním),
+     - malé typy (objem cviku, nejlepší série, celkový čas a vzdálenost) jsou jen stříbrná zlepšení na
+       stránce cviku, bez počtů a bez oslavy.
+     computeRecords vrací byW (jen rekordy, pro všechny počty, souhrn, sdílení a oslavu), byEx (všechna
+     zlepšení cviku, rekord má r.main), best a cnt (počet tréninků v kontextu, pro liveRecords).
+     Počty i oslava berou rekordy vždy přes wRecs(w).
+     Cvik na čas se zátěží (F4-14) má kromě výdrže i max. zátěž: nejvyšší váha ze série s časem, při stejné
+     váze delší čas. Platí i pro stagnaci (F4-06), která bere stejné ukazatele.
+     Vzdálenost se zátěží (F4-16) obdobně jako opakování a váha: maxKg (při stejné váze delší vzdálenost),
+     bestW (nejlepší série = nejvíc kg × m, velký typ), work (práce cviku v tréninku, kg × m) a maxM (nejdelší
+     vzdálenost), obojí malé. Odhad 1RM nemá. */
+  const REC = {
+    maxKg: "Max. zátěž",
+    e1rm: "Odh. 1RM",
+    bestSet: "Nejlepší série",
+    vol: "Objem cviku",
+    reps: "Max. opakování",
+    maxSec: "Nejdelší výdrž",
+    totSec: "Celkový čas",
+    maxKm: "Nejdelší vzdálenost",
+    totKm: "Vzdálenost v tréninku",
+    speed: "Nejvyšší tempo",
+    bestW: "Nejlepší série",
+    work: "Práce cviku",
+    maxM: "Nejdelší vzdálenost",
+  };
+  // název rekordu malými písmeny do věty
+  const recLow = (t) => (t === "e1rm" ? "odh. 1RM" : REC[t].toLowerCase());
+  const REC_ORDER = [
+    "maxKg",
+    "e1rm",
+    "bestSet",
+    "vol",
+    "reps",
+    "maxSec",
+    "totSec",
+    "maxKm",
+    "totKm",
+    "speed",
+    "bestW",
+    "work",
+    "maxM",
+  ];
+  const EPS = 1e-6;
+  const REC_FROM = 3; // rekord a zlepšení až od 3. tréninku cviku v kontextu (F3-25)
+  // kontext rekordu: cvik, u cviku vázaného na fitko navíc fitko („bench|*“, „leg-press|g2“)
+  function recCtx(exId, gymId) {
+    const e = S.exLib[exId];
+    return exId + "|" + (e && e.gymDep ? gymId : "*");
+  }
+  // hodnota rekordu jako text („82,5 kg“, „5×100kg“ jako setStr, „1:30“, „5 km“…)
+  function recFmt(type, v, set) {
+    if (type === "reps") return fmtInt(v) + " opak.";
+    if (type === "bestW" && set) return setStr("distw", set);
+    if (type === "work") return fmtInt(v) + " kg·m";
+    if (type === "maxM") return fmtInt(v) + " m";
+    if (type === "bestSet" && set) return set.reps + "×" + fmtKg(set.load != null ? set.load : set.kg) + "kg";
+    if (type === "e1rm") return fmtKg(Math.round(v * 10) / 10) + " kg";
+    if (type === "vol") return fmtInt(v) + " kg";
+    if (type === "maxSec" || type === "totSec") return fmtSec(v);
+    if (type === "maxKm" || type === "totKm") return fmtKg(v) + " km";
+    if (type === "speed") return fmtKg(Math.round(v * 10) / 10) + " km/h";
+    return fmtKg(v) + " kg";
+  }
+  // metriky jedné sady sérií (jen pracovní). Vrací {type:{v,set,j}}
+  function exMetrics(exId, sets, t) {
+    const kind = kindOf(exId);
+    const m = {};
+    let vol = 0,
+      totSec = 0,
+      totKm = 0,
+      totWork = 0,
+      any = false;
+    sets.forEach((s, j) => {
+      if (!isWork(s.t)) return;
+      if (hasReps(kind)) {
+        const reps = +s.reps || 0;
+        if (reps <= 0) return;
+        any = true;
+        const L = setLoad(kind, s, t);
+        if (L > 0) {
+          vol += L * reps;
+          if (!m.maxKg || L > m.maxKg.v + EPS || (Math.abs(L - m.maxKg.v) < EPS && reps > m.maxKg.set.reps)) {
+            m.maxKg = { v: L, set: Object.assign({}, s, { load: L }), j };
+          }
+          const r = e1rm(L, reps);
+          if (r > 0 && (!m.e1rm || r > m.e1rm.v + EPS)) {
+            m.e1rm = { v: r, set: Object.assign({}, s, { load: L }), j };
+          }
+          const p = L * reps;
+          if (!m.bestSet || p > m.bestSet.v + EPS) {
+            m.bestSet = { v: p, set: Object.assign({}, s, { load: L }), j };
+          }
+        }
+        if (kind === "bw" || kind === "assist" || kind === "bwplus") {
+          if (!m.reps || reps > m.reps.v) {
+            m.reps = { v: reps, set: s, j };
+          }
+        }
+      }
+      if (isTimed(kind)) {
+        const sec = +s.sec || 0;
+        if (sec <= 0) return;
+        any = true;
+        totSec += sec;
+        if (!m.maxSec || sec > m.maxSec.v + EPS) {
+          m.maxSec = { v: sec, set: s, j };
+        }
+        // na čas se zátěží: max. zátěž, při stejné váze delší čas (F4-14)
+        const L = kind === "timew" ? setLoad(kind, s, t) : 0;
+        const heavier = m.maxKg && L > m.maxKg.v + EPS;
+        const longer = m.maxKg && Math.abs(L - m.maxKg.v) < EPS && sec > m.maxKg.set.sec;
+        if (L > 0 && (!m.maxKg || heavier || longer)) {
+          m.maxKg = { v: L, set: Object.assign({}, s, { load: L }), j };
+        }
+      }
+      // vzdálenost se zátěží (F4-16): max. zátěž (při stejné váze delší vzdálenost), nejlepší série kg × m
+      if (kind === "distw") {
+        const meters = +s.m || 0;
+        if (meters <= 0) return;
+        any = true;
+        const L = setLoad(kind, s, t);
+        totWork += L * meters;
+        if (!m.maxM || meters > m.maxM.v + EPS) {
+          m.maxM = { v: meters, set: s, j };
+        }
+        const heavier = m.maxKg && L > m.maxKg.v + EPS;
+        const longer = m.maxKg && Math.abs(L - m.maxKg.v) < EPS && meters > m.maxKg.set.m;
+        if (L > 0 && (!m.maxKg || heavier || longer)) {
+          m.maxKg = { v: L, set: Object.assign({}, s, { load: L }), j };
+        }
+        if (L > 0 && (!m.bestW || L * meters > m.bestW.v + EPS)) {
+          m.bestW = { v: L * meters, set: Object.assign({}, s, { load: L }), j };
+        }
+      }
+      if (kind === "dist") {
+        const km = +s.km || 0,
+          sec = +s.sec || 0;
+        if (km <= 0) return;
+        any = true;
+        totKm += km;
+        if (!m.maxKm || km > m.maxKm.v + EPS) {
+          m.maxKm = { v: km, set: s, j };
+        }
+        const v = sec > 0 ? km / (sec / 3600) : 0;
+        if (v > 0 && (!m.speed || v > m.speed.v + EPS)) {
+          m.speed = { v, set: s, j };
+        }
+      }
+    });
+    if (vol > 0) {
+      m.vol = { v: vol };
+    }
+    if (totSec > 0 && kind !== "dist") {
+      m.totSec = { v: totSec };
+    }
+    if (totKm > 0) {
+      m.totKm = { v: totKm };
+    }
+    if (totWork > 0) {
+      m.work = { v: totWork };
+    }
+    return any ? m : null;
+  }
+  /* projde všechny tréninky od nejstaršího a zapíše, kde padl rekord:
+     byW = rekordy podle tréninku (1 na cvik), byEx = zlepšení podle cviku, best = nejlepší hodnoty
+     v každém kontextu, cnt = počet tréninků v každém kontextu */
+  function computeRecords() {
+    const best = {}; // ctx -> {type:{v,set,w}}
+    const cnt = {}; // ctx -> počet tréninků s cvikem
+    const byW = {}; // workoutId -> [{exId,type,v,prev,set,also}]
+    const byEx = {}; // exId -> [{w,type,v,prev,set,ctx,main}]
+    const list = derive().all.slice().reverse();
+    for (const w of list) {
+      // sloučit případné duplicitní cviky v tréninku
+      const grouped = {};
+      for (const e of w.ex || []) {
+        (grouped[e.exId] = grouped[e.exId] || []).push(...e.sets);
+      }
+      for (const exId in grouped) {
+        const m = exMetrics(exId, grouped[exId], w.start);
+        if (!m) continue;
+        const ctx = recCtx(exId, w.gymId);
+        const b = best[ctx] || (best[ctx] = {});
+        const n = (cnt[ctx] = (cnt[ctx] || 0) + 1);
+        const found = [];
+        for (const type in m) {
+          const cur = m[type],
+            prev = b[type];
+          if (!prev) {
+            b[type] = { v: cur.v, set: cur.set, w };
+            continue;
+          }
+          if (cur.v > prev.v + EPS) {
+            if (n >= REC_FROM) {
+              found.push({
+                exId,
+                type,
+                v: cur.v,
+                prev: prev.v,
+                set: cur.set,
+                prevSet: prev.set,
+                ctx,
+                gymId: w.gymId,
+              });
+            }
+            b[type] = { v: cur.v, set: cur.set, w };
+          }
+        }
+        if (!found.length) continue;
+        found.sort((x, y) => REC_ORDER.indexOf(x.type) - REC_ORDER.indexOf(y.type));
+        const big = found.filter((r) => REC_BIG[r.type]);
+        if (big.length) {
+          (byW[w.id] = byW[w.id] || []).push(Object.assign({ also: big.slice(1) }, big[0]));
+        }
+        for (const r of found) {
+          (byEx[exId] = byEx[exId] || []).push(Object.assign({ w, main: r === big[0] }, r));
+        }
+      }
+    }
+    return { best, byW, byEx, cnt };
+  }
+  // rekordy (computeRecords), spočítané jednou po každé změně dat
+  function recs() {
+    const d = derive();
+    if (!d.rec) {
+      d.rec = computeRecords();
+    }
+    return d.rec;
+  }
+  // rekordy, které padly v tréninku w (nejvýš 1 na cvik, další velké typy v r.also)
+  function wRecs(w) {
+    return recs().byW[w.id] || [];
+  }
+  /* živé medaile pro rozdělaný trénink: vrací {j:[types]} pro cvik i, seznam typů
+     cviku a jejich hodnoty v ({typ:{v,set,prev,prevSet}}). Jen velké typy (REC_BIG) a až od
+     REC_FROM. tréninku cviku v kontextu, stejně jako počty (F3-25). */
+  function liveRecords(d, i) {
+    const e = d.ex[i];
+    const ctx = recCtx(e.exId, d.gymId);
+    const b = recs().best[ctx];
+    const out = { sets: {}, ex: [], v: {} };
+    if (!b || (recs().cnt[ctx] || 0) + 1 < REC_FROM) return out;
+    const conv = (s) => ({
+      t: s.t,
+      kg: num(s.kg) || 0,
+      reps: num(s.reps) || 0,
+      sec: parseSec(s.sec) || 0,
+      km: num(s.km) || 0,
+      m: num(s.m) || 0,
+    });
+    const done = e.sets.map((s) => (s.done ? conv(s) : { t: "w" }));
+    const extra = [];
+    d.ex.forEach((x, k) => {
+      if (k !== i && x.exId === e.exId) {
+        for (const s of x.sets) {
+          if (s.done) {
+            extra.push(conv(s));
+          }
+        }
+      }
+    });
+    const m = exMetrics(e.exId, done.concat(extra), d.start);
+    if (!m) return out;
+    const types = REC_ORDER.filter((t) => m[t] && REC_BIG[t]);
+    for (const type of types) {
+      const prev = b[type];
+      if (!prev || !(m[type].v > prev.v + EPS)) continue;
+      out.ex.push(type);
+      out.v[type] = { v: m[type].v, set: m[type].set, prev: prev.v, prevSet: prev.set };
+      if (m[type].j != null && m[type].j < done.length) {
+        (out.sets[m[type].j] = out.sets[m[type].j] || []).push(type);
+      }
+    }
+    return out;
+  }
+  // seznam rekordů jako HTML (withEx = seskupený po cvicích)
+  function recListHtml(list, withEx) {
+    if (!list.length) return "";
+    if (withEx) {
+      // po cvicích: název na vlastním řádku, pod ním rekord a další překonané velké typy (r.also, F3-25)
+      const g = {};
+      for (const r of list) {
+        (g[r.exId] = g[r.exId] || []).push(r, ...(r.also || []));
+      }
+      return `<div class="reclist">
+        ${Object.keys(g)
+          .map(
+            (id) =>
+              `<div class="recex">
+                <div class="rn">
+                  <span class="md">${medal(g[id].map((r) => r.type))}</span><b>${esc(exName(id))}</b>
+                </div>
+                ${g[id]
+                  .map(
+                    (r) =>
+                      `<div class="rr">
+                        ${esc(REC[r.type])}: <b>${esc(recFmt(r.type, r.v, r.set))}</b>` +
+                      `<span class="muted"> (dříve ` +
+                      `${esc(recFmt(r.type, r.prev, r.prevSet))})</span>
+                      </div>`,
+                  )
+                  .join("")}
+              </div>`,
+          )
+          .join("")}
+      </div>`;
+    }
+    return `<div class="reclist">
+      ${list
+        .map(
+          (r) =>
+            `<div class="rec">
+              <span class="md">${medal([r.type])}</span>
+              <div class="grow">
+                ${esc(REC[r.type])}: <b>${esc(recFmt(r.type, r.v, r.set))}</b>` +
+            `<span class="muted"> (dříve ` +
+            `${esc(recFmt(r.type, r.prev, r.prevSet))})</span>
+              </div>
+            </div>`,
+        )
+        .join("")}
+    </div>`;
+  }
+  const plural = (n, a, b, c) => (n === 1 ? a : n >= 2 && n <= 4 ? b : c);
+
+  /* ---------- STAGNACE (F4-06) ----------
+     Cvik stagnuje, když posledních N uložených tréninků s cvikem (S.cfg.stagN) po sobě nepřekonalo trénink
+     těsně před nimi ani sebe navzájem v žádném ukazateli pracovních sérií. Ukazatele jsou stejné jako
+     u rekordů (exMetrics: max. zátěž – i u cviku na čas se zátěží, F4-14 –, odh. 1RM, nejlepší série, objem,
+     výdrž, čas, vzdálenost, tempo),
+     u cviku s vlastní vahou jen opakování (nejvíc v sérii a celkem), aby zlepšení nedělala tělesná hmotnost.
+     Nový ukazatel (např. první série se zátěží) se bere jako zlepšení. Porovnává se jen s tréninky těsně
+     před posledními N, ne s rekordem z celé historie (po pauze nebo zranění by hlásil stagnaci pořád).
+     Kontext jako u rekordů (recCtx): cvik vázaný na fitko zvlášť pro každé fitko. Nic se neukládá,
+     počítá se jednou po změně dat (stags). Vypínač S.cfg.stagOn (Nastavení → Rekordy a pokrok).
+     Výpočet computeStag (stags(): ok[k] = stagHolds), dotaz stagInfo(exId, gymId) / stagOfCtx (n = tréninků
+     bez zlepšení, ref = trénink, od kterého nic lepšího nebylo), texty stagCount, stagSince. N = STAG_N (3 /
+     4 / 5, výchozí 4), nastavení stagSettings. Ukazuje se jen v rozdělaném tréninku (.exc-stag pod názvem
+     cviku, ikona IC.stag, klepnutí = Statistiky cviku), na stránce cviku → Statistiky (sekce Bez zlepšení) a ve
+     Statistikách → Cviky (statsStag, jen cviky cvičené posledních STAG_RECENT dní). */
+  const STAG_MAX = 30; // nejdelší řada tréninků bez zlepšení, kterou appka počítá
+  const STAG_RECENT = 30 * 86400000; // Statistiky → Cviky: jen cviky cvičené posledních 30 dní
+  // ukazatele jednoho tréninku pro porovnání (exMetrics, u vlastní váhy jen opakování)
+  function stagMetrics(exId, sets, t) {
+    const m = exMetrics(exId, sets, t);
+    if (!m || kindOf(exId) !== "bw") return m;
+    let tot = 0;
+    for (const s of sets) {
+      if (isWork(s.t)) {
+        tot += +s.reps || 0;
+      }
+    }
+    return m.reps ? { reps: m.reps, totReps: { v: tot } } : null;
+  }
+  // platí pro posledních k tréninků ss (od nejstaršího), že nepřekonaly trénink před nimi ani sebe navzájem?
+  function stagHolds(ss, k) {
+    const run = {};
+    const ref = ss[ss.length - k - 1].m;
+    for (const t in ref) {
+      run[t] = ref[t].v;
+    }
+    for (let i = ss.length - k; i < ss.length; i++) {
+      const m = ss[i].m;
+      for (const t in m) {
+        if (run[t] == null || m[t].v > run[t] + EPS) return false;
+      }
+    }
+    return true;
+  }
+  /* pro každý kontext (recCtx) tréninky s cvikem od nejstaršího (ss) a ok[k] = platí stagHolds(ss, k) */
+  function computeStag() {
+    const byCtx = {};
+    const list = derive().all.slice().reverse();
+    for (const w of list) {
+      // sloučit případné duplicitní cviky v tréninku (jako u rekordů)
+      const grouped = {};
+      for (const e of w.ex || []) {
+        (grouped[e.exId] = grouped[e.exId] || []).push(...e.sets);
+      }
+      for (const exId in grouped) {
+        const m = stagMetrics(exId, grouped[exId], w.start);
+        if (!m) continue;
+        const ctx = recCtx(exId, w.gymId);
+        const x = byCtx[ctx] || (byCtx[ctx] = { exId, ctx, ss: [] });
+        x.ss.push({ w, m });
+      }
+    }
+    for (const ctx in byCtx) {
+      const x = byCtx[ctx];
+      x.ok = [];
+      const kMax = Math.min(x.ss.length - 1, STAG_MAX);
+      for (let k = 1; k <= kMax; k++) {
+        x.ok[k] = stagHolds(x.ss, k);
+      }
+    }
+    return byCtx;
+  }
+  // stagnace (computeStag), spočítaná jednou po každé změně dat
+  function stags() {
+    const d = derive();
+    if (!d.stag) {
+      d.stag = computeStag();
+    }
+    return d.stag;
+  }
+  /* stagnace cviku v kontextu fitka gymId: null = nestagnuje (nebo vypnuto), jinak
+     {n: tréninků bez zlepšení, ref: trénink, od kterého se nezlepšil, last: poslední trénink, gymId} */
+  function stagOfCtx(x) {
+    const N = S.cfg.stagN;
+    if (!S.cfg.stagOn || !x || !x.ok[N]) return null;
+    let n = N;
+    while (x.ok[n + 1]) {
+      n++;
+    }
+    const ref = x.ss[x.ss.length - n - 1];
+    const last = x.ss[x.ss.length - 1];
+    return { exId: x.exId, n, ref, last, gymDep: !x.ctx.endsWith("|*"), gymId: last.w.gymId };
+  }
+  function stagInfo(exId, gymId) {
+    return stagOfCtx(stags()[recCtx(exId, gymId)]);
+  }
+  // nejlepší série tréninku, od kterého se cvik nezlepšil („8×80kg“, „1:30“…)
+  function stagBest(info) {
+    const m = info.ref.m;
+    const t = ["e1rm", "bestSet", "maxKg", "reps", "maxSec", "maxKm"].find((t) => m[t] && m[t].set);
+    return t ? setStr(kindOf(info.exId), m[t].set) : "";
+  }
+  // text „4 tréninky bez zlepšení“
+  const stagCount = (n) => n + " " + plural(n, "trénink", "tréninky", "tréninků") + " bez zlepšení";
+  // text „od 12. 8. (8×80kg)“ (cap = na začátku věty „Od“)
+  function stagSince(info, cap) {
+    const best = stagBest(info);
+    return (cap ? "Od " : "od ") + fmtDateS(info.ref.w.start) + (best ? " (" + best + ")" : "");
+  }
+
+  /* ---------- OSLAVA REKORDU (F3-02) ----------
+     Medaile přes celou obrazovku: v rozdělaném tréninku po dokončení cviku (odškrtnuté všechny pracovní
+     série, zahřívací se nepočítají) a po uložení tréninku nad souhrnem. Slaví se jen rekordy (F3-25: velké
+     typy REC_BIG, 1 na cvik, další překonané typy drobně pod ním), proto je medaile zlatá; stříbrná
+     zlepšení se neslaví. Co už se oslavilo, si pamatuje cvik v rozdělaném
+     tréninku (e.cel = {typ: hodnota}, do uloženého tréninku se nedostane); znovu se slaví jen vyšší hodnota
+     nebo nový typ. Nastavení v config/main: recCelEx (po cviku; vypnuto = jen hláška po sérii jako dřív),
+     recCelW (po tréninku), recSnd (id zvuku z CEL_SOUNDS, "off" = bez zvuku). Zvuky se tvoří přes Web Audio.
+     Zavření jen na přání (aby šlo vše v klidu přečíst): tlačítko Pokračovat, klepnutí mimo kartu,
+     Zpět (navBack).
+     celebrate(R, podtitul, auto): element .cel v body, stav celEl (navBack a navDepth s ní počítají). V
+     tréninku ji spouští celExercise po odškrtnutí (exDone, liveRecords), po uložení wRecs. Zvuky celTone,
+     žádné soubory. Medaile sama nezmizí. */
+  const REC_BIG = { maxKg: 1, e1rm: 1, reps: 1, maxSec: 1, maxKm: 1, speed: 1, bestW: 1 };
+  /* malá medaile rekordu (F3-20): zlatá za velký rekord (REC_BIG), stříbrná za malý. U víc rekordů
+     najednou (počet, nadpis) zlatá, když je mezi nimi aspoň jeden velký, stejně jako medaile v oslavě. */
+  const recGold = (types) => types.some((t) => REC_BIG[t]);
+  const medal = (types) =>
+    `<svg class="ic md-ic ${recGold(types) ? "gold" : "silver"}" viewBox="0 0 24 24" aria-hidden="true">` +
+    `<path class="rib" d="${MEDAL_RIB}"/><circle class="disc" cx="12" cy="15" r="6"/></svg>`;
+  // štítek s medailí a počtem rekordů (Historie, stránka tréninku); text = místo počtu (např. „×2“)
+  const recCount = (list, text) =>
+    `<span class="medals">${medal(list.map((r) => r.type))}${text === undefined ? list.length : text}</span>`;
+  let celEl = null;
+  let stwFullEl = null; // vrstva stopek přes celou obrazovku (F1-24)
+  const exDone = (e) => {
+    const w = e.sets.filter((s) => isWork(s.t));
+    return w.length > 0 && w.every((s) => s.done);
+  };
+  // po odškrtnutí série: dokončený cvik s novým (ještě neoslaveným) rekordem
+  function celExercise(e, lr) {
+    if (!exDone(e) || !lr.ex.length) return;
+    const c = e.cel || {},
+      nw = lr.ex.filter((t) => !(c[t] != null && lr.v[t].v <= c[t] + EPS));
+    if (!nw.length) return;
+    e.cel = Object.assign({}, c);
+    for (const t of nw) {
+      e.cel[t] = lr.v[t].v;
+    }
+    // jeden rekord za cvik, další typy drobně pod ním (F3-25); lr.ex je seřazený podle REC_ORDER
+    const R = nw.map((t) => Object.assign({ exId: e.exId, type: t }, lr.v[t]));
+    celebrate([Object.assign({ also: R.slice(1) }, R[0])], exName(e.exId));
+  }
+  function celMedal(k) {
+    const m =
+      k === "gold"
+        ? { a: "#fff4b8", b: "#f5c542", c: "#d99a0b", d: "#9c6400", r: "#cf3a31", r2: "#9e2a23" }
+        : { a: "#ffffff", b: "#dde2e8", c: "#aab2bc", d: "#66707b", r: "#2a78d6", r2: "#1d5aa3" };
+    const id = "cel" + k,
+      bar = DUMBBELL; // činka z ikony appky
+    return `<svg viewBox="0 0 200 240" aria-hidden="true">
+      <defs>
+        <linearGradient id="${id}o" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="${m.a}"/>
+          <stop offset=".35" stop-color="${m.b}"/>
+          <stop offset=".7" stop-color="${m.c}"/>
+          <stop offset="1" stop-color="${m.d}"/>
+        </linearGradient>
+        <linearGradient id="${id}i" x1="1" y1="1" x2="0" y2="0">
+          <stop offset="0" stop-color="${m.a}"/>
+          <stop offset=".45" stop-color="${m.b}"/>
+          <stop offset="1" stop-color="${m.c}"/>
+        </linearGradient>
+        <clipPath id="${id}c"><circle cx="100" cy="152" r="70"/></clipPath>
+      </defs>
+      <g class="cel-sw">
+        <polygon points="56,0 96,0 114,98 84,106" fill="${m.r}"/>
+        <polygon points="70,0 82,0 99,100 90,103" fill="#fff" opacity=".85"/>
+        <polygon points="144,0 104,0 86,98 116,106" fill="${m.r2}"/>
+        <polygon points="130,0 118,0 101,100 110,103" fill="#fff" opacity=".7"/>
+        <rect x="84" y="84" width="32" height="14" rx="4" fill="${m.d}"/>
+        <circle cx="100" cy="152" r="70" fill="url(#${id}o)"/>
+        <circle cx="100" cy="152" r="70" fill="none" stroke="${m.d}" stroke-width="2.5" opacity=".6"/>
+        <circle cx="100" cy="152" r="54" fill="url(#${id}i)" stroke="${m.d}" stroke-opacity=".45"
+            stroke-width="2"/>
+        <g transform="translate(100 152) scale(3.3) translate(-12 -12)" fill="none"
+            stroke-linecap="round">
+          <path d="${bar}" stroke="${m.a}" stroke-width="3.1" transform="translate(.35 .45)"/>
+          <path d="${bar}" stroke="${m.d}" stroke-width="2.3"/>
+        </g>
+        <g clip-path="url(#${id}c)">
+          <rect class="cel-shine" x="0" y="60" width="26" height="200" fill="#fff" opacity=".55"
+              transform="rotate(20 100 152)"/>
+        </g>
+      </g>
+    </svg>`;
+  }
+  /* R = rekordy z wRecs (1 na cvik), další překonané typy cviku v r.also se ukážou drobně pod rekordem */
+  function celebrate(R, sub) {
+    celClose(true);
+    const gold = R.some((r) => REC_BIG[r.type]),
+      k = gold ? "gold" : "silver";
+    // další překonaný typ: jeden drobný řádek pod rekordem
+    const also = (x) =>
+      `<div class="cel-also">
+        ${esc(REC[x.type])}: <b>${esc(recFmt(x.type, x.v, x.set))}</b>` +
+      `<span> (dříve ${esc(recFmt(x.type, x.prev, x.prevSet))})</span>
+      </div>`;
+    const list = R.map(
+      (r) =>
+        (R.length > 1 ? `<div class="cel-g">${esc(exName(r.exId))}</div>` : "") +
+        `<div class="cel-r">
+          ${medal([r.type])}
+          <span>${esc(REC[r.type])}</span>
+          <b>${esc(recFmt(r.type, r.v, r.set))}</b>
+          <span class="was">dříve ${esc(recFmt(r.type, r.prev, r.prevSet))}</span>
+        </div>` +
+        (r.also || []).map(also).join(""),
+    ).join("");
+    let sp = "";
+    for (let i = 0; i < 14; i++) {
+      sp +=
+        `<i class="cel-sp" style="--a:${(i * 360) / 14 + (i % 2 ? 9 : -5)}deg;--d:${95 + (i % 3) * 22}px;` +
+        `--s:${(0.7 + (i % 4) * 0.22).toFixed(2)};--dl:${(0.42 + (i % 5) * 0.05).toFixed(2)}s"></i>`;
+    }
+    const el = document.createElement("div");
+    el.className = "cel " + k;
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", "Nový rekord");
+    el.innerHTML = `<div class="cel-m">
+      <div class="cel-glow"></div>
+      <div class="cel-rays"></div>
+      ${sp}${celMedal(k)}
+    </div>
+    <div class="cel-c">
+      <h2>Nový rekord!</h2>
+      <div class="cel-ex">${esc(sub)}</div>
+      <div class="cel-l">${list}</div>
+      <div class="cel-more" hidden>${icon("down")}Posuň pro další</div>
+      <button class="btn cel-ok">Pokračovat</button>
+    </div>`;
+    const t0 = Date.now();
+    el.addEventListener("click", (ev) => {
+      // zavře tlačítko nebo klepnutí mimo kartu (v kartě se posouvá seznam)
+      if (Date.now() - t0 < 400 || (ev.target.closest(".cel-c") && !ev.target.closest(".cel-ok"))) return;
+      celClose();
+    });
+    document.body.appendChild(el);
+    celEl = el;
+    const L = el.querySelector(".cel-l"),
+      M = el.querySelector(".cel-more");
+    // „Posuň pro další“: místo drží, dokud se seznam dá posouvat (jinak by
+    // seznam na konci poskočil), jen zneviditelní
+    const more = () => {
+      if (L.scrollHeight - L.clientHeight > 4) {
+        M.hidden = false;
+      }
+      const m = L.scrollHeight - L.scrollTop - L.clientHeight > 4;
+      L.classList.toggle("more", m);
+      L.classList.toggle("up", L.scrollTop > 4);
+      M.style.visibility = m ? "" : "hidden";
+    };
+    L.addEventListener("scroll", more);
+    requestAnimationFrame(more);
+    setTimeout(more, 500);
+    if (S.cfg.recSnd !== "off") {
+      celSound(gold);
+    }
+  }
+  function celClose(now) {
+    const el = celEl;
+    if (!el) return;
+    celEl = null;
+    if (now || matchMedia("(prefers-reduced-motion:reduce)").matches) {
+      el.remove();
+    } else {
+      el.classList.add("out");
+      setTimeout(() => el.remove(), 250);
+    }
+  }
+  // zvuky oslavy: plná podoba pro zlatou, kratší a tišší pro stříbrnou
+  let celOut = null;
+  function celTone(t, f, s, d, o) {
+    // tón f Hz od s na d s; o = {type, vol, att, vib, lp, lpTo, hold}
+    o = o || {};
+    const a = audioCtx,
+      g = a.createGain(),
+      osc = a.createOscillator();
+    osc.type = o.type || "triangle";
+    osc.frequency.value = f;
+    let out = osc;
+    if (o.lp) {
+      const fl = a.createBiquadFilter();
+      fl.type = "lowpass";
+      fl.frequency.setValueAtTime(o.lp, t + s);
+      if (o.lpTo) {
+        fl.frequency.linearRampToValueAtTime(o.lpTo, t + s + Math.min(0.25, d));
+      }
+      osc.connect(fl);
+      out = fl;
+    }
+    if (o.vib) {
+      const l = a.createOscillator(),
+        lg = a.createGain();
+      l.frequency.value = 5.5;
+      lg.gain.setValueAtTime(0, t + s);
+      lg.gain.linearRampToValueAtTime(f * 0.012, t + s + 0.35);
+      l.connect(lg);
+      lg.connect(osc.frequency);
+      l.start(t + s);
+      l.stop(t + s + d + 0.05);
+    }
+    const v = o.vol || 0.12,
+      att = o.att || 0.012;
+    g.gain.setValueAtTime(0, t + s);
+    g.gain.linearRampToValueAtTime(v, t + s + att);
+    if (o.hold) {
+      g.gain.setValueAtTime(v, t + s + d - 0.18);
+      g.gain.linearRampToValueAtTime(0.0001, t + s + d);
+    } else {
+      g.gain.exponentialRampToValueAtTime(0.0005, t + s + d);
+    }
+    out.connect(g);
+    g.connect(celOut);
+    osc.start(t + s);
+    osc.stop(t + s + d + 0.05);
+  }
+  const NT = {
+    G4: 392,
+    B4: 493.88,
+    C5: 523.25,
+    D5: 587.33,
+    E5: 659.25,
+    G5: 783.99,
+    A5: 880,
+    B5: 987.77,
+    C6: 1046.5,
+    D6: 1174.66,
+    E6: 1318.51,
+    G6: 1567.98,
+    A6: 1760,
+    C7: 2093,
+  };
+  const CEL_SOUNDS = [
+    {
+      id: "fanfara",
+      name: "Fanfára",
+      play(t, gold) {
+        const n = gold
+          ? [
+              ["C5", 0, 0.11],
+              ["E5", 0.11, 0.11],
+              ["G5", 0.22, 0.11],
+              ["C6", 0.36, 0.7],
+            ]
+          : [
+              ["G5", 0, 0.12],
+              ["C6", 0.14, 0.45],
+            ];
+        for (const [k, s, d] of n) {
+          celTone(t, NT[k], s, d, { vol: gold ? 0.16 : 0.1 });
+          celTone(t, NT[k] * 2, s, d, { type: "sine", vol: gold ? 0.04 : 0.025 });
+        }
+      },
+    },
+    {
+      id: "tada",
+      name: "Ta-dá",
+      play(t, gold) {
+        const br = { type: "sawtooth", lp: 700, lpTo: 2600, att: 0.03 };
+        if (gold) {
+          for (const k of ["G4", "B4", "D5"]) {
+            celTone(t, NT[k], 0, 0.14, Object.assign({ vol: 0.06 }, br));
+          }
+        }
+        const s = gold ? 0.17 : 0,
+          d = gold ? 1.25 : 0.6,
+          v = gold ? 0.07 : 0.045;
+        for (const k of ["C5", "E5", "G5"].concat(gold ? ["C6"] : [])) {
+          celTone(t, NT[k], s, d, Object.assign({ vol: v, hold: true, vib: gold }, br));
+          celTone(t, NT[k] * 1.004, s, d, Object.assign({ vol: v * 0.6, hold: true }, br));
+        }
+      },
+    },
+    {
+      id: "zvonky",
+      name: "Zvonkohra",
+      play(t, gold) {
+        const n = gold
+          ? [
+              ["E6", 0],
+              ["G6", 0.09],
+              ["C7", 0.18],
+              ["G6", 0.34],
+              ["C7", 0.42],
+            ]
+          : [
+              ["G6", 0],
+              ["C7", 0.1],
+            ];
+        for (const [k, s] of n) {
+          const f = NT[k],
+            d = gold ? 1.3 : 0.8,
+            v = gold ? 0.09 : 0.06;
+          celTone(t, f, s, d, { type: "sine", vol: v, att: 0.003 });
+          celTone(t, f * 2.76, s, d * 0.5, { type: "sine", vol: v * 0.35, att: 0.003 });
+          celTone(t, f * 5.4, s, d * 0.25, { type: "sine", vol: v * 0.15, att: 0.003 });
+        }
+      },
+    },
+    {
+      id: "levelup",
+      name: "Level up",
+      play(t, gold) {
+        const n = gold ? ["C5", "E5", "G5", "C6", "E6", "G6", "C7"] : ["G5", "C6", "E6", "G6"];
+        n.forEach((k, i) =>
+          celTone(t, NT[k], i * 0.055, i === n.length - 1 ? 0.4 : 0.07, {
+            type: "square",
+            lp: 3200,
+            vol: gold ? 0.06 : 0.04,
+            att: 0.004,
+          }),
+        );
+      },
+    },
+    {
+      id: "mince",
+      name: "Mince",
+      play(t, gold) {
+        const o = { type: "square", lp: 4000, vol: gold ? 0.06 : 0.04, att: 0.003 };
+        celTone(t, NT.B5, 0, 0.08, o);
+        celTone(t, NT.E6, 0.08, gold ? 0.55 : 0.35, o);
+        if (gold) {
+          celTone(t, NT.B5, 0.3, 0.08, o);
+          celTone(t, NT.E6 * 1.5, 0.38, 0.6, o);
+        }
+      },
+    },
+    {
+      id: "harfa",
+      name: "Harfa",
+      play(t, gold) {
+        const sc = ["C5", "D5", "E5", "G5", "A5", "C6", "D6", "E6", "G6", "A6", "C7"],
+          n = gold ? sc : sc.slice(5);
+        n.forEach((k, i) => celTone(t, NT[k], i * 0.035, 0.9, { vol: gold ? 0.07 : 0.05, att: 0.004 }));
+        if (gold) {
+          for (const k of ["C6", "E6", "G6"]) {
+            celTone(t, NT[k], n.length * 0.035 + 0.05, 1.2, { vol: 0.06, att: 0.004 });
+          }
+        }
+      },
+    },
+  ];
+  function celSound(gold, id) {
+    const x = CEL_SOUNDS.find((x) => x.id === (id || S.cfg.recSnd)) || CEL_SOUNDS[0];
+    try {
+      audioUnlock();
+      if (!audioCtx) return;
+      if (!celOut) {
+        celOut = audioCtx.createDynamicsCompressor();
+        celOut.connect(audioCtx.destination);
+      }
+      x.play(audioCtx.currentTime + 0.05, gold);
+    } catch (e) {}
+  }
+  /* Nastavení → Rekordy a pokrok: oslava rekordu */
+  function recSettings() {
+    const c = S.cfg;
+    let h = `<section class="sec">
+      <div class="sec-h">
+        <h2>Oslava rekordu</h2>
+        ${helpBtn("rec")}
+      </div>
+      <div class="card stack">`;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="recCelEx" ${c.recCelEx ? "checked" : ""}>
+      <span>Oslava po dokončení cviku</span>
+    </label>`;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="recCelW" ${c.recCelW ? "checked" : ""}>
+      <span>Oslava po uložení tréninku</span>
+    </label>`;
+    // volby zvuku zůstávají na místě, bez oslavy jen zešednou (F3-23)
+    const celOn = c.recCelEx || c.recCelW;
+    h += `<div class="stack dep${celOn ? "" : " off"}"${celOn ? "" : " inert"}>`;
+    h += `<div class="stack tight">
+      <span>Zvuk oslavy</span>
+      <div class="spick">
+        ${[["off", "Vypnuto"]]
+          .concat(CEL_SOUNDS.map((x) => [x.id, x.name]))
+          .map(
+            ([id, l]) =>
+              `<div class="spr">
+                <button class="spr-l" data-act="recSnd" data-v="${id}"
+                    aria-pressed="${c.recSnd === id}">
+                  <span class="rad"></span>
+                  ${l}
+                </button>
+                ${
+                  id === "off"
+                    ? ""
+                    : `<button class="spr-p" data-act="recSndPlay" data-v="${id}"
+                        aria-label="Přehrát zvuk ${l}">
+                      ${icon("play")}
+                    </button>`
+                }
+              </div>`,
+          )
+          .join("")}
+      </div>
+    </div>`;
+    h += '<button class="btn block" data-act="recTry">Vyzkoušet</button>';
+    h += "</div>";
+    return `${h}</div></section>`;
+  }
+
+  /* Nastavení → Rekordy a pokrok: upozornění na stagnaci (F4-06) */
+  function stagSettings() {
+    const c = S.cfg;
+    let h = `<section class="sec">
+      <div class="sec-h">
+        <h2>Upozornění na stagnaci</h2>
+        ${helpBtn("stag")}
+      </div>
+      <div class="card stack">`;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="stagOn" ${c.stagOn ? "checked" : ""}>
+      <span>Upozornit na cvik bez zlepšení</span>
+    </label>`;
+    // počet tréninků zůstává na místě, s vypnutým upozorněním jen zešedne (F3-23)
+    const off = c.stagOn ? "" : " off";
+    h += `<div class="stack tight dep${off}"${c.stagOn ? "" : " inert"}>
+      <span>Po kolika trénincích bez zlepšení</span>
+      <div class="seg seg-wide">
+        ${STAG_N.map(
+          (n) =>
+            `<button data-act="stagN" data-v="${n}" aria-pressed="${c.stagN === n}">` +
+            `${n} ${plural(n, "trénink", "tréninky", "tréninků")}</button>`,
+        ).join("")}
+      </div>
+    </div>`;
+    return `${h}</div></section>`;
+  }
+
+  /* ---------- vykreslení: hlavní smyčka, horní lišta, záložky ---------- */
+  const CK = {}; // posun posuvných nabídek podle klíče
+  function saveChipScroll(root) {
+    (root || document).querySelectorAll("[data-ck]").forEach((el) => {
+      CK[el.dataset.ck] = el.scrollLeft;
+    });
+  }
+  function restoreChipScroll(root) {
+    (root || document).querySelectorAll("[data-ck]").forEach((el) => {
+      const v = CK[el.dataset.ck];
+      if (v != null) {
+        el.scrollLeft = v;
+      }
+      const cur = el.querySelector('[aria-pressed="true"]');
+      if (!cur) return;
+      const l = cur.offsetLeft,
+        r = l + cur.offsetWidth;
+      if (l < el.scrollLeft + 4 || r > el.scrollLeft + el.clientWidth - 4) {
+        el.scrollLeft = Math.max(0, l - (el.clientWidth - cur.offsetWidth) / 2);
+      }
+    });
+  }
+  let rq = false;
+  function scheduleRender() {
+    if (rq) return;
+    rq = true;
+    requestAnimationFrame(() => {
+      rq = false;
+      render();
+    });
+  }
+  /* hláška nahoře; s funkcí undo má tlačítko „Vrátit“ (F2-03, akce undo), které platí,
+     jen dokud je hláška vidět (UNDO_MS); ic = ikona před textem (SVG z appky, např. medal()) */
+  const UNDO_MS = 5000;
+  function toast(msg, cls, undo, ic) {
+    const r = document.getElementById("toastRoot");
+    toast.undo = undo || null;
+    r.innerHTML =
+      `<div class="toast${cls ? " " + cls : ""}${undo ? " has-undo" : ""}" role="status">` +
+      `${ic || ""}<span>${esc(msg)}</span>` +
+      `${undo ? '<button class="toast-undo" data-act="undo">Vrátit</button>' : ""}` +
+      `</div>`;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(
+      () => {
+        r.innerHTML = "";
+        toast.undo = null;
+      },
+      undo ? UNDO_MS : 2600,
+    );
+  }
+
+  /* zvýrazněná záložka dole (F3-34): stránka cviku, formulář cviku a úprava tréninku / šablony svítí pod
+     záložkou stránky, odkud se na ně přišlo (podle S.nav, stejně jako vede šipka ←): z tréninku Trénink,
+     ze stránky uloženého tréninku Historie, ze Statistik Statistiky, ze Cviků Cviky. Stránka uloženého
+     tréninku vždy Historie (F3-19), i hned po uložení. n = kolik kroků S.nav patří pod stránku route. */
+  function tabOf(route, n) {
+    if (route === "wd") return "hist";
+    if (route === "home") return "train";
+    if (route !== "exd" && route !== "exed" && route !== "edit" && route !== "replan") return route;
+    const f = S.nav[n - 1];
+    if (f) return tabOf(f.route, n - 1);
+    // Přeplánovat a Naplánovat (F2-13) pod záložkou, odkud se přišlo, bez ní Historie
+    return route === "edit" ? "train" : route === "replan" ? "hist" : "ex";
+  }
+  function renderTabs() {
+    const t = [
+      ["train", "Trénink"],
+      ["hist", "Historie"],
+      ["ex", "Cviky"],
+      ["stats", "Statistiky"],
+      ["body", "Tělo"],
+      ["set", "Nastavení"],
+    ];
+    const cur = tabOf(S.route, S.nav.length);
+    document.getElementById("tabs").innerHTML = t
+      .map(
+        ([k, l]) =>
+          `<button data-act="tab" data-v="${k}" aria-current="${cur === k}">${IC[k]}` +
+          `${k === "train" && S.active && S.route !== "train" ? '<span class="dot"></span>' : ""}${l}` +
+          `</button>`,
+      )
+      .join("");
+  }
+  /* akce v nadpisu sekce: ikona v rámečku malého tlačítka, bez textu (label = popis pro čtečku obrazovky);
+     v = data-v */
+  function icoBtn(act, icon, label, v) {
+    return `<button class="btn sm ico" data-act="${act}"${v ? ` data-v="${esc(v)}"` : ""}
+        aria-label="${esc(label)}">${IC[icon]}</button>`;
+  }
+  function topbar(title, sub, left, subCls) {
+    return `${testBar()}${movedBar()}
+    <header class="top">
+      ${left || ""}
+      <h1${String(title).length > 18 ? ' class="long"' : ""}>
+        ${esc(title)}${sub ? `<small${subCls ? ` class="${subCls}"` : ""}>${esc(sub)}</small>` : ""}
+      </h1>
+      <span class="sync" id="sync"></span>
+    </header>`;
+  }
+  let cellKeep = false; // render vrací kurzor do políčka série: nezprázdňovat (F1-23)
+  function render() {
+    const app = document.getElementById("app");
+    const y = window.scrollY;
+    let h = "";
+    try {
+      if (S.route === "edit" && S.editDraft) {
+        h = vEditor(S.editDraft);
+      } else if (S.route === "train" || S.route === "home") {
+        // úvodní obrazovka během tréninku (F2-09); trénink mezitím skončil = obyčejná záložka Trénink
+        if (S.route === "home" && !S.active) {
+          S.route = "train";
+        }
+        h = S.active && S.route === "train" ? vEditor(S.active) : vHome();
+      } else if (S.route === "hist") {
+        h = vHist();
+      } else if (S.route === "ex") {
+        h = vExList();
+      } else if (S.route === "stats") {
+        h = vStats();
+      } else if (S.route === "exd") {
+        h = vExDetail();
+      } else if (S.route === "exed") {
+        h = vExEdit();
+      } else if (S.route === "wd") {
+        h = vWorkout();
+      } else if (S.route === "replan") {
+        h = vReplan();
+      } else if (S.route === "body") {
+        h = vBody();
+      } else if (S.route === "set") {
+        h = vSettings();
+      } else {
+        S.route = "train";
+        h = vHome();
+      }
+    } catch (err) {
+      console.error(err);
+      h = `${topbar("Chyba")}<div class="banner">${esc(err.message)}</div>`;
+    }
+    const act = document.activeElement;
+    const focusId = act && act.id;
+    // popis cviku (F3-14): po překreslení kurzor na stejném místě
+    const areaSel = act && act.tagName === "TEXTAREA" ? [act.selectionStart, act.selectionEnd] : null;
+    const cellWasClear = !!act && act.cellOld != null; // F1-23: políčko série zprázdněné klepnutím
+    app.innerHTML = h;
+    unsavedSync(); // F3-16: rozepsaná úprava nebo formulář cviku do zařízení
+    renderTabs();
+    updSync();
+    drawCharts();
+    renderRest();
+    restoreChipScroll(app);
+    galRestore(app);
+    if (focusId) {
+      const f = document.getElementById(focusId);
+      if (f && f.tagName === "INPUT" && f.type !== "checkbox") {
+        cellKeep = true; // F1-23: napsané číslo po překreslení nemazat
+        f.focus();
+        cellKeep = false;
+        if (cellWasClear) {
+          cellClear(f);
+        }
+        try {
+          const l = f.value.length;
+          f.setSelectionRange(l, l);
+        } catch (e) {}
+      } else if (f && f.tagName === "TEXTAREA" && areaSel) {
+        f.focus();
+        f.setSelectionRange(areaSel[0], areaSel[1]);
+      }
+    }
+    if (render.keepScroll) {
+      window.scrollTo(0, y);
+    }
+    if (render.restoreY != null) {
+      window.scrollTo(0, render.restoreY);
+      render.restoreY = null;
+      render.toEx = false;
+    }
+    // F2-14: nově otevřená stránka posunutá na sekci s prvkem render.toSel (formulář cviku → pauza)
+    if (render.toSel) {
+      const el = document.querySelector(render.toSel);
+      render.toSel = null;
+      if (el) {
+        const sec = el.closest("section") || el;
+        const top = document.querySelector("#app .top");
+        const bar = top ? top.getBoundingClientRect().height : 0;
+        window.scrollTo(0, sec.getBoundingClientRect().top + window.scrollY - bar);
+      }
+    }
+    // F1-11: návrat do rozdělaného tréninku z jiné záložky = na naposledy změněný cvik
+    if (render.toEx && (S.route !== "train" || S.active)) {
+      render.toEx = false;
+      if (S.route === "train" && S.active) {
+        edScroll(S.active);
+      }
+    }
+    render.keepScroll = true;
+    navEnsure();
+  }
+  function go(route) {
+    if (route !== "exd" && route !== "edit" && route !== "exed" && route !== "wd" && route !== "replan") {
+      S.nav = [];
+    }
+    if (route === "train" && S.route !== "train") {
+      render.toEx = true;
+    }
+    if (route === "exd") {
+      galReset();
+    } // nově otevřená stránka cviku začíná postavou (F2-05)
+    S.route = route;
+    // po restartu se otevře záložka, pod kterou stránka svítí (tabOf, F3-34); u formuláře cviku (F3-14)
+    // zůstane uložené místo, odkud se na něj přišlo. Rozepsaný formulář a úpravu vrací unsavedRestore (F3-16)
+    if (route !== "exed") {
+      lsSet("route", tabOf(route, S.nav.length));
+    }
+    render.keepScroll = false;
+    scheduleRender();
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- ÚVODNÍ OBRAZOVKA (F2-02, F2-09) ----------
+     Bez rozdělaného tréninku záložka Trénink (route train). Během tréninku (F2-09) route home: šipka ←
+     z tréninku, velké tlačítko „Probíhá trénink“ vrátí do tréninku, Kde dnes cvičíš mění fitko tréninku
+     a Začít u šablony se zeptá, co s rozdělaným tréninkem (sheetRun).
+     Route train = rozdělaný trénink (když S.active), jinak vHome; route home = úvodní obrazovka během
+     tréninku (bez tréninku se změní na train, do Local route se ukládá jako train). Tlačítko „Probíhá
+     trénink“ = akce runOpen. curGym() je během tréninku fitko tréninku (selGym ho mění, výběr Fitko v
+     tréninku mění S.selGym). Šablony vHomeTpls, karta tplCard. Uložení a smazání šablony se vrací přes
+     tplLeave(). */
+  // fitko, kde dnes cvičíš; během tréninku fitko tréninku
+  function curGym() {
+    if (S.active && S.cfg.gyms.some((g) => g.id === S.active.gymId)) return S.active.gymId;
+    // v naplánovaný den předvybrané fitko plánu, dokud ho nezměníš (F4-07)
+    const plan = !S.selGym && planToday();
+    if (plan && plan.gymId) return plan.gymId;
+    // archivované fitko se nevybírá (F2-06)
+    if (gymOn(S.selGym)) return S.selGym;
+    if (gymOn(S.cfg.defaultGymId)) return S.cfg.defaultGymId;
+    const on = gymsOn();
+    return on[0] ? on[0].id : null;
+  }
+  function vHome() {
+    const { all } = derive();
+    const now = Date.now();
+    const w30 = all.filter((w) => w.start > now - 30 * DAY);
+    const weekStart = startOfWeek(now);
+    const thisWeek = all.filter((w) => w.start >= weekStart).length;
+    const vol30 = w30.reduce((a, w) => a + wVol(w), 0);
+    let h = topbar(
+      "Workout deník",
+      new Date().toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" }),
+    );
+    if (Store.state === "off") {
+      h += `<div class="banner">
+        Úložiště v prohlížeči teď není dostupné. Záznamy se drží v telefonu a uloží se, až bude znovu
+        dostupné.
+      </div>`;
+    }
+    h += backupBanner();
+    h +=
+      `<div class="kpis">
+      <div class="kpi"><b>${thisWeek}</b><span>Tento týden</span></div>
+      <div class="kpi"><b>${w30.length}</b><span>Za 30 dní</span></div>
+      <div class="kpi">
+        <b>${vol30 >= 1000 ? fmtKg(Math.round(vol30 / 100) / 10) + " t" : fmtInt(vol30) + " kg"}</b>` +
+      `<span>Objem
+          30 dní</span>
+      </div>
+    </div>`;
+    // bez fitka místo prázdných čipů tlačítko Přidat fitko (F3-24)
+    const addGym = S.cfg.gyms.length
+      ? ""
+      : `<button class="btn block" data-act="addGym">${icon("plus")}Přidat fitko</button>`;
+    h += `<section class="sec">
+      <div class="sec-h"><h2>Kde dnes cvičíš</h2></div>
+      ${addGym}
+      <div class="chips" data-ck="selGym">
+        ${gymsOn()
+          .map(
+            (g) =>
+              `<button class="chip" data-act="selGym" data-v="${g.id}"
+                  aria-pressed="${curGym() === g.id}">
+                <span class="sw" style="background:${gymColor(g.id)}"></span>
+                ${esc(g.name)}
+              </button>`,
+          )
+          .join("")}
+      </div>
+    </section>`;
+    // během tréninku místo nového tréninku návrat do rozdělaného (F2-09)
+    h += S.active
+      ? `<section class="sec startbar">
+        <button class="btn primary block" data-act="runOpen">Probíhá trénink</button>
+      </section>`
+      : `<section class="sec startbar">
+        <button class="btn primary block" data-act="startEmpty">
+          ${icon("plus")}Začít prázdný trénink
+        </button>
+      </section>`;
+    // dnešní plán (F4-07): karta šablony zvlášť, v seznamu šablon zůstává na svém místě
+    const plan = planToday();
+    if (plan) {
+      h += `<section class="sec">
+        <div class="sec-h"><h2>Naplánovaný trénink</h2></div>
+        <div class="stack">${tplCard(plan.tplId, plan.t, all, plan.gymId || curGym(), false, plan)}</div>
+      </section>`;
+    }
+    h += vHomeTpls(all);
+    return h;
+  }
+  /* ---------- ŠABLONY PODLE FITKA (F2-02) ----------
+     Šablona má t.gyms = seznam fitek, kam patří ([] = do všech fitek, i u starších šablon). Na úvodní
+     obrazovce nahoře šablony vybraného fitka (curGym) a šablony bez fitka, ostatní až po tlačítku
+     „Ostatní šablony“ (jako „Zobrazit další“ v Historii; tplOther, po otevření appky a změně fitka
+     znovu skryté). Smazané fitko se ze šablon odebere (delGym), fitka, která už neexistují, se navíc
+     nikdy nepočítají (tplGyms).
+     Šablona = {name, order, gyms, items, hints}; hints = "tpl" (předvyplnění jen ze šablony, F2-11, popis v sekci
+     MINULE A PŘEDVYPLNĚNÍ) nebo "last" / chybí (z minula); gyms doplní tplNorm (při načtení i v normBackup), dotaz tplHere(t,
+     gymId). Výběr fitek v editoru tplGymPick (akce tplGym, d.gyms). Zápis šablony vždy přes Object.assign s
+     původní šablonou (zachová pole, která editor nezná). */
+  let tplOther = false; // ukázané ostatní šablony (klepnutí na tlačítko „Ostatní šablony“)
+  // doplní šablonám seznam fitek (starší šablony ho nemají); items = {id: šablona}
+  function tplNorm(items) {
+    const out = {};
+    for (const [id, t] of Object.entries(items || {})) {
+      if (!t || typeof t !== "object") continue;
+      const gyms = Array.isArray(t.gyms) ? t.gyms.filter((g) => typeof g === "string") : [];
+      out[id] = Object.assign({}, t, { gyms: [...new Set(gyms)] });
+      if (Array.isArray(t.items)) {
+        out[id].items = t.items.map(tplRestClean); // F1-21: pauza cviku v šabloně jen jako platná délka
+      }
+    }
+    return out;
+  }
+  // fitka šablony, jen ta, která ještě existují (v pořadí fitek v Nastavení)
+  const tplGyms = (t) => S.cfg.gyms.filter((g) => (t.gyms || []).includes(g.id)).map((g) => g.id);
+  // patří šablona do fitka gymId? (bez fitka = do všech)
+  function tplHere(t, gymId) {
+    const gyms = tplGyms(t);
+    return !gyms.length || gyms.includes(gymId);
+  }
+  // šablony na úvodní obrazovce: šablony vybraného fitka, pod nimi ostatní po tlačítku „Ostatní šablony“
+  // šablony v ručním pořadí ([id, šablona]; mění se přetažením, F2-07)
+  function tplSorted() {
+    return Object.entries(S.templates).sort(
+      (a, b) => (a[1].order || 0) - (b[1].order || 0) || a[1].name.localeCompare(b[1].name),
+    );
+  }
+  // pořadí nové šablony: za poslední (i po přetažení a smazání šablon)
+  function tplNextOrder(items) {
+    return Object.values(items).reduce((m, t) => Math.max(m, (t.order || 0) + 1), 0);
+  }
+  /* ---------- SKRYTÉ ŠABLONY (F2-12) ----------
+     Nepoužívanou šablonu jde skrýt: v úpravě šablony dole tlačítko „Skrýt šablonu“ / „Zobrazit šablonu“
+     (stejně jako „Skrýt z výběru“ v Upravit cvik, akce tplHide), běžné obrysové, ne červené (jde vrátit).
+     Spolu s tím se sjednotila tlačítka dole na všech stránkách (pravidlo v CLAUDE.md): hlavní akce plná, ostatní
+     obrysová pod sebou, nebezpečná červený obrys za čárou (.bzone, .btn.danger). Skrytá šablona má t.hidden = true
+     (pole je nepovinné, starší šablony a zálohy ho nemají = viditelná; zachová ho Object.assign i tplNorm).
+     Skrytá se neukazuje mezi šablonami na úvodu (ani v „Ostatní šablony“) ani v panelu Změnit pořadí šablon.
+     Pod seznamy je tlačítko „Skryté šablony (N)“ (jen když nějaké jsou, tplHid = ukázané skryté, po otevření
+     appky sbalené). Skrytá karta Začít nemá, klepnutí na ni otevře panel ⋯ se Zobrazit šablonu (F2-13).
+     Skrytí platí pro všechna fitka šablony.
+     Skrytá šablona zůstává v záloze, tréninky z ní (tplId) se nemění a pořád blokuje stejný název ve stejném
+     fitku (tplClash, F2-08; hláška řekne, že je skrytá). Funkce tplVisible (neskryté šablony), tplHidden.
+     Později sloučit s archivací (F2-06). */
+  let tplHid = false; // ukázané skryté šablony (klepnutí na „Skryté šablony (N)“)
+  const tplVisible = () => tplSorted().filter(([, t]) => !t.hidden);
+  const tplHidden = () => tplSorted().filter(([, t]) => t.hidden);
+
+  /* ---------- JEDINEČNÉ NÁZVY ŠABLON (F2-08) ----------
+     Stejný název nesmí mít šablony, které se ukazují ve stejném fitku (tplMeet; bez fitka = ve všech,
+     s jedním fitkem tedy všechny). Názvy se porovnávají bez velkých písmen, diakritiky a mezer (tplKey).
+     Úprava šablony: upozornění pod názvem hned při psaní (tplNameMark), Uložit šablonu při shodě nepustí.
+     Uložit jako šablonu v souhrnu se při shodě zeptá (sheetTplClash): přepsat / uložit jako „Nohy 2“.
+     Stávající duplikáty zůstanou (obnova zálohy, smazané fitko, šablony z dřívějška).
+     Funkce: tplClash (shody), tplFreeName (volný název „Nohy 2“), tplClean (uložený název). Editor:
+     tplNameProblem / tplNameMark (červený název a text #ed-title-msg hned při psaní), saveTpl nepustí,
+     tlačítko #tpl-save je šedé přes tplSaveOff (.btn.off, klepnout jde, ukáže hlášku). Stará šablona s
+     duplikátem projde, dokud se nezmění název a fitka. sheetTplClash: stav tplAsk, akce tplAskNew /
+     tplAskOver / tplAskBack. Každé nové místo, které vytváří šablonu, má volný název hlídat stejně. */
+  let tplAsk = null; // dotaz Uložit jako šablonu při shodě: {w, gyms, id, name}
+  // název pro porovnání: „Nohy A“ = „nohya“ = „Nohy  á“
+  const tplKey = (name) => fold(name).replace(/\s+/g, "");
+  // název k uložení: bez mezer na okrajích a zdvojených mezer
+  const tplClean = (name) =>
+    String(name || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  // ukazují se šablony s těmito fitky ve stejném fitku? (žádné fitko = všechna fitka)
+  function tplMeet(gymsA, gymsB) {
+    return !gymsA.length || !gymsB.length || gymsA.some((g) => gymsB.includes(g));
+  }
+  // šablony se stejným názvem ve stejném fitku ([id, šablona] v pořadí šablon); skipId = upravovaná šablona
+  function tplClash(name, gyms, skipId) {
+    const key = tplKey(name);
+    const mine = tplGyms({ gyms });
+    return tplSorted().filter(
+      ([id, t]) => id !== skipId && tplKey(t.name) === key && tplMeet(mine, tplGyms(t)),
+    );
+  }
+  // první volný název: „Nohy“, „Nohy 2“, „Nohy 3“…; název končící číslem pokračuje dalším („Nohy 2“ → „Nohy 3“)
+  function tplFreeName(name, gyms, skipId) {
+    name = tplClean(name);
+    if (!tplClash(name, gyms, skipId).length) return name;
+    const numbered = name.match(/^(.*\S)\s+(\d+)$/);
+    const base = numbered ? numbered[1] : name;
+    let n = numbered ? +numbered[2] + 1 : 2;
+    while (tplClash(base + " " + n, gyms, skipId).length) {
+      n++;
+    }
+    return base + " " + n;
+  }
+  // shoda názvu v úpravě šablony: text pod název, "" = v pořádku; stará šablona s duplikátem projde,
+  // dokud se nezmění název ani fitka
+  function tplNameProblem(d) {
+    const gyms = tplGyms({ gyms: d.gyms });
+    const old = d.id && S.templates[d.id];
+    if (old && tplKey(old.name) === tplKey(d.title) && tplGyms(old).join() === gyms.join()) return "";
+    const clash = tplClash(d.title, gyms, d.id);
+    if (!clash.length) return "";
+    const name = clash[0][1].name;
+    const hid = clash[0][1].hidden ? " (je skrytá)" : ""; // F2-12
+    return S.cfg.gyms.length > 1
+      ? "Šablonu „" + name + "“ už máš ve stejném fitku" + hid + ", změň název nebo fitka"
+      : "Šablonu „" + name + "“ už máš" + hid + ", změň název";
+  }
+  // zvýrazní název upravované šablony při shodě a napíše pod něj proč (hned při psaní, bez překreslení)
+  function tplNameMark(d) {
+    const msg = tplNameProblem(d);
+    const input = document.getElementById("ed-title");
+    if (input) {
+      input.classList.toggle("bad", !!msg);
+    }
+    const msgEl = document.getElementById("ed-title-msg");
+    if (msgEl) {
+      msgEl.textContent = msg;
+    }
+    const save = document.getElementById("tpl-save");
+    if (save) {
+      const off = tplSaveOff(d);
+      save.classList.toggle("off", off);
+      save.setAttribute("aria-disabled", String(off));
+    }
+    return msg;
+  }
+  // tlačítko Uložit šablonu vypadá neaktivní (šedé) při shodě názvu nebo prázdném názvu; klepnout na něj jde
+  // dál (hláška a posun k názvu), jinak by u dlouhé šablony nebylo vidět proč
+  const tplSaveOff = (d) => !tplClean(d.title) || !!tplNameProblem(d);
+  // cviky a série šablony z uloženého tréninku (i supersérie); src = šablona, ze které se převezmou pauzy
+  // cviků (F1-21, tplItemRest)
+  function tplItemsOf(w, src) {
+    return (w.ex || []).map((e, i) =>
+      Object.assign(
+        { exId: e.exId, sets: e.sets.map(tplSet) },
+        ssOf(e),
+        noteOf(e),
+        restOf(tplItemRest(src, w.ex, i)),
+      ),
+    );
+  }
+  // nová šablona z uloženého tréninku (Uložit jako šablonu v souhrnu)
+  function tplFromWorkout(w, name, gyms) {
+    const items = Object.assign({}, S.templates);
+    items[uid("t")] = { name, order: tplNextOrder(items), gyms, items: tplItemsOf(w, S.templates[w.tplId]) };
+    put("config/templates", { items });
+    closeSheet();
+    toast("Šablona „" + name + "“ vytvořena");
+  }
+  // Uložit jako šablonu při shodě názvu: přepsat šablonu, nebo uložit s dalším číslem (panel nad stránkou tréninku)
+  function sheetTplClash(w, gyms, clash) {
+    const [id, t] = clash;
+    tplAsk = { w, gyms, id, name: tplFreeName(w.title, gyms, null) };
+    const where = S.cfg.gyms.length > 1 ? " pro stejné fitko" : "";
+    openSheet(
+      "Šablona už existuje",
+      `<p>
+        Šablonu „${esc(t.name)}“ už máš${where}${t.hidden ? " (je skrytá a po přepsání zůstane skrytá)" : ""}.
+        Můžeš ji přepsat cviky a sériemi z tohoto tréninku
+        (název, fitka a pořadí šablony zůstanou), nebo uložit novou šablonu s jiným názvem.
+      </p>`,
+      `<button class="btn primary full" data-act="tplAskNew">Uložit jako „${esc(tplAsk.name)}“</button>
+      <button class="btn full" data-act="tplAskOver">Přepsat šablonu „${esc(t.name)}“</button>
+      <button class="btn full" data-act="tplAskBack">Zrušit</button>`,
+    );
+  }
+
+  function vHomeTpls(all) {
+    const gymId = curGym();
+    const tpls = tplVisible();
+    const hiddenTpls = tplHidden();
+    if (!hiddenTpls.length) {
+      tplHid = false;
+    }
+    const here = tpls.filter(([, t]) => tplHere(t, gymId));
+    const other = tpls.filter(([, t]) => !tplHere(t, gymId));
+    let h = `<section class="sec">
+        <div class="sec-h">
+          <h2>Šablony${gymId && S.cfg.gyms.length > 1 ? " · " + esc(gymName(gymId)) : ""}</h2>
+          <div class="sec-btns">
+            ${tpls.length > 1 ? icoBtn("tplOrder", "order", "Změnit pořadí šablon") : ""}
+            ${icoBtn("newTpl", "plus", "Nová šablona")}
+          </div>
+        </div>
+        <div class="stack list">`;
+    if (!tpls.length && hiddenTpls.length) {
+      h += '<div class="empty">Všechny šablony jsou skryté.</div>';
+    } else if (!tpls.length) {
+      h += '<div class="empty">Zatím žádné šablony. Vytvoř si třeba Push / Pull / Legs.</div>';
+    } else if (!here.length) {
+      h += '<div class="empty">Pro toto fitko zatím žádné šablony.</div>';
+    }
+    for (const [id, t] of here) {
+      h += tplCard(id, t, all, gymId);
+    }
+    // ostatní šablony až po tlačítku (jako „Zobrazit další“ v Historii), bez šablon pro toto fitko hned;
+    // na místě tlačítka pak nadpis
+    if (other.length && !tplOther && here.length) {
+      h += '<button class="btn block" data-act="tplOther">Ostatní šablony</button>';
+    }
+    h += "</div></section>";
+    if (other.length && (tplOther || !here.length)) {
+      h += `<section class="sec">
+          <div class="sec-h"><h2>Ostatní šablony</h2></div>
+          <div class="stack list">`;
+      for (const [id, t] of other) {
+        h += tplCard(id, t, all, null);
+      }
+      h += "</div></section>";
+    }
+    return h + vHomeTplsHidden(hiddenTpls, all);
+  }
+  // skryté šablony (F2-12): tlačítko „Skryté šablony (N)“ a po klepnutí jejich karty se Zobrazit / Upravit
+  function vHomeTplsHidden(hiddenTpls, all) {
+    if (!hiddenTpls.length) return "";
+    const btn = `<button class="btn block" data-act="tplHid" aria-pressed="${tplHid}">
+        Skryté šablony (${hiddenTpls.length})
+      </button>`;
+    if (!tplHid) return `<section class="sec"><div class="stack">${btn}</div></section>`;
+    return `<section class="sec">
+        <div class="sec-h">
+          <h2>Skryté šablony</h2>
+          ${helpBtn("tplHidden")}
+        </div>
+        <div class="stack list">
+          ${hiddenTpls.map(([id, t]) => tplCard(id, t, all, null, true)).join("")}
+          ${btn}
+        </div>
+      </section>`;
+  }
+  // přepínač předvyplnění sérií v úpravě šablony (F2-11): z minula / ze šablony
+  function tplHintsPick(d) {
+    const opts = [
+      ["last", "Z minula"],
+      ["tpl", "Ze šablony"],
+    ];
+    return `<section class="sec">
+        <div class="sec-h">
+          <h2>Předvyplnění hodnot</h2>
+          ${helpBtn("tplHints")}
+        </div>
+        <div class="card stack">
+          <div class="seg seg-wide">
+            ${opts
+              .map(
+                ([k, l]) =>
+                  `<button data-act="tplHints" data-v="${k}" aria-pressed="${d.hints === k}">${l}</button>`,
+              )
+              .join("")}
+          </div>
+        </div>
+      </section>`;
+  }
+  // výběr fitek v úpravě šablony (víc najednou, žádné = všechna fitka)
+  function tplGymPick(d) {
+    const gyms = d.gyms || [];
+    return `<div class="stack tight">
+        <div class="lbl-f">Fitka</div>
+        <div class="chips" data-ck="tplGym">
+          ${S.cfg.gyms
+            .filter((g) => !g.archived || gyms.includes(g.id)) // archivované jen k odebrání (F2-06)
+            .map(
+              (g) =>
+                `<button class="chip" data-act="tplGym" data-v="${g.id}" aria-pressed="${gyms.includes(g.id)}">
+                  <span class="sw" style="background:${gymColor(g.id)}"></span>
+                  ${esc(g.name)}
+                </button>`,
+            )
+            .join("")}
+        </div>
+        <p class="xs muted" style="margin:0">
+          ${
+            gyms.length
+              ? "Šablona se nahoře ukáže jen ve vybraných fitkách, jinde bude mezi ostatními."
+              : "Žádné fitko nevybrané: šablona se nahoře ukáže ve všech fitkách."
+          }
+        </p>
+      </div>`;
+  }
+  /* ---------- KARTA ŠABLONY (F2-13) ----------
+     Karta šablony na úvodu vypadá jako karta tréninku v Historii: nahoře název (Barlow tučně, jako karta
+     cviku v tréninku) a vpravo štítek fitka (gymPill), pod ním „6 cviků · naposledy 10. 10.“, pod tím cviky.
+     Klepnutí kamkoli na kartu = Začít (startTpl; u naplánovaného tréninku planStart ve fitku plánu), skrytá
+     šablona začít nejde, klepnutí otevře panel. Vpravo nahoře ⋯ (jako u karty cviku v tréninku) = panel
+     sheetTplMenu: Upravit, Naplánovat, Skrýt / Zobrazit šablonu, za čárou Smazat šablonu (potvrzení,
+     tplDelete). U naplánovaného tréninku ⋯ = panel plánu (sheetPlanDay s home: Upravit šablonu, Změnit
+     šablonu nebo fitko, Přeplánovat, Zrušit plán). Naplánovat = stránka s kalendářem jako Přeplánovat (route
+     replan, S.planNew = {tplId, gymId}, tplPlanNew); klepnutí na volný den plán uloží (planMove) a vrátí tam,
+     odkud se přišlo. Fitko plánu: vybrané fitko, když do něj šablona patří, jinak první fitko šablony.
+     Hlavička karty tplHead (i karta v panelu dne v kalendáři, bez ⋯). Fitko v závorce za „naposledy“ jen tam,
+     kde ho neříká štítek. Karta je div role="button" (tlačítko ⋯ uvnitř), Enter a mezerník řeší posluchač
+     keydown. */
+  // hlavička karty šablony: název, štítky fitek, vpravo případně tlačítko ⋯ (after)
+  function tplHead(name, gyms, after) {
+    return `<div class="tpl-h${after ? " m" : ""}">
+        <h3>${esc(name)}</h3>
+        <div class="tpl-r">${gyms.map(gymPill).join("")}${after || ""}</div>
+      </div>`;
+  }
+  /* karta šablony; gymId = šablona vybraného fitka: „naposledy“ přednostně z tohoto fitka (bez názvu fitka),
+     jinak (i u ostatních šablon) poslední běh kdekoli s názvem fitka; plan = dnešní plán (F4-07): štítek fitka
+     plánu, když je vybrané jiné fitko, a Začít ve fitku plánu */
+  function tplCard(id, t, all, gymId, hidden, plan) {
+    const runs = all.filter((w) => sameRun({ tplId: id, title: t.name }, w));
+    const lastHere = gymId ? runs.find((w) => w.gymId === gymId) : null;
+    const last = lastHere || runs[0];
+    // u ostatních šablon, kam patří; u plánu fitko plánu, když není vybrané
+    const gyms = plan ? (plan.gymId && plan.gymId !== curGym() ? [plan.gymId] : []) : gymId ? [] : tplGyms(t);
+    // fitko posledního běhu v závorce, jen když ho neříká štítek
+    const lastGym = last && !lastHere && last.gymId && !(gyms.length === 1 && gyms[0] === last.gymId);
+    const lastTxt = !last
+      ? ""
+      : " · naposledy " + fmtDateS(last.start) + (lastGym ? " (" + esc(gymName(last.gymId)) + ")" : "");
+    const nEx = (t.items || []).length;
+    const today = dayKey(Date.now());
+    const tap = hidden
+      ? `data-act="tplMenu" data-v="${id}" aria-label="Možnosti šablony ${esc(t.name)}"`
+      : plan
+        ? `data-act="planStart" data-v="${today}" aria-label="Začít trénink ${esc(t.name)}"`
+        : `data-act="startTpl" data-v="${id}" aria-label="Začít trénink ${esc(t.name)}"`;
+    const menu = plan
+      ? `<button class="iconbtn" data-act="planMenu" data-v="${today}" aria-label="Možnosti plánu">
+          ${IC.more}
+        </button>`
+      : `<button class="iconbtn" data-act="tplMenu" data-v="${id}" aria-label="Možnosti šablony">
+          ${IC.more}
+        </button>`;
+    return `<div class="card tpl tap" role="button" tabindex="0" ${tap}>
+        ${tplHead(t.name, gyms, menu)}
+        <p class="tpl-meta">${nEx} ${plural(nEx, "cvik", "cviky", "cviků")}${lastTxt}</p>
+        <p>${esc((t.items || []).map((i) => exName(i.exId)).join(", "))}</p>
+      </div>`;
+  }
+  // panel ⋯ u šablony: Upravit, Naplánovat (ne u skryté), Skrýt / Zobrazit, Smazat
+  function sheetTplMenu(id) {
+    const t = S.templates[id];
+    if (!t) return;
+    openSheet(
+      t.name,
+      `<div class="stack">
+        <button class="btn block" data-act="editTpl" data-v="${id}">Upravit</button>
+        ${t.hidden ? "" : `<button class="btn block" data-act="tplPlan" data-v="${id}">Naplánovat</button>`}
+        <button class="btn block" data-act="tplHide" data-v="${id}">
+          ${t.hidden ? "Zobrazit šablonu" : "Skrýt šablonu"}
+        </button>
+        <div class="bzone"></div>
+        <button class="btn block danger" data-act="tplDel" data-v="${id}">Smazat šablonu</button>
+      </div>`,
+    );
+  }
+  // smaže šablonu (plány s ní zmizí, planOf je nebere a planClean je smaže)
+  function tplDelete(id) {
+    const items = Object.assign({}, S.templates);
+    delete items[id];
+    put("config/templates", { items });
+    planClean();
+  }
+  // Naplánovat z panelu šablony: stránka s kalendářem (vReplan s S.planNew)
+  function tplPlanNew(id) {
+    const t = S.templates[id];
+    if (!t) return;
+    const gyms = tplGyms(t);
+    const f = navFrame();
+    closeSheet();
+    S.nav.push(f); // Zpět (←) vrátí na úvod s otevřeným panelem šablony
+    S.replan = null;
+    S.planNew = { tplId: id, gymId: tplHere(t, curGym()) ? curGym() : gyms[0] || null };
+    go("replan");
+  }
+  function startOfWeek(t) {
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    const wd = (d.getDay() + 6) % 7;
+    return d.getTime() - wd * DAY;
+  }
+  function wVol(w) {
+    let v = 0;
+    for (const e of w.ex || []) {
+      const k = kindOf(e.exId);
+      for (const s of e.sets) {
+        if (isWork(s.t)) {
+          v += setVol(k, s, w.start);
+        }
+      }
+    }
+    return v;
+  }
+  function wSets(w) {
+    let n = 0;
+    for (const e of w.ex || []) {
+      for (const s of e.sets) {
+        if (isWork(s.t)) {
+          n++;
+        }
+      }
+    }
+    return n;
+  }
+
+  /* ---------- EDITOR (rozdělaný trénink / úprava uloženého tréninku / šablona) ----------
+     Poznámka ke cviku (F2-10): patří ke cviku, ne ke stroji ani fitku, takže se přenáší vždy (i do jiného
+     fitka). Šablona ji má u cviku jako nepovinné pole note (bez něj nebo prázdná = pole se neukládá, staré
+     šablony fungují dál). Ze šablony se přes startWorkout vloží do rozdělaného tréninku, z uloženého
+     tréninku přes Cvičit znovu (startAgain). Zpět do šablony jde jen výslovně: Uložit šablonu, Uložit jako
+     šablonu, Aktualizovat šablonu a přepsání při shodě názvu. Poznámka se nepředvyplňuje z historie u cviku
+     přidaného ručně ani při nahrazení cviku (exReplace). Značku do objektu cviku dává noteOf(e), stejně jako
+     ssOf u supersérie; každé nové místo, které kopíruje cviky, ji přenáší přes noteOf. */
+  // poznámka cviku pro Object.assign (prázdný objekt = cvik nemá poznámku)
+  const noteOf = (e) => {
+    const note = e && typeof e.note === "string" ? e.note.trim() : "";
+    return note ? { note } : {};
+  };
+  // série do šablony z uloženého tréninku (i čas a vzdálenost)
+  function tplSet(s) {
+    return { t: s.t, kg: s.kg || 0, reps: s.reps || 0, sec: s.sec || 0, km: s.km || 0, m: s.m || 0 };
+  }
+  function newSetFrom(s) {
+    return {
+      t: s ? s.t : "n",
+      kg: s && s.kg ? numStr(s.kg) : "",
+      reps: s && s.reps ? String(s.reps) : "",
+      sec: s && s.sec ? (typeof s.sec === "string" ? s.sec : fmtSec(s.sec)) : "",
+      km: s && s.km ? numStr(s.km) : "",
+      m: s && s.m ? String(s.m) : "",
+      done: false,
+    };
+  }
+  // nový cvik v tréninku: série podle šablony, jinak podle minula v tomto fitku;
+  // hodnoty zůstávají prázdné (šedé předvyplnění, F1-01). fromTplSets = série šablony nebo uloženého tréninku,
+  // fromOnly = předvyplnit jen z nich, vše nebo nic (F2-11); jinak jen u cviku, který nikdy necvičil
+  function exEntryFor(exId, gymId, fromTplSets, fromOnly) {
+    const last = lastSession(exId, gymId);
+    let sets;
+    if (fromTplSets && fromTplSets.length) {
+      const never = !lastSession(exId, gymId, null, 0, true);
+      sets = fromTplSets.map((x) => {
+        const n = newSetFrom({ t: x.t || "n" });
+        if (fromOnly) {
+          n.phTpl = true;
+        }
+        if (never || fromOnly) {
+          const ph = {};
+          for (const f of HINT_F) {
+            if (+x[f] > 0) {
+              ph[f] = +x[f];
+            }
+          }
+          if (Object.keys(ph).length) {
+            n.ph = ph;
+          }
+        }
+        return n;
+      });
+    } else if (last) {
+      sets = last.e.sets.map((x) => newSetFrom({ t: x.t }));
+    } else {
+      sets = [newSetFrom(null), newSetFrom(null), newSetFrom(null)];
+    }
+    return { k: uid("e"), exId, note: "", sets };
+  }
+  function startWorkout(tplId) {
+    const gymId = curGym();
+    const t = tplId && S.templates[tplId];
+    const d = {
+      mode: "active",
+      id: null,
+      title: t ? t.name : defaultTitle(),
+      gymId,
+      start: Date.now(),
+      tplId: tplId || null,
+      ex: [],
+    };
+    if (t) {
+      for (const it of t.items || []) {
+        const fromOnly = t.hints === "tpl"; // F2-11: předvyplnění jen ze šablony
+        d.ex.push(Object.assign(exEntryFor(it.exId, gymId, it.sets, fromOnly), ssOf(it), noteOf(it)));
+      }
+      ssNorm(d.ex);
+    }
+    S.active = d;
+    saveActive();
+    restStop();
+    go("train");
+  }
+
+  /* ---------- SUPERSÉRIE (F4-05) ----------
+     Cviky v supersérii mají stejnou značku e.ss (rozdělaný trénink, uložený trénink i šablona) a stojí
+     v seznamu hned za sebou. Supersérie = aspoň 2 sousední cviky se stejnou značkou (ssRun); osamělá
+     značka se nebere v úvahu a ssNorm ji zahodí. Vytváří se v menu cviku (ssOn = s dalším cvikem,
+     ssOff = zrušit), přenáší se ze šablony, přes Cvičit znovu, Uložit jako šablonu i Aktualizovat šablonu.
+     Série se párují podle druhu jako u Minule (setGrp: zahřívací se zahřívacími, ostatní s pracovními)
+     a podle pořadí. Po ✓ série rozhodne ssRest o pauze:
+     - dvojice v jiném cviku supersérie ještě není hotová → bez pauzy, jen hláška „Další: …“,
+     - kolo je hotové → pracovní kolo S.cfg.restSs (Časovač po pracovní supersérii), zahřívací kolo
+       S.cfg.restWarm (Časovač po zahřívací sérii, F1-22),
+     - série nemá v jiném cviku dvojici (série navíc) → jako mimo supersérii (restAfter, F1-22).
+     ssNorm se volá po odebrání cviku, po přetažení (ssMoved), v draftToWorkout a při uložení šablony. Menu
+     cviku ssOn (ssLink) / ssOff (ssUnlink). Karty jedné supersérie obaluje ssWrap (.ssg = menší mezera),
+     karta má třídu ss-on (proužek vlevo přes ::before, rozměry karty beze změny; i na stránce tréninku a v
+     panelu Pořadí cviků, bez štítku, F3-22). Každé nové místo, které kopíruje cviky (šablona ↔ trénink),
+     přenáší značku přes ssOf(e). restNext v supersérii vybírá další kolo. */
+  // značka supersérie cviku pro Object.assign (prázdný objekt = cvik není v supersérii)
+  const ssOf = (e) => (e && e.ss ? { ss: e.ss } : {});
+  // rozsah [od, do] supersérie, do které patří cvik na místě i (null = není v supersérii)
+  function ssRun(list, i) {
+    const tag = list[i] && list[i].ss;
+    if (!tag) return null;
+    let from = i;
+    let to = i;
+    while (from > 0 && list[from - 1].ss === tag) {
+      from--;
+    }
+    while (to < list.length - 1 && list[to + 1].ss === tag) {
+      to++;
+    }
+    return to > from ? [from, to] : null;
+  }
+  // uklidí značky: osamělý cvik ze supersérie vypadne, rozdělená supersérie dostane pro další část novou
+  function ssNorm(list) {
+    const seen = new Set();
+    let i = 0;
+    while (i < list.length) {
+      const tag = list[i].ss;
+      let to = i;
+      while (tag && to < list.length - 1 && list[to + 1].ss === tag) {
+        to++;
+      }
+      if (tag && to === i) {
+        delete list[i].ss;
+      } else if (tag && seen.has(tag)) {
+        const fresh = uid("s");
+        for (let k = i; k <= to; k++) {
+          list[k].ss = fresh;
+        }
+      }
+      if (tag) {
+        seen.add(tag);
+      }
+      i = to + 1;
+    }
+    return list;
+  }
+  // spojí cvik i s cvikem pod ním (i s jeho případnou supersérií)
+  function ssLink(list, i) {
+    const a = list[i];
+    const b = list[i + 1];
+    if (!a || !b) return;
+    const tag = a.ss || b.ss || uid("s");
+    const other = b.ss && b.ss !== tag ? b.ss : null;
+    for (const e of list) {
+      if (other && e.ss === other) {
+        e.ss = tag;
+      }
+    }
+    a.ss = tag;
+    b.ss = tag;
+    ssNorm(list);
+  }
+  // zruší celou supersérii, do které patří cvik i
+  function ssUnlink(list, i) {
+    const run = ssRun(list, i);
+    if (!run) return;
+    for (let k = run[0]; k <= run[1]; k++) {
+      delete list[k].ss;
+    }
+  }
+  // po přetažení cviku na místo k: mezi dvěma cviky stejné supersérie se k ní přidá, jinak ze své vypadne
+  function ssMoved(list, k) {
+    const e = list[k];
+    const prev = list[k - 1];
+    const next = list[k + 1];
+    if (prev && next && prev.ss && prev.ss === next.ss) {
+      e.ss = prev.ss;
+    } else if (e.ss && !(prev && prev.ss === e.ss) && !(next && next.ss === e.ss)) {
+      delete e.ss;
+    }
+    ssNorm(list);
+  }
+  // karty cviků (cards[i] patří list[i]); karty jedné supersérie obalí kvůli menší mezeře mezi nimi.
+  // Proužek vlevo má každá karta sama (třída ss-on), rozměry karty se nemění.
+  function ssWrap(list, cards) {
+    let h = "";
+    for (let i = 0; i < list.length; i++) {
+      const run = ssRun(list, i);
+      if (!run) {
+        h += cards[i];
+        continue;
+      }
+      h += `<div class="ssg">${cards.slice(run[0], run[1] + 1).join("")}</div>`;
+      i = run[1];
+    }
+    return h;
+  }
+  // pauza po ✓ série j cviku i: "none" = kolo supersérie pokračuje, "ss" = časovač po pracovní supersérii,
+  // "def" = výchozí časovač
+  function ssRest(d, i, j) {
+    const run = ssRun(d.ex, i);
+    if (!run) return "def";
+    const grp = setGrp(d.ex[i].sets[j].t);
+    const pos = d.ex[i].sets.slice(0, j).filter((s) => setGrp(s.t) === grp).length;
+    const pairs = [];
+    for (let k = run[0]; k <= run[1]; k++) {
+      if (k === i) continue;
+      const pair = d.ex[k].sets.filter((s) => setGrp(s.t) === grp)[pos];
+      if (pair) {
+        pairs.push(pair);
+      }
+    }
+    if (!pairs.length) return "def";
+    if (pairs.some((s) => !s.done)) return "none";
+    return grp === "w" ? "def" : "ss";
+  }
+
+  /* ---------- CVIČIT ZNOVU (F2-01) ----------
+     Nový trénink podle tréninku z historie: stejný název a cviky, počet a druh sérií z něj,
+     hodnoty jen šedě z minula v zvoleném fitku (jako u šablony, F1-01). Poznámky ke cvikům jen
+     ve stejném fitku. Vazba na šablonu zůstane (když šablona ještě existuje), „Aktualizovat šablonu“
+     je nezaškrtnuté (od F4-05 vždy, u každého tréninku ze šablony).
+     d.again = id původního tréninku, uloží se jako w.againOf (souhrn F3-03 s ním pak porovnává).
+     Tlačítko wAgain na stránce tréninku (vWorkout) otevře sheetAgain (volba fitka, stav again), startAgain
+     založí trénink přes exEntryFor. Starší rozdělaný trénink může mít again:true. Série do šablony z tréninku
+     vždy přes tplSet (i sec, km). */
+  let again = null; // {w, gym}: otevřené okno Cvičit znovu
+  const againEx = (w) => (w.ex || []).filter((e) => S.exLib[e.exId]);
+  function againInfo() {
+    const w = again.w,
+      n = (w.ex || []).length - againEx(w).length;
+    return (
+      (w.gymId && again.gym !== w.gymId
+        ? `<p class="small muted">
+          Trénink byl v ${esc(gymName(w.gymId))}. Hodnoty z minula se vezmou z vybraného fitka.
+        </p>`
+        : "") +
+      (n
+        ? `<p class="small muted">
+          ${n} ${plural(n, "cvik už v appce není", "cviky už v appce nejsou", "cviků už v appce není")}` +
+          `${n === 1 ? ", vynechá se." : ", vynechají se."}
+        </p>`
+        : "")
+    );
+  }
+  function sheetAgain(w) {
+    again = { w, gym: S.cfg.gyms.some((g) => g.id === curGym()) ? curGym() : w.gymId };
+    const ex = againEx(w);
+    const b =
+      `<p>
+      ${ex.length} ${plural(ex.length, "cvik", "cviky", "cviků")}: ` +
+      `${esc(ex.map((e) => exName(e.exId)).join(", "))}
+    </p>
+    <div class="lbl-f">Kde dnes cvičíš</div>
+    ${gymChips("againGym", again.gym, false)}
+    <div class="stack tight" id="againInfo">${againInfo()}</div>`;
+    openSheet(
+      "Cvičit znovu: " + w.title,
+      b,
+      `<button class="btn grow" data-act="againBack">Zpět</button>
+      <button class="btn primary grow" data-act="againOk">Začít</button>`,
+    );
+  }
+  function startAgain() {
+    const w = again.w,
+      gymId = again.gym;
+    const t = w.tplId && S.templates[w.tplId];
+    const d = {
+      mode: "active",
+      id: null,
+      title: w.title,
+      gymId,
+      start: Date.now(),
+      tplId: t ? w.tplId : null,
+      again: w.id,
+      ex: [],
+    };
+    for (const e of againEx(w)) {
+      // F2-11: hodnoty jen ze zvoleného tréninku
+      d.ex.push(Object.assign(exEntryFor(e.exId, gymId, e.sets, true), ssOf(e), noteOf(e)));
+    }
+    ssNorm(d.ex); // cvik, který už v appce není, mohl supersérii rozdělit
+    again = null;
+    S.selGym = gymId;
+    S.active = d;
+    saveActive();
+    restStop();
+    closeSheet();
+    go("train");
+  }
+  /* ---------- NOVÝ TRÉNINK BĚHEM TRÉNINKU (F2-09) ----------
+     Začít u šablony nebo Cvičit znovu během rozdělaného tréninku se zeptá (sheetRun): Dokončit a začít
+     nový (okno Dokončit trénink, pak rovnou nový trénink bez souhrnu), Zahodit a začít nový, Zrušit.
+     Co začne potom, drží runNext: {tpl: id šablony} nebo {again: stav okna Cvičit znovu}.
+     runFinish = finishAsk a po finishOk runStart bez souhrnu, runDiscard. Konec tréninku vždy přes
+     activeEnd(). */
+  let runNext = null;
+  // název toho, co začne („trénink podle šablony „Push““)
+  function runNextName(next) {
+    if (next.tpl) {
+      const t = S.templates[next.tpl];
+      return t ? "trénink podle šablony „" + t.name + "“" : "nový trénink";
+    }
+    return "znovu trénink „" + next.again.w.title + "“";
+  }
+  function sheetRun(next) {
+    const d = S.active;
+    runNext = next;
+    const done = d.ex.reduce((a, e) => a + e.sets.filter((s) => s.done).length, 0);
+    const doneTxt = done
+      ? done + " " + plural(done, "hotová série", "hotové série", "hotových sérií")
+      : "zatím žádná hotová série";
+    // Dokončit jde i bez hotové série, když série mají zapsané hodnoty (označí se v okně, F1-14)
+    const canFinish = done || finUndone(d).val;
+    openSheet(
+      "Probíhá trénink",
+      `<p>
+        Trénink „${esc(d.title)}“ ještě běží (${doneTxt}). Chceš ho ukončit a začít ${esc(runNextName(next))}?
+      </p>`,
+      (canFinish
+        ? '<button class="btn primary full" data-act="runFinish">Dokončit a začít nový</button>'
+        : "") +
+        `<button class="btn danger full" data-act="runDiscard">Zahodit a začít nový</button>
+        <button class="btn full" data-act="closeSheet">Zrušit</button>`,
+    );
+  }
+  // začne trénink po ukončení rozdělaného (šablona mohla mezitím zmizet)
+  function runStart(next) {
+    if (next && next.tpl && S.templates[next.tpl]) {
+      startWorkout(next.tpl);
+    } else if (next && next.again) {
+      again = next.again;
+      startAgain();
+    } else {
+      go("train");
+    }
+  }
+  // konec rozdělaného tréninku (uložení i zahození); jeho fitko zůstane vybrané na úvodní obrazovce
+  function activeEnd() {
+    S.selGym = curGym();
+    S.active = null;
+    saveActive();
+    stwCancel();
+    restStop();
+  }
+  function defaultTitle() {
+    const h = new Date().getHours();
+    return h < 11 ? "Ranní trénink" : h < 17 ? "Odpolední trénink" : "Večerní trénink";
+  }
+  const END_PAD = 3 * 60000; // pár minut po poslední sérii
+  function lastSetAt(d) {
+    let t = 0;
+    for (const e of d.ex) {
+      for (const s of e.sets) {
+        if (s.done && s.at > t) {
+          t = s.at;
+        }
+      }
+    }
+    return t || null;
+  }
+  function suggestEnd(d) {
+    const t = lastSetAt(d);
+    const now = Date.now();
+    return t ? Math.min(now, t + END_PAD) : now;
+  }
+  function finEndValue(d) {
+    const el = document.getElementById("fin-end");
+    return el ? finEndFrom(d, el.value) : null;
+  }
+  // čas „HH:MM“ z políčka Konec jako okamžik (po půlnoci další den)
+  function finEndFrom(d, value) {
+    if (!value) return null;
+    const [h, m] = value.split(":").map(Number);
+    const x = new Date(d.start);
+    x.setHours(h, m, 0, 0);
+    let t = x.getTime();
+    if (t < d.start - 60000) {
+      t += DAY;
+    }
+    return t;
+  }
+  function finInfo(d, end, lastAt) {
+    return `Délka <b>${fmtDur(end - d.start)}</b>${
+      lastAt
+        ? " · poslední série v " + fmtTime(lastAt) + ", navrženo +3 min"
+        : " · bez časů sérií, navržen aktuální čas"
+    }`;
+  }
+  /* okno Dokončit trénink (tlačítko v tréninku i Dokončit a začít nový, F2-09); neoznačené série a keep
+     (Konec a Aktualizovat šablonu po znovuotevření) viz sekce NEOZNAČENÉ SÉRIE PŘI DOKONČENÍ (F1-14) */
+  function finishAsk(d, keep, noanim) {
+    const problem = draftProblem(d, true);
+    if (problem) {
+      showProblem(problem.e, problem.j, problem);
+      return;
+    }
+    const ex = draftToWorkout(d, true);
+    const undone = finUndone(d);
+    if (!ex.length && !undone.val) {
+      toast("Žádná série není označená jako hotová.");
+      return;
+    }
+    const lastAt = lastSetAt(d);
+    const sug = suggestEnd(d);
+    const end = (keep && finEndFrom(d, keep.end)) || sug;
+    const nSets = ex.reduce((a, e) => a + e.sets.length, 0);
+    const cnt = ex.length
+      ? `${ex.length} ${plural(ex.length, "cvik", "cviky", "cviků")}, ` +
+        `${nSets} ${plural(nSets, "série", "série", "sérií")}.`
+      : "Zatím žádná hotová série.";
+    let b = `<p>${cnt}</p>`;
+    if (undone.val) {
+      b += `<div class="banner act" style="margin-top:0">
+        <span class="grow">${finValTxt(undone.val)}</span>
+        <button class="btn" data-act="finMark">${icon("check")}Označit</button>
+      </div>`;
+    }
+    if (undone.empty) {
+      b += `<div class="banner" style="margin-top:0">
+        ${undone.empty} ${plural(undone.empty, "série", "série", "sérií")} bez zapsaných hodnot se neuloží.
+      </div>`;
+    }
+    b += `<div class="card stack inner">
+      <div class="row">
+        <label class="f grow">
+          Začátek
+          <input class="inp" type="time" value="${toTimeInput(d.start)}" disabled>
+        </label>
+        <label class="f grow">
+          Konec
+          <input class="inp" type="time" id="fin-end" data-f="finEnd" value="${toTimeInput(end)}">
+        </label>
+      </div>
+      <div class="small muted" id="fin-info">${finInfo(d, end, lastAt)}</div>
+      <label class="f">
+        Poznámka k tréninku
+        <textarea class="inp" rows="2" data-f="wNote">${esc(d.note || "")}</textarea>
+      </label>
+    </div>`; // poznámka k tréninku (F1-26)
+    b += coachPart(d); // Pro coache (F4-12)
+    // Dokončit a začít nový (F2-09): co začne po uložení
+    if (runNext) {
+      b += `<p class="small muted">Po uložení začne ${esc(runNextName(runNext))}.</p>`;
+    }
+    if (d.tplId && S.templates[d.tplId]) {
+      b +=
+        `<label class="switch">
+        <input type="checkbox" id="updTpl"${keep && keep.upd ? " checked" : ""}> Aktualizovat šablonu „` +
+        `${esc(S.templates[d.tplId].name)}“ (cviky a váhy)
+      </label>`;
+    }
+    // bez hotové série se Uložit ukáže až po Označit (F1-14)
+    openSheet(
+      "Dokončit trénink?",
+      b,
+      '<button class="btn grow" data-act="closeSheet">Zpět</button>' +
+        (ex.length ? '<button class="btn primary grow" data-act="finishOk">Uložit trénink</button>' : ""),
+      noanim,
+    );
+  }
+
+  /* ---------- NEOZNAČENÉ SÉRIE PŘI DOKONČENÍ (F1-14) ----------
+     Okno Dokončit trénink (finishAsk) rozlišuje neodškrtnuté série (finUndone): se zapsanými hodnotami
+     (setHasVal: aspoň jedno políčko druhu zápisu vyplněné psaním, krokovačem nebo tlačítkem 60 %; šedé
+     předvyplnění se nepočítá) a bez hodnot. První ukáže oranžový pruh s tlačítkem Označit (.banner.act jako
+     připomínka zálohy), druhé pruh bez tlačítka (.banner) „… bez zapsaných hodnot se neuloží“. Okno se otevře
+     i bez hotové série, když nějaká série má hodnoty; místo počtů „Zatím žádná hotová série.“ a Uložit trénink
+     se ukáže až po označení. Panel Probíhá trénink (sheetRun, F2-09) pak nabízí i Dokončit a začít nový.
+     Označit (finMark) dělá totéž co ✓ u každé takové série, ale nad kopiemi: doplní chybějící hodnoty
+     z předvyplnění (setFill), zkontroluje hodnoty (setProblem) a velký skok (setJump, F1-10). Při problému
+     se neoznačí nic: okno se zavře a appka skočí do políčka (showProblem, s krokovačem jeho panel); u skoku
+     panel „Opravdu …?“, kde Ano (finJumpOk) dá sérii jumpOk a označování pokračuje, Opravit (jumpFix) skočí do
+     políčka. Pauza se nespustí, hláška rekordu u série se neukáže (oslava po uložení tréninku ano).
+     Označená série má done a místo času odškrtnutí s.atEnd; čas s.at dostane při Uložit trénink (finishOk)
+     = Konec z okna, navržený Konec (suggestEnd) podle ní neposouvá. ✓ v tréninku atEnd maže (toggleSetDone).
+     Upravený Konec a Aktualizovat šablonu zůstanou i po znovuotevření okna (finState → finishAsk keep,
+     přes panel Opravdu …? v finKeep). */
+  let finKeep = null;
+  // má série zapsanou aspoň jednu hodnotu druhu zápisu cviku? (šedé předvyplnění se nepočítá)
+  function setHasVal(kind, s) {
+    return kFields(kind).some((f) => String(s[setRule(f)] ?? "").trim() !== "");
+  }
+  // neodškrtnuté série tréninku: val = se zapsanými hodnotami, empty = bez hodnot
+  function finUndone(d) {
+    const res = { val: 0, empty: 0 };
+    for (const e of d.ex) {
+      const kind = kindOf(e.exId);
+      for (const s of e.sets) {
+        if (s.done) continue;
+        if (setHasVal(kind, s)) {
+          res.val++;
+        } else {
+          res.empty++;
+        }
+      }
+    }
+    return res;
+  }
+  // text pruhu se sériemi, které mají hodnoty, ale nejsou označené
+  function finValTxt(n) {
+    if (n === 1) return "1 série má hodnoty, ale není označená.";
+    return n + " " + plural(n, "série má", "série mají", "sérií má") + " hodnoty, ale nejsou označené.";
+  }
+  // Konec a Aktualizovat šablonu z otevřeného okna Dokončit trénink
+  function finState() {
+    const end = document.getElementById("fin-end");
+    const upd = document.getElementById("updTpl");
+    return { end: end ? end.value : "", upd: !!(upd && upd.checked) };
+  }
+  // Označit: odškrtne všechny série s hodnotami, nebo ukáže první problém a neoznačí nic
+  function finMark(d, keep) {
+    finKeep = keep;
+    const todo = [];
+    for (let i = 0; i < d.ex.length; i++) {
+      const e = d.ex[i];
+      const kind = kindOf(e.exId);
+      for (let j = 0; j < e.sets.length; j++) {
+        const s = e.sets[j];
+        if (s.done || !setHasVal(kind, s)) continue;
+        const copy = Object.assign({}, s);
+        setFill(d, e, j, copy);
+        const problem = setProblem(kind, copy, true);
+        if (problem) {
+          closeSheet();
+          showProblem(e, j, problem);
+          return;
+        }
+        todo.push({ i, j, copy });
+      }
+    }
+    for (const x of todo) {
+      const jump = x.copy.jumpOk ? null : setJump(d, x.i, x.j, x.copy);
+      if (jump) {
+        sheetJump(x.i, x.j, jump, "finJumpOk");
+        return;
+      }
+    }
+    for (const x of todo) {
+      const s = d.ex[x.i].sets[x.j];
+      Object.assign(s, x.copy, { done: true, atEnd: true });
+      delete s.at;
+      edMark(d, d.ex[x.i]);
+    }
+    touchDraft();
+    scheduleRender();
+    finishAsk(d, keep, true);
+  }
+  // délka tréninku jako text do řádku s údaji
+  const durLabel = (w) => `<span>${fmtDur((w.end || w.start) - w.start)}</span>`;
+  function curDraft() {
+    return S.route === "edit" ? S.editDraft : S.active;
+  }
+  function touchDraft() {
+    const d = curDraft();
+    if (d && d.mode === "active") {
+      saveActive();
+      if (S.restEnd && !S.restFired) {
+        restPost();
+      }
+    }
+  } // restPost: aktuální „Další:“ v oznámení
+
+  /* ---------- NÁVRAT DO TRÉNINKU (F1-11) ----------
+     Poslední změněný cvik rozdělaného tréninku (klíč e.k v Local "edLast"). Po návratu z jiné záložky
+     (i po znovuotevření appky) se stránka posune tak, aby karta cviku začínala hned pod horní lištou.
+     edMark(d, e) volají posluchače click / input pro prvky s data-i, přidání cviku, Smazat v řádku série a
+     Vrátit; nový způsob změny cviku mimo data-i má edMark volat taky. go("train") z jiné záložky a start
+     appky nastaví render.toEx, render pak posune na kartu přes edScroll (render.restoreY má přednost). Enter
+     v jednořádkovém textovém poli (ne data-num) schová klávesnici (globální keydown). */
+  function edMark(d, e) {
+    if (d && d.mode === "active" && e && e.k) {
+      lsSet("edLast", e.k);
+    }
+  }
+  function edScroll(d) {
+    const i = d.ex.findIndex((e) => e.k === lsGet("edLast", ""));
+    if (i < 0) return;
+    const card = document.querySelector(`article.exc[data-i="${i}"]`);
+    if (!card) return;
+    const bar = document.querySelector("header.top");
+    const under = bar ? bar.offsetHeight + (parseFloat(getComputedStyle(bar).top) || 0) : 0;
+    window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - under - 8);
+  }
+
+  /* ---------- VRÁTIT CVIK (F2-03) ----------
+     Po odebrání nebo nahrazení cviku (šablona, rozdělaný i ukončený trénink) nabídne hláška „Vrátit“.
+     Vrátí původní cvik se sériemi a poznámkou na stejné místo (u nahrazení místo nového cviku newK).
+     Platí jen pro stejnou úpravu, která je pořád otevřená. Smazání série „Vrátit“ nemá.
+     ssBefore = [[cvik, značka supersérie]] před odebráním: Vrátit obnoví i supersérii (F4-05).
+     toast(msg, cls, undo) s funkcí undo ukáže tlačítko „Vrátit“ (akce undo, UNDO_MS). exUndoOffer po exRemove
+     a po nahrazení cviku (pickDone), jen když je otevřená stejná úprava (curDraft()). */
+  function exUndoOffer(d, idx, entry, newK, msg, ssBefore) {
+    toast(msg, "", () => {
+      if (curDraft() !== d) {
+        toast("Cvik už nejde vrátit.");
+        return;
+      }
+      const at = newK ? d.ex.findIndex((e) => e.k === newK) : -1;
+      if (at >= 0) {
+        d.ex[at] = entry;
+      } else {
+        d.ex.splice(Math.min(idx, d.ex.length), 0, entry);
+      }
+      for (const [e, tag] of ssBefore || []) {
+        if (tag) {
+          e.ss = tag;
+        } else {
+          delete e.ss;
+        }
+      }
+      ssNorm(d.ex);
+      edMark(d, entry);
+      touchDraft();
+      scheduleRender();
+    });
+  }
+
+  /* ---------- SMAZÁNÍ SÉRIE TAHEM (F2-03) ----------
+     Tah doleva po řádku série (tr.sw) odsune řádek a vpravo odkryje tlačítko „Smazat“ (.sw-del, akce
+     delSet, leží za posledním sloupcem a karta cviku ho jinak ořízne). Série se smaže až klepnutím na
+     něj. Tah doprava, klepnutí jinam nebo posunutí stránky řádek vrátí. Odsunutý je nejvýš jeden řádek
+     (swOpen). Svislý pohyb posouvá stránku (touch-action: pan-y u buněk). Po tahu se klepnutí zahodí,
+     aby se neotevřel krokovač ani neodškrtla série.
+     Stav sw, odsunutý řádek swOpen, zahození klepnutí swEatUntil, tlačítko v buňce .sw-cell. Tlačítko × ani
+     swipe na ✓ nejsou (tah od levého okraje je v Chromu Zpět). */
+  const SW_SLOP = 10; // px: pohyb, po kterém se rozhodne, jestli jde o tah do strany, nebo o posun stránky
+  const SW_OPEN = 0.4; // část šířky tlačítka Smazat, po které řádek po puštění zůstane odsunutý
+  const SW_EAT_MS = 350; // ms: jak dlouho po tahu zahodit klepnutí
+  let swOpen = null; // odsunutý řádek
+  let sw = null; // rozběhnutý tah: {row, pid, x0, y0, base, dx, horiz, w}
+  let swEatUntil = 0;
+
+  function swWidth(row) {
+    const btn = row.querySelector(".sw-del");
+    return btn ? btn.offsetWidth : 0;
+  }
+  function swSet(row, x, anim) {
+    row.classList.toggle("sw-anim", !!anim);
+    row.style.transform = x ? `translateX(${x}px)` : "";
+  }
+  function swClose() {
+    if (swOpen && swOpen.isConnected) {
+      swSet(swOpen, 0, true);
+    }
+    swOpen = null;
+  }
+  document.addEventListener("pointerdown", (ev) => {
+    if (sw || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    const row = ev.target.closest && ev.target.closest("tr.sw");
+    if (swOpen && !swOpen.isConnected) {
+      swOpen = null;
+    }
+    if (swOpen && row !== swOpen) {
+      swClose();
+    }
+    if (!row || ev.target.closest(".sw-del")) return;
+    sw = {
+      row,
+      pid: ev.pointerId,
+      x0: ev.clientX,
+      y0: ev.clientY,
+      base: row === swOpen ? -swWidth(row) : 0,
+      dx: 0,
+      horiz: null,
+      w: 0,
+    };
+  });
+  document.addEventListener("pointermove", (ev) => {
+    if (!sw || ev.pointerId !== sw.pid) return;
+    const dx = ev.clientX - sw.x0;
+    const dy = ev.clientY - sw.y0;
+    if (sw.horiz === null) {
+      if (Math.abs(dx) < SW_SLOP && Math.abs(dy) < SW_SLOP) return;
+      sw.horiz = Math.abs(dx) > Math.abs(dy);
+      if (!sw.horiz) {
+        sw = null;
+        return;
+      }
+      sw.w = swWidth(sw.row);
+    }
+    sw.dx = dx;
+    swSet(sw.row, Math.max(-sw.w, Math.min(0, sw.base + dx)), false);
+  });
+  function swEnd(ev, cancel) {
+    if (!sw || ev.pointerId !== sw.pid) return;
+    const g = sw;
+    sw = null;
+    if (!g.horiz) {
+      // klepnutí na odsunutý řádek ho jen vrátí
+      if (g.row === swOpen) {
+        swClose();
+        swEatUntil = Date.now() + SW_EAT_MS;
+      }
+      return;
+    }
+    swEatUntil = Date.now() + SW_EAT_MS;
+    const x = g.base + g.dx;
+    const open = !cancel && g.w > 0 && x < -g.w * SW_OPEN;
+    swSet(g.row, open ? -g.w : 0, true);
+    swOpen = open ? g.row : null;
+  }
+  document.addEventListener("pointerup", (ev) => swEnd(ev, false));
+  document.addEventListener("pointercancel", (ev) => swEnd(ev, true));
+  document.addEventListener(
+    "click",
+    (ev) => {
+      if (Date.now() >= swEatUntil) return;
+      swEatUntil = 0;
+      ev.stopPropagation();
+      ev.preventDefault();
+    },
+    true,
+  );
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (swOpen && !sw) {
+        swClose();
+      }
+    },
+    { passive: true },
+  );
+
+  /* ---------- VĚTŠÍ DOTYKOVÉ PLOCHY (F1-18) ----------
+     Nejpoužívanější prvky tréninku reagují na klepnutí i vedle svého rámečku, vzhled zůstává stejný.
+     Jen v css/app.css: tlačítko má neviditelný okraj (::after), který patří k tlačítku, takže ho prst
+     trefí přímo (Chrome na dotyk jinak „přitáhne“ klepnutí vedle tlačítka k nejbližšímu políčku).
+     - ✓ série (.okb) a odznak druhu série (.stype, vykresluje vExCard): okraj vyplní celou buňku tabulky
+       sérií (td.c-ok, td.c-type s position: relative, tlačítko samo bez position; medaile rekordu se proto
+       drží vnitřního .stype-in). Buňka má aspoň výšku --tap z :root (44 px).
+     - −15 / +15 / Přeskočit v pruhu pauzy: okraj sahá až k hornímu a dolnímu okraji pruhu a do poloviny
+       mezery k sousednímu tlačítku (.rest-in button::after).
+     Tlačítko Smazat (.sw-del, F2-03) leží mimo buňku ✓, tah doleva funguje i z okraje ✓.
+     Stejné pravidlo pro zbytek appky (čipy, segmenty, ikonová tlačítka) převzala F3-23 (--tap). */
+
+  /* ---------- JEDNOTNÝ VZHLED (F3-23) ----------
+     Úzké zadání podle UX auditu 27. 9. 2026 (§7), ne vizuální přestavba. Většina je v css/app.css.
+     - Barvy podle významu: hlavní barva (--accent) znamená jen hlavní akci (btn primary) a vybrané
+       nebo aktivní (záložka, čip, přepínač, rámeček políčka). Název cviku v kartě (.exc-h h3) je v barvě
+       textu, klikatelnost nese ikona grafu vedle. Přečas pauzy (.rest-in.over) je v barvě textu pruhu.
+       Smazat / Zahodit se od hlavní akce liší tvarem a místem (obrys pod čarou, F2-12), odstín zůstává.
+     - Jedna hlavní akce: v rozdělaném tréninku bez hotové série je plné Přidat cvik a Dokončit trénink
+       jen obrys, od první ✓ naopak (anyDone ve vEditor).
+     - Řádek série: odznak druhu, políčka kg / opak., RIR/RPE a ✓ mají stejnou výšku --row-h (36 px) z :root,
+       celý řádek --tap (44 px). ✓ je 50 × 36 px. Nový prvek v řádku série = výška --row-h.
+     - Dotyková plocha aspoň --tap (44 px): ikonová tlačítka .iconbtn rozměrem (nemají rámeček), čipy,
+       přepínače .seg, .btn.sm a .spr-p neviditelným okrajem nahoru a dolů (::after jako F1-18), vzhled
+       zůstává. Posuvný řádek .chips má pro okraj místo v padding, .seg nemá overflow: hidden (rohy dělají
+       krajní tlačítka). Přepínač viditelně 44 px vysoký uživatel zamítl (méně se vejde na stránku).
+       Zaškrtávátka (.switch) mají okraj jen do poloviny mezery k sousednímu, plochy se nepřekrývají.
+     - Písmo nastavení: názvy voleb (zaškrtávátko, nad přepínačem, vedle políčka) i hodnota v řádku obyčejně
+       a 15 px, tučně jen název věci v seznamu (fitko, bod obnovy) a nadpisy.
+     - Závislé volby (pod vypínačem) se neschovávají: zůstávají na místě, s vypnutým vypínačem šedé a inert
+       (.dep.off; recSettings, stagSettings, restSettings, wakeSettings), stránka neposkakuje.
+     - Číselné políčko .inp[data-num] má číslo na středu. Údaj jedním řádkem .frow (název vlevo, políčko
+       vpravo): Tělo v Nastavení (F3-33) a formulář měření (sheetBody). Výběr fitka v tréninku zůstává
+       velký jako ostatní rozbalovací výběry (Upravit cvik), menší uživatel zamítl. Formulář měření má sekce
+       Hmotnost a složení / Obvody (.subh).
+     - Mazání: .btn.danger je vždy červený obrys. Patička panelu: vedlejší vlevo, hlavní vpravo, stejně široká
+       (Smazat | Uložit u měření a fitka); potvrzovací okno má plné potvrzení (Smazat fotku?), menu cviku
+       Odebrat cvik za čárou .bzone. */
+  /* ---------- SVISLÉ MEZERY (F3-43) ----------
+     Svislé mezery mezi bloky stránky jen ze tří proměnných v :root v css/app.css, žádné ruční style="margin…"
+     v px (úloha „kontrola“ v .github/workflows/nasazeni.yml takový nový řádek v js/app.js odmítne):
+     - --gap-in (10 px) uvnitř skupiny: nadpis sekce → obsah (.sec-h), blok ovládání nahoře (přepínač části,
+       čipy fitek, období, hledání, filtry) mezi sebou i k obsahu, který filtruje, pruhy (.banner) mezi sebou,
+     - --gap-out (22 px) mezi skupinami: sekce → sekce (.sec), nadpis sekce i hned pod filtry, samostatné velké
+       tlačítko přes celou šířku (Začít prázdný trénink, Nové měření), měsíc v Historii (.mhead) mezi měsíci,
+     - --gap-list (8 px) karty a řádky seznamu pod sebou: .stack.list (šablony, měření, cviky, historie cviku),
+       .mb-list (tréninky v Historii).
+     Třídy: .sec.cont = sekce, která pokračuje ve skupině nad ní (období pod čipy fitek ve Statistikách, obsah
+     stránky cviku pod přepínačem), .mt-in / .mb-in = odsazení bloku o --gap-in. Pruh hned pod záhlavím (.top +
+     .banner) a přepínač části nemají mezeru od záhlaví. Řádek čipů (.chips) nikdy nedostává vlastní margin:
+     má záporný okraj kvůli dotykové ploše (F3-23), odsazení dostane soused (dřív výpočet calc u čipů grafů).
+     Kontrola: tools/mezery.js (Playwright, lokálně) vypíše mezery mezi bloky hlavních obrazovek a panelů
+     se zkušebními daty. */
+  /* ---------- MEZERY V PANELECH, FORMULÁŘÍCH A KARTÁCH (F3-44) ----------
+     Stupnice uvnitř komponent (odsouhlasená 14. 10. 2026): 2 px název → drobný popis pod ním (typografie),
+     4 px popisek nad políčkem nebo čipy → obsah (--gap-lbl), 8 px prvky uvnitř karty a řádky seznamu,
+     10 px uvnitř skupiny (--gap-in), 22 px mezi skupinami (--gap-out). Jen CSS a třídy:
+     - obsah panelu (.sheet-b z openSheet): okraj nahoře i bloky pod sebou --gap-in, dole a po stranách 16 px,
+       nadpis sekce formuláře (.subh) bez vlastního okraje (10 nad i pod),
+     - popisek: label.f / .lbl-f má k obsahu --gap-lbl; samostatný div.lbl-f přímo v panelu ho dostane pravidlem
+       .sheet-b > .lbl-f, jinde třídou .mb-lbl (2 px uživatel v náhledu zamítl),
+     - odstavec v panelu nemá výchozí okraj (:where(.sheet-b) p), proto bez style="margin:0",
+     - čára .bzone před nebezpečnou akcí nemá vlastní okraj, nad i pod ní je mezera sloupce tlačítek,
+     - výběr cviků: řádky .stack.list (--gap-list), nadpis skupiny .pick-sec 14 px nad a 6 px pod (přání uživatele),
+     - Informace o cviku (sheetExInfo): postavy a partie jedna skupina, popis a dlaždice čísel nové skupiny
+       (štítek fitka nebo čipy nad dlaždicemi patří k číslům, .exi-gym, F3-46).
+     Krok B (karty a stránky, náhled odsouhlasen 14. 10. 2026):
+     - karta cviku (vExCard): okraj nahoře --gap-in (název má vlastní výšku řádku), název → řádky pod ním
+       (Minule, stroj, poznámka, návrh progrese) 8 px, série → + Série / + Zahřívací 8 px, pod tlačítky 14 px
+       jako po stranách (přání uživatele: tlačítka mají ke spodku karty stejně jako k bokům, jako políčka ve
+       formuláři); boky 14 px zůstávají kvůli zarovnání řádků (F3-36). Stagnace přitažená k Minule (−4 px),
+       karty v supersérii (.ssg) 6 px, aby bylo vidět, že patří k sobě,
+     - karty cviků pod sebou (trénink, úprava tréninku, šablona) .stack.list, nad první kartou .mt-in,
+     - tlačítka dole na stránce a blok Pro coache jsou nová skupina: .mt-out (--gap-out),
+     - třídy sloupců místo style="gap:…": .stack.tight = popisek nad přepínačem, políčkem nebo čipy → obsah
+       (--gap-lbl), .stack.inner = prvky uvnitř karty (8 px), .stack.list = seznam karet nebo řádků (8 px).
+       Prvky vedle sebe v kartě (tlačítka, dlaždice čísel) 8 px. Vodorovné mezery jinak mimo pravidlo.
+     Úloha „kontrola“ odmítne nový svislý gap v px (row-gap, gap sloupce .stack) stejně jako margin.
+     F3-47 (zbylá místa mimo F3-43 a F3-44, náhled odsouhlasen 14. 10. 2026):
+     - karta má vždy okraj .card (14 px), žádný ruční padding (historie cviku, karta fitka v Nastavení),
+     - prvky v kartě mimo sloupec: .mt-list / .mb-list (8 px), řádek pod nadpisem .mt-lbl (4 px); v kartě
+       i postava (.card > .figs bez okraje nahoře), pruh skupin, legenda a nadpis .subh po 8 px,
+     - sloupce stránek a panelů (souhrn tréninku .wsum, formulář cviku .ex-form, Pro coache, prohlížení
+       fotky, panel Naplánovat) --gap-in; nadpis .subh ve sloupci panelu bez vlastního okraje,
+     - .row má gap 8 px sám, style="gap:8px" je zbytečný; prázdný graf na střed třídou .chart-empty,
+     - úloha „kontrola“ odmítá i padding v px ve style="…". */
+  /* ---------- TYPOGRAFIE (F3-45) ----------
+     Jen v css/app.css a třídy v šablonách (přání uživatele 13. 10. 2026, náhled schválen týž den).
+     Jedno písmo pro jednu roli, aby stejné věci vypadaly všude stejně:
+     - Název v kartě (šablona .tpl h3, cvik v tréninku .exc-h h3, trénink v Historii .hw h3, cvik v uloženém
+       tréninku .wex-n, nadpis karty na stránce tréninku .sumh, F1-26): Barlow 700, --fs-lg, výška řádku 1,2,
+       barva textu. 600 uživatel zamítl: v kartě cviku by se název nelišil od čísel sérií (.cell je také --fs-lg
+       a 600).
+     - Název v řádku seznamu (Cviky .exrow .n, výběr cviků, fitka, řazení cviků a šablon): 600 (.row-n).
+     - Popisek nad políčkem nebo čipy (Název, Barva, Fitko, Kde dnes cvičíš): label.f / .lbl-f, drobné velké písmo.
+     - Nadpis VELKÝMI písmeny v úzkém písmu (.sec-h h2, měsíc .mhead, skupina ve výběru cviků .pick-sec):
+       600, --fs-base, proložení 0,09 em. Drobný popisek VELKÝMI (.subh, hlavička sérií, popisky dlaždic a čísel):
+       --fs-2xs, 600, proložení 0,06 em (popisek pauzy .rest-l zůstává obyčejný).
+     - Velké číslo v úzkém písmu (dlaždice, pauza, krokovač, rekordy, Statistiky → Cviky): 600.
+     Písmo Barlow je jen v řezech 400–700 (fonts/), jiný řez se nekreslí. */
+  /* ---------- ODZNAK DRUHU SÉRIE A HOTOVÝ ŘÁDEK (F3-35) ----------
+     Jen v css/app.css (přání uživatele 10. 10. 2026, náhled schválen 11. 10.). Po ✓ ztratí políčka
+     kg / opak. a RIR/RPE šedý podklad (tr.done .cell, tr.done .effb), odznak pracovní série si ho ale
+     nechával a na zeleném řádku vypadal jako zapomenuté prázdné políčko.
+     - Každý druh série má vlastní barvu odznaku (.stype): pracovní šedomodrá --work / --work-bg (nová,
+       v :root pro oba motivy), zahřívací --warm, drop set --drop, do selhání --fail. Na všech řádcích.
+     - Všechny odznaky mají tenký rámeček jako tlačítka a ✓ (1px --line-2), barva se neztrácí na zeleném.
+     - Hodnota RIR/RPE (.effb) má stejnou velikost písma jako kg a opakování (--fs-lg).
+     Zamítnuto: průhledný odznak (na hotovém řádku by převzal zelenou), rámeček v barvě písmene (výrazný). */
+  /* ---------- ZAROVNÁNÍ ŘÁDKŮ SÉRIÍ (F3-36) ----------
+     Jen v css/app.css a třída .end-in ve vExCard (přání uživatele 11. 10. 2026, náhled schválen týž den).
+     Řádek série lícuje s nadpisem a poznámkou karty cviku: odznak druhu série začíná a poslední prvek řádku
+     (✓, RIR/RPE nebo políčko) končí 15 px od kraje karty, stejně tlačítka + Série / + Zahřívací (.exc-f).
+     - Tabulka .sets má table-layout: fixed. Odznak (.c-type), RIR/RPE (.c-eff) a ✓ (.c-ok) mají pevnou šířku
+       tlačítka + padding, políčka (.c-in) šířku nemají a dělí si zbytek rovným dílem. Dřív se volné místo
+       dělilo i do sloupce odznaku a odznak bez ✓ nebo u cviku s jedním políčkem „ujel“ doprava.
+     - Okraj 14 px je padding první a poslední buňky, takže zelený pruh hotové série vede přes celou kartu.
+     - Je-li posledním sloupcem políčko (.end-in: šablona, úprava tréninku bez RIR/RPE), je tabulka o 12 px
+       užší (jinak by poslední políčko bylo užší o padding) a tlačítko Smazat (.sw-del) začíná až za tímto okrajem.
+     Nový sloupec v řádku série: pevná šířka v CSS, nebo bez šířky jako políčko. */
+  // má trénink aspoň jednu hotovou sérii? (hlavní tlačítko dole, F3-23)
+  const anyDone = (d) => d.ex.some((e) => e.sets.some((s) => s.done));
+
+  function vEditor(d) {
+    const mode = d.mode;
+    let h = "";
+    // šipka ←: z rozdělaného tréninku na úvodní obrazovku (F2-09), jinak tam, odkud se přišlo
+    const left = `<button class="iconbtn" data-act="edCancel" aria-label="Zpět">${IC.back}</button>`;
+    const heading =
+      mode === "template"
+        ? d.id
+          ? "Úprava šablony"
+          : "Nová šablona"
+        : mode === "edit"
+          ? "Úprava tréninku"
+          : "Trénink";
+    h += topbar(heading, mode === "active" ? "Začátek " + fmtTime(d.start) : "", left);
+    const durMin = Math.round(((d.end || d.start) - d.start) / 60000); // délka v úpravě tréninku (min)
+    let vol = 0,
+      done = 0;
+    for (const e of d.ex) {
+      const k = kindOf(e.exId);
+      for (const s of e.sets) {
+        if (mode === "active" && !s.done) continue;
+        if (!isWork(s.t)) continue;
+        done++;
+        vol += setVol(k, { kg: num(s.kg) || 0, reps: num(s.reps) || 0 }, d.start);
+      }
+    }
+    // F2-08: shoda názvu šablony s jinou šablonou ve stejném fitku (hned při psaní, tplNameMark)
+    const clash = mode === "template" ? tplNameProblem(d) : "";
+    const titleInp = `<input class="ed-title${clash ? " bad" : ""}" id="ed-title" data-f="title"
+        value="${esc(d.title)}" aria-label="Název" placeholder="Název">`;
+    h += '<div class="ed-head">';
+    if (mode === "template") {
+      h += titleInp;
+    } else {
+      // F1-26: ⋯ s poznámkou k tréninku vpravo od názvu, zapsaná poznámka pod ním
+      h += `<div class="ed-trow">
+        ${titleInp}
+        <button class="iconbtn" data-act="wMenu" aria-label="Možnosti tréninku">${IC.more}</button>
+      </div>`;
+      h += wNoteLine(d);
+    }
+    if (mode === "template") {
+      h += `<span class="fmsg" id="ed-title-msg">${esc(clash)}</span>`;
+    }
+    if (mode === "template" && S.cfg.gyms.length > 1) {
+      h += tplGymPick(d);
+    }
+    if (mode !== "template") {
+      h +=
+        `<div class="row wrap-r">
+          <label class="f grow" style="min-width:150px">
+            Fitko
+            <select class="inp" id="ed-gym" data-f="gymId">${S.cfg.gyms
+              .filter((g) => !g.archived || g.id === d.gymId)
+              .map(
+                (g) =>
+                  `<option value="${g.id}"${g.id === d.gymId ? " selected" : ""}>${esc(g.name)}</option>`,
+              )
+              .join("")}` +
+        `</select>
+        </label>`;
+      if (mode === "edit") {
+        h += `<label class="f">
+          Datum
+          <input class="inp" type="date" id="ed-date" data-f="date" value="${toDateInput(d.start)}">
+        </label>
+        <label class="f">
+          Začátek
+          <input class="inp" type="time" id="ed-time" data-f="time" value="${toTimeInput(d.start)}">
+        </label>
+        <label class="f">
+          Délka (min)
+          <input class="inp${numCls("min", durMin)}" inputmode="numeric" id="ed-dur" data-num="min"
+              enterkeyhint="done" data-f="dur" value="${durMin}" style="width:90px">
+        </label>`;
+      }
+      h += "</div>";
+      h += `<div class="ed-meta">
+        ${
+          mode === "active"
+            ? `<div class="stat">
+              <b data-elapsed>${fmtClock((Date.now() - d.start) / 1000)}</b><span>Čas</span>
+            </div>`
+            : ""
+        }
+        <div class="stat"><b>${fmtInt(vol)} kg</b><span>Objem</span></div>
+        <div class="stat">
+          <b>${done}</b><span>${mode === "active" ? "Hotové série" : "Pracovní série"}</span>
+        </div>
+      </div>`;
+    }
+    h += "</div>";
+    if (mode === "template") {
+      h += tplHintsPick(d);
+    }
+    h += '<div class="stack list mt-in">';
+    h += ssWrap(
+      d.ex,
+      d.ex.map((e, i) => vExCard(d, e, i)),
+    );
+    h += "</div>";
+    if (mode === "edit" && coachOn()) {
+      h += `<div class="mt-out">${coachPart(d)}</div>`; // Pro coache (F4-12)
+    }
+    // jedna hlavní akce (F3-23): v tréninku bez hotové série Přidat cvik, od první ✓ Dokončit trénink
+    const addMain = mode === "active" && !anyDone(d);
+    h += `<div class="stack mt-out">
+        <button class="btn${addMain ? " primary" : ""} block" data-act="addEx">
+          ${icon("plus")}Přidat cvik
+        </button>`;
+    if (mode === "active") {
+      h += `<button class="btn${addMain ? "" : " primary"} block" data-act="finish">Dokončit trénink</button>
+        <div class="bzone"></div>
+        <button class="btn danger block" data-act="discard">Zahodit trénink</button>`;
+    } else if (mode === "edit") {
+      h += `<button class="btn primary block" data-act="saveEdit">Uložit změny</button>
+        <div class="bzone"></div>
+        <button class="btn danger block" data-act="delWorkout">Smazat trénink</button>`;
+    } else {
+      const off = tplSaveOff(d); // F2-08: šedé při shodě nebo prázdném názvu
+      h +=
+        `<button class="btn primary block${off ? " off" : ""}" id="tpl-save" data-act="saveTpl"
+            aria-disabled="${off}">Uložit šablonu</button>` +
+        (d.id && S.templates[d.id]
+          ? `<button class="btn block" data-act="tplHide" data-v="${esc(d.id)}">
+              ${S.templates[d.id].hidden ? "Zobrazit šablonu" : "Skrýt šablonu"}
+            </button>`
+          : "") +
+        (d.id
+          ? '<div class="bzone"></div><button class="btn danger block" data-act="delTpl">Smazat šablonu</button>'
+          : "");
+    }
+    h += "</div>";
+    return h;
+  }
+  /* ---------- MINULE JAKO TEXT (F1-19) ----------
+     Sloupec Minule v tabulce cviku je schovaný konstantou PREV_COL (false); kód sloupce zůstal a vrátí
+     se přepsáním na true. Místo něj je nad tabulkou řádek „Minule: Fitko · 24. 9. · 8×80kg · 9×75kg (RIR 1)“
+     (prevLine, klepnutí ho rozbalí, jinak nejvýš 2 řádky). Zdroj je stejný jako dřív ve sloupci:
+     draftLast (cvik vázaný na fitko jen v tomto fitku, při úpravě uloženého tréninku jen tréninky před ním).
+     Jen pracovní série (drop set i do selhání), zahřívací jen když jiné nejsou. RIR/RPE za sérií jen při
+     zapnuté volbě Náročnost série (effCol). Název fitka jen když jsou fitka aspoň dvě. Datum s rokem, když
+     je záznam starší než rok. Vázaný cvik bez záznamu v tomto fitku, ale s záznamem jinde: „v tomto fitku
+     ještě ne“. Úplně nový cvik: žádný řádek. V šabloně řádek není. Předvyplnění (exHints) se nemění. */
+  const PREV_COL = false;
+  function prevLine(d, e, last) {
+    const parts = [];
+    if (last) {
+      const kind = kindOf(e.exId);
+      const work = last.e.sets.filter((s) => isWork(s.t));
+      const shown = work.length ? work : last.e.sets;
+      const withEff = effCol(d);
+      const sets = shown.map((s) => {
+        const eff = withEff ? effTxt({ rpe: effOf(s) }) : "";
+        return setStr(kind, s) + (eff ? ` (${eff})` : "");
+      });
+      const old = last.w.start < Date.now() - 365 * 864e5;
+      if (S.cfg.gyms.length > 1) {
+        parts.push(esc(gymName(last.w.gymId)));
+      }
+      parts.push(esc(old ? fmtDate(last.w.start) : fmtDateS(last.w.start)));
+      parts.push(`<span class="num">${esc(sets.join(" · ") || "–")}</span>`);
+    } else if (S.exLib[e.exId] && S.exLib[e.exId].gymDep) {
+      if (!lastSession(e.exId, d.gymId, d.id, draftBefore(d), true)) return "";
+      parts.push("v tomto fitku ještě ne");
+    } else {
+      return "";
+    }
+    return `<button class="exc-prev" data-act="prevMore" aria-expanded="false">
+      Minule: ${parts.join(" · ")}
+    </button>`;
+  }
+  /* ---------- POZNÁMKA KE CVIKU V KARTĚ (F3-52) ----------
+     Poznámka ke cviku (F2-10, e.note) se v kartě cviku v tréninku, šabloně i úpravě uloženého tréninku
+     ukazuje jako řádek jen pro čtení (noteLine): vlevo ikona IC.note, za ní celý text včetně odřádkování
+     (výška podle textu, nic se neusekává), vpravo šipka ›. Prázdná poznámka řádek nemá. Klepnutí na řádek
+     (noteEdit) otevře panel bez klávesnice, Přidat / Upravit poznámku v nabídce ⋯ (exNote) s klávesnicí.
+     Panel (noteSheet): „Poznámka – cvik“, políčko na 3 řádky, Smazat (jen u existující poznámky) a Uložit;
+     uložený text se ořízne, prázdný poznámku smaže. Zavření bez Uložit změny zahodí. V uloženém tréninku
+     (detail z Historie) stejná ikona před textem poznámky (noteView). Data beze změny. */
+  // řádek s poznámkou pod názvem cviku v kartě (klepnutí = panel s úpravou)
+  function noteLine(e, i) {
+    if (!e.note) return "";
+    return `<button class="exc-note" data-act="noteEdit" data-i="${i}">
+      <span class="nt-ic" aria-hidden="true">${icon("note")}</span>
+      <span class="t">${esc(e.note)}</span>
+      ${excGo}
+    </button>`;
+  }
+  // poznámka s ikonou jen ke čtení (uložený trénink)
+  const noteView = (note) =>
+    `<div class="note-v xs muted"><span class="nt-ic" aria-hidden="true">${icon("note")}</span>` +
+    `<span class="t">${esc(note)}</span></div>`;
+  // panel s úpravou poznámky cviku i v rozdělaném tréninku / šabloně d
+  function noteSheet(d, i) {
+    const e = d && d.ex[i];
+    if (!e) return;
+    openSheet(
+      "Poznámka – " + exName(e.exId),
+      `<textarea class="inp" id="note-txt" rows="3"
+          placeholder="Např. lopatky stažené, pomalu dolů">${esc(e.note || "")}</textarea>`,
+      (e.note ? `<button class="btn danger grow" data-act="noteDel" data-i="${i}">Smazat</button>` : "") +
+        `<button class="btn primary grow" data-act="noteSave" data-i="${i}">Uložit</button>`,
+    );
+  }
+  /* ---------- POZNÁMKA K TRÉNINKU (F1-26) ----------
+     Poznámka k celému tréninku (w.note, v draftu d.note), obecný údaj tréninku jako název nebo fitko, bez vazby
+     na funkci Pro coache (text pro coache ji jen čte jako „Pozn.:“, F4-18). Stejný princip jako poznámka ke cviku
+     (F3-52): karta s názvem tréninku (ed-head) v rozdělaném tréninku i v Upravit trénink má vpravo ⋯ (wMenu,
+     panel s názvem tréninku a jedinou položkou Přidat / Upravit poznámku, wNote, s klávesnicí). Zapsaná poznámka
+     je pod názvem jako řádek jen ke čtení (wNoteLine: ikona IC.note, celý text, šipka ›), klepnutí na něj
+     (wNoteEdit) otevře panel bez klávesnice. Panel (wNoteSheet): políčko na 3 řádky, Smazat (jen u existující
+     poznámky) a Uložit; text se ořízne, prázdný poznámku smaže, zavření bez Uložit změny zahodí. Šablona ⋯ ani
+     poznámku tréninku nemá (poznámka k šabloně je samostatná úloha F2-15).
+     V okně Dokončit (finishAsk) políčko Poznámka k tréninku v kartě se Začátkem a Koncem, předvyplněné z draftu
+     (data-f="wNote", psaní mění d.note bez překreslení). Do tréninku ji při uložení zapíše wNoteApply (Dokončit
+     i Uložit v Upravit trénink). Na stránce tréninku (wSummary) vlastní karta wNoteCard za Procvičenými
+     partiemi; trénink bez poznámky kartu nemá. Cvičit znovu ani Uložit jako šablonu ji nepřenášejí.
+     Data beze změny (w.note existovalo od F4-12). */
+  // řádek s poznámkou pod názvem tréninku (klepnutí = panel s úpravou)
+  function wNoteLine(d) {
+    if (!d.note || !d.note.trim()) return "";
+    return `<button class="exc-note wnote-l" data-act="wNoteEdit">
+      <span class="nt-ic" aria-hidden="true">${icon("note")}</span>
+      <span class="t">${esc(d.note.trim())}</span>
+      ${excGo}
+    </button>`;
+  }
+  // nabídka ⋯ karty tréninku
+  function wMenu(d) {
+    openSheet(
+      d.title.trim() || "Trénink",
+      `<div class="stack">
+        <button class="btn block" data-act="wNote">
+          ${d.note && d.note.trim() ? "Upravit poznámku" : "Přidat poznámku"}
+        </button>
+      </div>`,
+    );
+  }
+  // panel s úpravou poznámky k tréninku
+  function wNoteSheet(d) {
+    const note = (d.note || "").trim();
+    openSheet(
+      "Poznámka k tréninku",
+      `<textarea class="inp" id="wnote-txt" rows="3"
+          placeholder="Např. plné fitko, začal jsem nohama">${esc(note)}</textarea>`,
+      (note ? `<button class="btn danger grow" data-act="wNoteDel">Smazat</button>` : "") +
+        `<button class="btn primary grow" data-act="wNoteSave">Uložit</button>`,
+    );
+  }
+  // zapíše poznámku z draftu do ukládaného tréninku (oříznutá, prázdná = pole se neukládá)
+  function wNoteApply(w, d) {
+    const note = String(d.note || "").trim();
+    if (note) {
+      w.note = note;
+    } else {
+      delete w.note;
+    }
+  }
+  // karta s poznámkou na stránce tréninku
+  function wNoteCard(w) {
+    const note = String(w.note || "").trim();
+    if (!note) return "";
+    return `<div class="card">
+      <h3 class="sumh">Poznámka k tréninku</h3>
+      <div class="wnote-t">${esc(note)}</div>
+    </div>`;
+  }
+  /* ---------- NASTAVENÍ STROJE PODLE FITKA (F1-07) ----------
+     Volný text (sedačka, opěrka, úchop…) u cviku vázaného na fitko, zvlášť pro každé fitko. Uložený u cviku
+     v config/exercises jako machine: {idFitka: "text"} (bez nastavení pole chybí, staré zálohy fungují,
+     machClean při obnově zálohy zahodí jiné než textové hodnoty). Platí natrvalo, dokud ho nezměníš;
+     do tréninku, šablony ani Cvičit znovu se nekopíruje. Rozdíl proti poznámce (F2-10): poznámka patří
+     k tréninku, nastavení stroje ke cviku a fitku.
+     V probíhajícím tréninku s fitkem řádek „Stroj: …“ hned pod názvem cviku (machLine, jeden řádek, delší
+     text končí „…“), klepnutí otevře panel s celým textem bez klávesnice (machEdit, psaní až klepnutím do
+     políčka). V nabídce cviku (⋯) tlačítko Přidat / Upravit nastavení stroje, to otevře panel rovnou
+     s klávesnicí (data-focus). Panel (machSheet): jeden text, v nadpisu fitko, Smazat (jen u uloženého)
+     a Uložit; prázdný text nastavení smaže. Stránka cviku (Popis): sekce Nastavení stroje s řádkem za každé
+     existující fitko, které nastavení má (machInfo, klepnutí = úprava). Nastavení smazaného fitka zůstává
+     v datech, jen se neukazuje. U cviku, který není vázaný na fitko, a v tréninku bez fitka se nic neukazuje.
+     Upravit cvik nastavení nemění (Object.assign), Vrátit na výchozí ho zachová. Rozhodnuto 11. 10. 2026:
+     zmenšení řádků pod názvem po první hotové sérii zatím ne (odložený nápad F1-20 v plánu). */
+  let machEd = null; // {exId, gymId} otevřeného panelu
+  // nastavení stroje cviku v daném fitku, nebo ""
+  function machOf(exId, gymId) {
+    const ex = S.exLib[exId];
+    if (!ex || !ex.gymDep || !gymId || !ex.machine) return "";
+    return typeof ex.machine[gymId] === "string" ? ex.machine[gymId] : "";
+  }
+  // nastavení stroje jde v tréninku zapsat (probíhající trénink s fitkem, cvik vázaný na fitko)
+  const machCan = (d, e) => d.mode === "active" && !!d.gymId && !!exOf(e.exId).gymDep;
+  // řádek pod názvem cviku v kartě tréninku
+  function machLine(d, e, i) {
+    if (!machCan(d, e)) return "";
+    const txt = machOf(e.exId, d.gymId);
+    if (!txt) return "";
+    return `<button class="exc-mach" data-act="machEdit" data-i="${i}" data-v="${esc(e.exId)}"
+        data-g="${esc(d.gymId)}">
+      <span class="gd-ic" aria-hidden="true">${icon("gymDep")}</span>
+      <span class="t">Stroj: ${esc(txt)}</span>
+      ${excGo}
+    </button>`;
+  }
+  // panel s úpravou nastavení stroje
+  function machSheet(exId, gymId) {
+    machEd = { exId, gymId };
+    const txt = machOf(exId, gymId);
+    openSheet(
+      "Nastavení stroje – " + gymName(gymId),
+      `<textarea class="inp" id="mach-txt" rows="3" maxlength="300"
+          placeholder="Např. sedačka 4, opěrka 2">${esc(txt)}</textarea>`,
+      (txt ? '<button class="btn danger grow" data-act="machDel">Smazat</button>' : "") +
+        '<button class="btn primary grow" data-act="machSave">Uložit</button>',
+    );
+  }
+  // zápis nastavení stroje (prázdný text = smazat)
+  function machPut(exId, gymId, text) {
+    const items = Object.assign({}, S.exLib);
+    const ex = Object.assign({}, items[exId]);
+    const machine = Object.assign({}, ex.machine);
+    const clean = String(text || "").trim();
+    if (clean) {
+      machine[gymId] = clean;
+    } else {
+      delete machine[gymId];
+    }
+    if (Object.keys(machine).length) {
+      ex.machine = machine;
+    } else {
+      delete ex.machine;
+    }
+    items[exId] = ex;
+    putEx(items);
+  }
+  // stránka cviku (Popis): nastavení ve všech existujících fitkách
+  function machInfo(ex, id) {
+    if (!ex.gymDep || !ex.machine) return "";
+    const rows = S.cfg.gyms.filter((g) => typeof ex.machine[g.id] === "string" && ex.machine[g.id]);
+    if (!rows.length) return "";
+    return `<section class="sec">
+      <div class="sec-h"><h2>Nastavení stroje</h2></div>
+      <div class="card stack mach-list">
+        ${rows
+          .map(
+            (g) => `<button class="mach-row" data-act="machEdit" data-v="${esc(id)}" data-g="${esc(g.id)}">
+              ${gymPill(g.id)}
+              <span>${esc(ex.machine[g.id])}</span>
+            </button>`,
+          )
+          .join("")}
+      </div>
+    </section>`;
+  }
+  // obnova zálohy: nastavení stroje jen jako objekt s texty
+  function machClean(items) {
+    for (const id in items) {
+      const item = items[id];
+      if (!item || typeof item !== "object" || !("machine" in item)) continue;
+      const machine = {};
+      if (item.machine && typeof item.machine === "object") {
+        for (const gymId in item.machine) {
+          const text = item.machine[gymId];
+          if (typeof text === "string" && text.trim()) {
+            machine[gymId] = text.trim();
+          }
+        }
+      }
+      if (Object.keys(machine).length) {
+        item.machine = machine;
+      } else {
+        delete item.machine;
+      }
+    }
+    return items;
+  }
+  /* ---------- karta cviku (F3-22) ----------
+     V hlavičce žádné textové štítky. Stav cviku = ikona za názvem v barvě názvu
+     (nameWithIcons): vázáno na fitko gdIcon(tip) (klepnutí gdTip = hláška GD_TIP), nový rekord medaile
+     (recTip). Supersérie jen proužek (ss-on), druh zápisu jen sloupce tabulky, rozsah opakování v nadpisu
+     Opak. (repsRange, progSpan). Nový údaj o cviku do karty jako ikonu nebo do tabulky, ne jako štítek. */
+  function vExCard(d, e, i) {
+    const ex = S.exLib[e.exId] || { name: e.exId };
+    const last = draftLast(d, e.exId);
+    const mode = d.mode;
+    const kind = kindOf(e.exId),
+      flds = kFields(kind);
+    const lr = mode === "active" ? liveRecords(d, i) : { sets: {}, ex: [] };
+    const inSs = ssRun(d.ex, i); // supersérie (F4-05): proužek vlevo
+    const range = progRange(e.exId); // rozsah opakování pro návrh progrese (F4-01), pod nadpisem Opak.
+    const eff = effCol(d); // sloupec RIR/RPE (F4-04)
+    /* F3-22: v hlavičce karty žádné štítky. Za názvem ikona „vázáno na fitko“ a medaile nového
+       rekordu, klepnutí na ně ukáže vysvětlení (gdTip, recTip), klepnutí na název otevře Popis.
+       Druh zápisu poznáš podle sloupců tabulky, supersérii podle proužku vlevo. */
+    const recNames = lr.ex.map(recLow).join(", ");
+    const after =
+      (ex.gymDep ? gdIcon(true) : "") +
+      (lr.ex.length
+        ? `<span class="exc-med" data-act="recTip" data-v="${esc(recNames)}" role="img"
+            aria-label="Nový rekord: ${esc(recNames)}">${medal(lr.ex)}</span>`
+        : "");
+    let h =
+      `<article class="exc${inSs ? " ss-on" : ""}" data-i="${i}">
+      <div class="exc-h">
+        <div class="grow">
+          <h3>
+            <button data-act="openEx" data-v="${esc(e.exId)}" data-p="info">` +
+      `${nameWithIcons(ex.name, after)}</button>
+          </h3>
+          ${ex.cz ? `<div class="cz">${esc(ex.cz)}</div>` : ""}
+        </div>
+      <button class="iconbtn" data-act="openEx" data-v="${esc(e.exId)}" data-p="stats"
+          aria-label="Statistiky cviku">
+        ${IC.stats}
+      </button>
+      <button class="iconbtn" data-act="exMenu" data-i="${i}" aria-label="Možnosti cviku">
+        ${IC.more}
+      </button>
+      </div>`;
+    // pod názvem: nastavení stroje (F1-07), poznámka, Minule (F1-19), návrh progrese (F4-01), stagnace (F4-06)
+    h += machLine(d, e, i);
+    h += restLine(d, e, i);
+    h += noteLine(e, i);
+    if (mode !== "template") {
+      h += prevLine(d, e, last);
+      h += progLine(d, e, i);
+    }
+    // stagnace (F4-06): jen v probíhajícím tréninku, klepnutí otevře Statistiky cviku
+    const stag = mode === "active" ? stagInfo(e.exId, d.gymId) : null;
+    if (stag) {
+      h += `<button class="exc-stag" data-act="openEx" data-v="${esc(e.exId)}" data-p="stats">
+        <span class="stag-ico" aria-hidden="true">${IC.stag}</span>
+        <span>${esc(stagCount(stag.n))} ${esc(stagSince(stag))}</span>
+        ${excGo}
+      </button>`;
+    }
+    // rozsah opakování (F4-01) za nadpisem sloupce Opak. (F3-22), bez místa se zalomí pod něj
+    const repsRange = range
+      ? `<span class="rng" title="Rozsah opakování pro návrh progrese">${progSpan(range)}</span>`
+      : "";
+    const thLabel = (f) => FLD[f].lab + (f === "reps" && repsRange ? " " + repsRange : "");
+    // poslední sloupec je políčko (šablona, úprava tréninku bez RIR/RPE): okraj vpravo řeší .end-in (F3-36)
+    const endIn = mode !== "active" && !eff;
+    // série na čas v rozdělaném tréninku mají za políčky tlačítko stopek (F1-24)
+    const stwCol = mode === "active" && flds.includes("sec");
+    h += `<table class="sets${endIn ? " end-in" : ""}">
+      <thead>
+        <tr>
+          <th class="c-type">Série</th>
+          ${mode !== "template" && PREV_COL ? '<th class="c-prev">Minule</th>' : ""}
+          ${flds.map((f) => `<th class="c-in">${thLabel(f)}</th>`).join("")}
+          ${stwCol ? '<th class="c-stw" aria-hidden="true"></th>' : ""}
+          ${eff ? `<th class="c-eff">${EFF_NAME[effMode()]}</th>` : ""}
+          ${mode === "active" ? '<th class="c-ok" aria-label="Hotovo">' + icon("check") + "</th>" : ""}
+        </tr>
+      </thead>
+      <tbody>`;
+    let wn = 0;
+    // šablona „Ze šablony“ (F2-11) v editoru šedé minule neukazuje, v tréninku by se nepoužilo
+    const noHints = mode === "template" && d.hints === "tpl";
+    const hints = noHints
+      ? e.sets.map(() => ({ p: null, h: null }))
+      : mode === "active"
+        ? draftHints(d, e)
+        : exHints(e, last);
+    const useStepper = kkOn(d);
+    // hodnota políčka série (kg, +kg a −kg jsou v s.kg)
+    const fval = (s, f) => s[setRule(f)] || "";
+    e.sets.forEach((s, j) => {
+      const lbl = s.t === "w" ? "W" : s.t === "d" ? "D" : s.t === "f" ? "F" : String(++wn);
+      const p = hints[j].p,
+        hn = hints[j].h;
+      const marked = kk && d === S.active && kk.i === i && kk.j === j;
+      // tlačítko Smazat za posledním sloupcem, odkryje ho tah doleva (F2-03)
+      const delBtn = `<button class="sw-del" data-act="delSet" data-i="${i}" data-j="${j}" tabindex="-1">
+        Smazat
+      </button>`;
+      h +=
+        `<tr class="sw${s.done ? " done" : ""}${marked ? " kk-on" : ""}">
+        <td class="c-type">
+          <button class="stype ${s.t}" data-act="cycType" data-i="${i}" data-j="${j}"
+              title="${TYPE_NAME[s.t]} — klepnutím změníš">
+            <span class="stype-in">${lbl}` +
+        `${
+          lr.sets[j]
+            ? `<span class="medal" title="${esc(lr.sets[j].map((t) => REC[t]).join(", "))}">` +
+              `${medal(lr.sets[j])}</span>`
+            : ""
+        }</span>
+          </button>
+        </td>`;
+      if (mode !== "template" && PREV_COL) {
+        h += `<td class="c-prev num">${p ? esc(setStr(kind, p)) : "–"}</td>`;
+      }
+      flds.forEach((f, n) => {
+        const fld = f === "plus" || f === "minus" ? "kg" : f;
+        const id = kkInputId(e, j, f);
+        // krokovač (F1-03): políčko jen ke čtení, klepnutí otevře panel s +/−
+        const stepper = useStepper && !kkTyping(id) ? ` readonly data-act="kk" data-v="${f}"` : "";
+        const last = mode !== "active" && !eff && n === flds.length - 1;
+        // klávesa Enter: Další do dalšího políčka série nebo k nevyplněnému RIR/RPE, jinak Hotovo
+        // (F3-24, setEnter); mimo rozdělaný trénink z poslední série do další série (F1-23)
+        const effNext = eff && s.t !== "w" && s.t !== "f" && effOf(s) == null;
+        const rowNext = mode !== "active" && j < e.sets.length - 1;
+        const enter = n < flds.length - 1 || effNext || rowNext ? "next" : "done";
+        h += `<td class="c-in${last ? " sw-cell" : ""}">
+          <input class="cell${numCls(fld, fval(s, fld))}" id="${id}" enterkeyhint="${enter}"
+              inputmode="${FLD[f].mode}" data-num="${fld}" data-f="${fld}" data-i="${i}" data-j="${j}"
+              value="${esc(fval(s, fld))}" placeholder="${esc(hintStr(hn, fld))}"
+              aria-label="${FLD[f].lab}"${stepper}>
+          ${last ? delBtn : ""}
+        </td>`;
+      });
+      if (stwCol) {
+        h += stwCell(i, j, s);
+      }
+      if (eff) {
+        h += effCell(e, i, j, s, mode !== "active" ? delBtn : "");
+      }
+      if (mode === "active") {
+        h += `<td class="c-ok sw-cell">
+          <button class="okb" data-act="done" data-i="${i}" data-j="${j}" aria-pressed="${!!s.done}"
+              aria-label="Série hotová">
+            ${IC.check}
+          </button>
+          ${delBtn}
+        </td>`;
+      }
+      h += `</tr>`;
+    });
+    h += `</tbody></table>
+    <div class="exc-f">
+      <button class="btn sm" data-act="addSet" data-i="${i}">${icon("plus")}Série</button>
+      <button class="btn sm" data-act="addWarm" data-i="${i}">${icon("plus")}Zahřívací</button>
+    </div>
+    </article>`;
+    return h;
+  }
+  function draftToWorkout(d, onlyDone) {
+    const ex = [];
+    for (const e of d.ex) {
+      const kind = kindOf(e.exId),
+        flds = kFields(kind);
+      const sets = [];
+      for (const s of e.sets) {
+        if (onlyDone && !s.done) continue;
+        const o = { t: s.t };
+        let any = false;
+        if (flds.some((f) => f === "kg" || f === "plus" || f === "minus")) {
+          const kg = num(s.kg);
+          o.kg = isFinite(kg) ? kg : 0;
+          if (isFinite(kg)) {
+            any = true;
+          }
+        } else {
+          o.kg = 0;
+        }
+        if (hasReps(kind)) {
+          const r = num(s.reps);
+          o.reps = isFinite(r) ? Math.round(r) : 0;
+          if (isFinite(r)) {
+            any = true;
+          }
+        } else {
+          o.reps = 0;
+        }
+        if (isTimed(kind)) {
+          const sec = parseSec(s.sec);
+          if (isFinite(sec) && sec > 0) {
+            o.sec = Math.round(sec);
+            any = true;
+          }
+        }
+        if (kind === "dist") {
+          const km = num(s.km);
+          if (isFinite(km) && km > 0) {
+            o.km = km;
+            any = true;
+          }
+        }
+        // vzdálenost se zátěží (F4-16): metry
+        if (kind === "distw") {
+          const meters = num(s.m);
+          if (isFinite(meters) && meters > 0) {
+            o.m = Math.round(meters);
+            any = true;
+          }
+        }
+        if (!any) continue;
+        const rpe = effSave(s); // RIR/RPE (F4-04)
+        if (rpe) {
+          o.rpe = rpe;
+        }
+        if (s.t === "f" && effNum(s.rpeEst) != null) {
+          o.rpeEst = s.rpeEst; // odhad před selháním (F4-12)
+        }
+        if (s.at) {
+          o.at = s.at;
+        }
+        sets.push(o);
+      }
+      if (sets.length) {
+        const o = Object.assign({ exId: e.exId, sets }, ssOf(e));
+        if (e.note) {
+          o.note = e.note;
+        }
+        ex.push(o);
+      }
+    }
+    return ssNorm(ex); // cvik bez uložené série ze supersérie vypadne
+  }
+  function saveWorkout(id, w, oldMk) {
+    const mk = monthKey(w.start);
+    if (oldMk && oldMk !== mk) {
+      const items = Object.assign({}, S.months[oldMk] || {});
+      delete items[id];
+      put("workouts/" + oldMk, { items });
+    }
+    const items = Object.assign({}, S.months[mk] || {});
+    items[id] = w;
+    put("workouts/" + mk, { items });
+  }
+  function workoutToDraft(w, mode) {
+    return {
+      mode,
+      id: w.id,
+      mk: w.mk,
+      title: w.title,
+      gymId: w.gymId,
+      start: w.start,
+      end: w.end,
+      tplId: w.tplId || null,
+      note: w.note || "",
+      feel: w.feel, // Pro coache (F4-12)
+      energy: w.energy,
+      sleep: w.sleep,
+      pain: w.pain ? Object.assign({}, w.pain) : undefined,
+      ex: (w.ex || []).map((e) => ({
+        k: uid("e"),
+        exId: e.exId,
+        ...ssOf(e),
+        note: e.note || "",
+        sets: e.sets.map((s) => ({
+          t: s.t,
+          kg: s.kg ? numStr(s.kg) : "",
+          reps: s.reps ? String(s.reps) : "",
+          sec: s.sec ? fmtSec(s.sec) : "",
+          km: s.km ? numStr(s.km) : "",
+          m: s.m ? String(s.m) : "",
+          done: true,
+          rpe: s.rpe,
+          rpeEst: s.rpeEst,
+          at: s.at,
+        })),
+      })),
+    };
+  }
+
+  /* ---------- HISTORIE (F3-06) ---------- */
+  // čipy fitek: s „Všechna fitka“ filtr (Historie, Statistiky), jinak výběr fitka (jen aktivní, F2-06)
+  function gymChips(act, cur, withAll) {
+    return (
+      `<div class="chips" data-ck="${act}">
+        ${
+          withAll
+            ? `<button class="chip" data-act="${act}" data-v="all" aria-pressed="${cur === "all"}">
+              Všechna fitka
+            </button>`
+            : ""
+        }` +
+      `${(withAll ? gymsFilter() : gymsOn())
+        .map(
+          (g) =>
+            `<button class="chip" data-act="${act}" data-v="${g.id}" aria-pressed="${cur === g.id}">
+              <span class="sw" style="background:${gymColor(g.id)}"></span>
+              ${esc(g.name)}
+            </button>`,
+        )
+        .join("")}` +
+      `</div>`
+    );
+  }
+  function vHist() {
+    const { all } = derive();
+    const list = all.filter((w) => S.histGym === "all" || w.gymId === S.histGym);
+    let h = topbar("Historie", list.length + " " + plural(list.length, "trénink", "tréninky", "tréninků"));
+    h += `<div class="seg seg-wide mb-in">${[
+      ["cal", "Kalendář"],
+      ["list", "Seznam"],
+    ]
+      .map(
+        ([k, l]) =>
+          `<button data-act="histView" data-v="${k}" aria-pressed="${S.histView === k}">${l}</button>`,
+      )
+      .join("")}</div>`;
+    h += gymChips("histGym", S.histGym, true);
+    if (S.histView === "cal") return h + vCal(all, list);
+    if (!list.length) return `${h}<div class="empty mt-in">Žádné tréninky.</div>`;
+    let curM = "";
+    const lim = S.histLimit || 40;
+    list.slice(0, lim).forEach((w) => {
+      const d = new Date(w.start);
+      const m = MONTHS_FULL[d.getMonth()] + " " + d.getFullYear();
+      if (m !== curM) {
+        curM = m;
+        h += `<div class="mhead">${m}</div>`;
+      }
+      h +=
+        `<button class="hw mb-list" data-act="openW" data-v="${esc(w.id)}" data-m="${w.mk}">
+        <div class="row">
+          <h3 class="grow">
+            ${esc(w.title)}` +
+        `${wRecs(w).length ? " " + recCount(wRecs(w)) : ""}
+          </h3>
+          ${w.gymId ? gymPill(w.gymId) : ""}
+        </div>
+        <div class="line num">
+          <span>${fmtDay(w.start)} ${fmtTime(w.start)}</span>
+          ${durLabel(w)}
+          <span>${fmtInt(wVol(w))} kg</span>
+          <span>${wSets(w)} sérií</span>
+        </div>
+        <div class="exs">
+          ${esc((w.ex || []).map((e) => e.sets.length + "× " + exName(e.exId)).join(", "))}
+        </div>
+      </button>`;
+    });
+    if (list.length > lim) {
+      h += '<button class="btn block" data-act="histMore">Zobrazit další</button>';
+    }
+    return h;
+  }
+  /* ---------- SOUHRN TRÉNINKU (F3-03, F3-37) ----------
+     Stránka tréninku (F3-19, po uložení „Hotovo · …“ i z Historie): karty Čas, Objem, Série, Rekordy s rozdílem
+     proti minulému běhu stejné šablony (prevRun: přednostně ve stejném fitku), procvičené partie
+     (hlavní partie = série, pomocná = půl) a u každého cviku porovnání s posledním výskytem cviku
+     (prevEx: i z jiné šablony, cvik vázaný na fitko jen ze stejného fitka). Vše se počítá z uložených dat.
+     Dole po uložení červené Dokončit (do Historie, F3-12), z Historie Cvičit znovu.
+     Obsah wSummary. Minulý běh prevRun podle sameRun: šablona, jinak název bez automatických DEF_TITLES, nebo
+     againOf. Procvičené partie wMuscles, postava přes musFigs (sdílí ji i Statistiky). Nic se neukládá.
+     Partie, které byly jen vedlejší (wSecOnly), mají na postavě, v pruzích i na obrázku ke sdílení slabou
+     barvu MUS_WEAK.
+     Karta cviku (F3-37): název, pod ním šedě český název (ex.cz, jako karta cviku v tréninku), poznámka, série
+     a až pod nimi výsledek sumEx: rámeček porovnání s minule (.excmp), nebo u cviku poprvé zelený text
+     „Poprvé“ / „Poprvé v tomto fitku“ (.exnew) na vlastním řádku, zarovnaný s textem karty (ne štítek za názvem,
+     ten se podle délky názvu zalamoval). Za názvem jen medaile rekordů (recCount). */
+  const DEF_TITLES = ["Ranní trénink", "Odpolední trénink", "Večerní trénink", "Trénink"];
+  const runKey = (t) => {
+    t = String(t || "").trim();
+    return DEF_TITLES.includes(t) ? "" : fold(t);
+  };
+  // je x běh „stejného tréninku“ jako w? stejná šablona, jinak stejný (ne
+  // automatický) název, nebo zdroj Cvičit znovu
+  function sameRun(w, x) {
+    if (w.againOf && x.id === w.againOf) return true;
+    if (w.tplId && x.tplId) return w.tplId === x.tplId;
+    const k = runKey(w.title);
+    return !!k && k === runKey(x.title);
+  }
+  function prevRun(w) {
+    let other = null;
+    for (const x of derive().all) {
+      if (x.start >= w.start || x.id === w.id || !sameRun(w, x)) continue;
+      if (x.gymId === w.gymId) return x;
+      if (!other) {
+        other = x;
+      }
+    }
+    return other;
+  }
+  const exSetsIn = (w, exId) => (w.ex || []).filter((e) => e.exId === exId).flatMap((e) => e.sets);
+  function prevEx(exId, w, anyGym) {
+    const g = anyGym ? null : exCtxGym(exId, w.gymId);
+    for (const s of derive().byEx[exId] || []) {
+      if (s.w.start >= w.start || s.w.id === w.id) continue;
+      if (g && s.w.gymId !== g) continue;
+      return s.w;
+    }
+    return null;
+  }
+  // nejlepší pracovní série: klíč se porovnává zleva (váha, pak opakování; dopomoc čím menší, tím lepší)
+  function setKey(kind, s) {
+    const kg = +s.kg || 0,
+      reps = +s.reps || 0,
+      sec = +s.sec || 0,
+      km = +s.km || 0;
+    if (kind === "time") return sec > 0 ? [sec] : null;
+    if (kind === "timew") return sec > 0 ? [kg, sec] : null;
+    if (kind === "dist") return km > 0 ? [km, -sec] : null;
+    if (kind === "distw") return +s.m > 0 ? [kg, +s.m] : null;
+    if (reps <= 0) return null;
+    if (kind === "bw") return [reps];
+    if (kind === "assist") return [-kg, reps];
+    return [kg, reps];
+  }
+  const keyCmp = (a, b) => {
+    for (let i = 0; i < a.length; i++) {
+      const d = a[i] - b[i];
+      if (Math.abs(d) > EPS) return d > 0 ? 1 : -1;
+    }
+    return 0;
+  };
+  function bestOf(kind, sets) {
+    let b = null;
+    for (const s of sets) {
+      if (!isWork(s.t)) continue;
+      const k = setKey(kind, s);
+      if (k && (!b || keyCmp(k, b.k) > 0)) {
+        b = { k, s };
+      }
+    }
+    return b;
+  }
+  // součet cviku: objem (kg), u cviků na čas celkový čas, u vzdálenosti km, u vzdálenosti se zátěží práce
+  function exTotal(kind, sets, t) {
+    if (kind === "distw") {
+      let work = 0;
+      for (const s of sets) {
+        if (isWork(s.t)) {
+          work += setLoad(kind, s, t) * (+s.m || 0);
+        }
+      }
+      return { v: work, lab: "Práce", fmt: (x) => fmtInt(x) + " kg·m" };
+    }
+    let v = 0;
+    for (const s of sets) {
+      if (isWork(s.t)) {
+        v += kind === "dist" ? +s.km || 0 : isTimed(kind) ? +s.sec || 0 : setVol(kind, s, t);
+      }
+    }
+    return {
+      v,
+      lab: kind === "dist" ? "Vzdálenost" : isTimed(kind) ? "Celkem" : "Objem",
+      fmt: kind === "dist" ? (x) => fmtKg(x) + " km" : isTimed(kind) ? fmtSec : (x) => fmtInt(x) + " kg",
+    };
+  }
+  function wMuscles(w) {
+    const m = {};
+    for (const e of w.ex || []) {
+      const n = e.sets.filter((s) => isWork(s.t)).length;
+      if (!n) continue;
+      const x = exOf(e.exId);
+      for (const k of exPri(x)) {
+        m[k] = (m[k] || 0) + n;
+      }
+      for (const k of x.sec || []) {
+        m[k] = (m[k] || 0) + n / 2;
+      }
+    }
+    for (const k in m) {
+      if (!MUSCLE_MAP.NAMES[k]) {
+        delete m[k];
+      }
+    }
+    return m;
+  }
+  // partie, které byly v tréninku jen vedlejší (u žádného cviku s pracovní sérií hlavní): {partie: true}
+  function wSecOnly(w) {
+    const pri = {},
+      weak = {};
+    for (const e of w.ex || []) {
+      if (!e.sets.some((s) => isWork(s.t))) continue;
+      for (const k of exPri(exOf(e.exId))) {
+        pri[k] = true;
+      }
+    }
+    for (const k in wMuscles(w)) {
+      if (!pri[k]) {
+        weak[k] = true;
+      }
+    }
+    return weak;
+  }
+  // rozdíl proti minule: ▲ víc (zeleně), ▼ míň (červeně), ◄► beze změny; neutral = jen šedě (čas)
+  // trojúhelníčky jako SVG, aby vypadaly stejně v každém písmu
+  const TRI = (() => {
+    const t = (d) => `<svg class="tri" viewBox="0 0 10 10" aria-hidden="true"><path d="${d}"/></svg>`;
+    return {
+      up: t("M5 1.5 9.5 8.5H.5z"),
+      down: t("M5 8.5 .5 1.5h9z"),
+      same: `<svg class="tri tri2" viewBox="0 0 20 10" aria-hidden="true">
+        <path d="M.5 5 7 .8v8.4zM19.5 5 13 .8v8.4z"/>
+      </svg>`,
+    };
+  })();
+  const SAME = TRI.same + " 0";
+  function dHtml(d, fmt, cls, neutral) {
+    if (Math.abs(d) < EPS || fmt(Math.abs(d)) === fmt(0)) {
+      return `<span class="${cls} flat">${SAME}</span>`;
+    }
+    return (
+      `<span class="${cls} ${neutral ? "flat" : d > 0 ? "gain" : "loss"}">` +
+      `${d > 0 ? TRI.up + " +" : TRI.down + " −"}${fmt(Math.abs(d))}</span>`
+    );
+  }
+  // den s rokem, jen když se liší od roku tréninku
+  const dayY = (t, ref) =>
+    fmtDay(t) +
+    (new Date(t).getFullYear() !== new Date(ref).getFullYear() ? " " + new Date(t).getFullYear() : "");
+  function sumKpis(w, p) {
+    const dur = wDur(w),
+      vol = wVol(w),
+      sets = wSets(w),
+      rec = wRecs(w).length;
+    // dlaždice Rekordy jen s rekordem nebo s rozdílem proti minule, jinak 3 dlaždice (F3-24)
+    const showRec = rec > 0 || (p && wRecs(p).length > 0);
+    const kpi = (v, l, dl) => `<div class="kpi"><b>${v}</b><span>${l}</span>${p ? dl : ""}</div>`;
+    let dv = "";
+    if (p) {
+      const pv = wVol(p);
+      const pc = pv > 0 ? Math.round(((vol - pv) / pv) * 100) : 0;
+      dv =
+        dHtml(vol - pv, (x) => fmtInt(x) + " kg", "dl") +
+        (pc
+          ? `<span class="dl pc ${pc > 0 ? "gain" : "loss"}">
+            ${pc > 0 ? "+" : "−"}${Math.abs(pc)} %
+          </span>`
+          : "");
+    }
+    return (
+      `<div class="kpis k4${showRec ? "" : " k3"}">
+      ${kpi(
+        fmtDurS(dur),
+        "Čas",
+        p
+          ? dHtml(
+              Math.round(dur / 60000) - Math.round(wDur(p) / 60000),
+              (m) => fmtDurS(m * 60000),
+              "dl",
+              true,
+            )
+          : "",
+      )}` +
+      `${kpi(fmtVol(vol), "Objem", dv)}` +
+      `${kpi(sets, "Série", p ? dHtml(sets - wSets(p), String, "dl") : "")}` +
+      `${showRec ? kpi(rec, "Rekordy", p ? dHtml(rec - wRecs(p).length, String, "dl") : "") : ""}
+    </div>`
+    );
+  }
+  function sumCompare(w, p) {
+    if (!p) {
+      return `<div class="small muted">${
+        w.tplId || w.againOf || runKey(w.title)
+          ? "První trénink „" + esc(w.title) + "“, zatím není s čím porovnat."
+          : "Trénink bez šablony, není s čím porovnat."
+      }</div>`;
+    }
+    const have = new Set((w.ex || []).map((e) => e.exId));
+    const extra = [...new Set((p.ex || []).map((e) => e.exId))].filter((id) => !have.has(id));
+    return (
+      `<button class="cmp" data-act="prevW" data-v="${esc(p.id)}" data-m="${p.mk}">
+        <div class="grow">
+          Porovnáno s <b>${esc(p.title)}</b> · ${dayY(p.start, w.start)} · ` +
+      `${esc(gymName(p.gymId))}${p.gymId !== w.gymId ? " (jiné fitko)" : ""}
+          ${extra.length ? `<div class="xs muted">Minule navíc: ${esc(extra.map(exName).join(", "))}</div>` : ""}
+        </div>
+        ${icon("next", "chev")}
+      </button>`
+    );
+  }
+  function sumMuscles(w) {
+    const m = wMuscles(w),
+      rows = Object.entries(m).sort((a, b) => b[1] - a[1]);
+    if (!rows.length) return "";
+    const mx = rows[0][1];
+    const weak = wSecOnly(w); // jen vedlejší partie slabší barvou
+    return `<div class="card">
+      <h3 class="sumh">Procvičené partie</h3>
+      ${musFigs(m, false, true, weak)}${mgStack(m)}
+      <div class="mbars">
+        ${rows
+          .map(
+            ([k, v]) =>
+              `<div class="mbar">
+                <span>${esc(MUSCLE_MAP.NAMES[k])}</span>
+                <div>
+                  <i style="width:${Math.max(4, (v / mx) * 100)}%;background:${mgColWeak(k, weak)}"></i>
+                </div>
+              </div>`,
+          )
+          .join("")}
+      </div>
+    </div>`;
+  }
+  function sumEx(w, exId) {
+    const kind = kindOf(exId),
+      sets = exSetsIn(w, exId);
+    const pw = prevEx(exId, w);
+    if (!pw) {
+      const ex = S.exLib[exId];
+      return `<div class="exnew">
+        ${ex && ex.gymDep && prevEx(exId, w, true) ? "Poprvé v tomto fitku" : "Poprvé"}
+      </div>`;
+    }
+    const ps = exSetsIn(pw, exId);
+    const b = bestOf(kind, sets),
+      pb = bestOf(kind, ps),
+      t = exTotal(kind, sets, w.start),
+      pt = exTotal(kind, ps, pw.start);
+    let h = "";
+    if (b) {
+      h += `<span class="k">Nejlepší</span>
+      <span class="v">${esc(setStr(kind, b.s))}</span>
+      ${
+        !pb
+          ? "<span></span>"
+          : keyCmp(b.k, pb.k)
+            ? `<span class="d ${keyCmp(b.k, pb.k) > 0 ? 'gain">' + TRI.up : 'loss">' + TRI.down}` +
+              ` z ${esc(setStr(kind, pb.s))}</span>`
+            : `<span class="d flat">${SAME}</span>`
+      }`;
+    }
+    if (t.v > 0 || pt.v > 0) {
+      h += `<span class="k">${t.lab}</span>
+      <span class="v">${t.fmt(t.v)}</span>
+      ${dHtml(t.v - pt.v, t.fmt, "d")}`;
+    }
+    return {
+      h: `${h}
+      <span class="src">
+        Minule ${dayY(pw.start, w.start)} · ${esc(pw.title)}${sameRun(w, pw) ? "" : " (jiný trénink)"}
+      </span>`,
+    };
+  }
+  /* ---------- STRÁNKA TRÉNINKU (F3-19) ----------
+     Uložený trénink se otevírá jako stránka (route "wd", jako stránka cviku), ne panel: z Historie (seznam
+     i kalendář), z porovnání „Porovnáno s…“ a po uložení tréninku. S.wDetail = {id, mk, saved}, saved =
+     právě uložený („Hotovo · …“ a Dokončit). Zpět vede tam, odkud se přišlo (navFrame si pamatuje
+     i předchozí trénink a otevřený výběr dne v kalendáři). Otevírat jen přes openWorkout.
+     vWorkout, openWorkout(w, justSaved). navFrame si pamatuje S.wDetail (f.wd). Po uložení úpravy (saveEdit)
+     zpět na stránku s novým mk. */
+  function openWorkout(w, justSaved) {
+    const f = navFrame();
+    closeSheet();
+    S.nav.push(f);
+    S.wDetail = { id: w.id, mk: w.mk, saved: !!justSaved };
+    go("wd");
+  }
+  function vWorkout() {
+    const o = S.wDetail;
+    const x = o && S.months[o.mk] && S.months[o.mk][o.id];
+    if (!x) {
+      // trénink mezitím zmizel (smazaný, obnova zálohy): zpět do Historie
+      S.route = "hist";
+      S.nav = [];
+      return vHist();
+    }
+    const w = Object.assign({ id: o.id, mk: o.mk }, x);
+    let h = topbar(
+      (o.saved ? "Hotovo · " : "") + w.title,
+      "",
+      `<button class="iconbtn" data-act="wBack" aria-label="Zpět">${IC.back}</button>`,
+    );
+    // obal s mezerami mezi rámečky (dřív je dělal panel .sheet-b)
+    h += `<div class="stack wsum">${wSummary(w, o.saved)}</div>`;
+    // tlačítka pod sebou (F2-12): hlavní, pak Upravit, Sdílet (F4-08), Uložit jako šablonu a Kopírovat pro coache;
+    // po uložení nad nimi nabídka zálohy (F0-13)
+    h += `<div class="stack mt-out">
+      ${o.saved ? bkSumCard() : ""}
+      ${
+        o.saved
+          ? '<button class="btn primary block" data-act="wBack">Dokončit</button>'
+          : `<button class="btn primary block" data-act="wAgain" data-v="${esc(w.id)}" data-m="${w.mk}">
+            Cvičit znovu
+          </button>`
+      }
+      <button class="btn block" data-act="editW" data-v="${esc(w.id)}" data-m="${w.mk}">Upravit</button>
+      <button class="btn block" data-act="wShare" data-v="${esc(w.id)}" data-m="${w.mk}">Sdílet</button>
+      <button class="btn block" data-act="wToTpl" data-v="${esc(w.id)}" data-m="${w.mk}">
+        Uložit jako šablonu
+      </button>
+    </div>`;
+    return h;
+  }
+  // obsah stránky tréninku: fitko a čas, karty, porovnání, rekordy, partie, cviky se sériemi
+  function wSummary(w, justSaved) {
+    const p = prevRun(w);
+    let b = `<div class="row wrap-r small muted num">
+      ${w.gymId ? gymPill(w.gymId) : ""}
+      <span>${fmtDay(w.start)} ${fmtTime(w.start)}</span>
+    </div>`;
+    b += sumKpis(w, p) + sumCompare(w, p);
+    const R = wRecs(w);
+    if (justSaved || R.length) {
+      b += R.length
+        ? `<div class="recbox">
+          <h3>
+            ${medal(R.map((r) => r.type))}${R.length} ${plural(R.length, "rekord", "rekordy", "rekordů")}
+          </h3>
+          ${recListHtml(R, true)}
+        </div>`
+        : '<div class="small muted">Tentokrát bez nového rekordu.</div>';
+    }
+    b += sumMuscles(w);
+    b += wNoteCard(w); // poznámka k tréninku (F1-26)
+    const seen = {};
+    const cards = []; // karta každého cviku, supersérie (F4-05) je obalí rámečkem
+    (w.ex || []).forEach((e, i) => {
+      let wn = 0;
+      const er = R.filter((r) => r.exId === e.exId);
+      const c = seen[e.exId] ? null : sumEx(w, e.exId);
+      seen[e.exId] = true;
+      const cz = (S.exLib[e.exId] || {}).cz; // český název pod anglickým (F3-37)
+      cards.push(
+        `<div class="card${ssRun(w.ex, i) ? " ss-on" : ""}">
+        <div class="wex-n">
+          <button class="linkbtn" data-act="openEx" data-v="${esc(e.exId)}">${esc(exName(e.exId))}` +
+          `</button>${er.length ? " " + recCount(er) : ""}
+        </div>
+        ${cz ? `<div class="cz">${esc(cz)}</div>` : ""}
+        ${e.note ? noteView(e.note) : ""}
+        <div class="dset">
+          ${(() => {
+            const k = kindOf(e.exId);
+            return e.sets
+              .map((s) => {
+                const l = s.t === "w" ? "W" : s.t === "d" ? "D" : s.t === "f" ? "F" : ++wn;
+                const L = setLoad(k, s, w.start);
+                const r = hasReps(k) && L && s.reps ? e1rm(L, s.reps) : 0;
+                return (
+                  `<div>
+                  <span class="lbl ${s.t}">${l}</span><span>${esc(setStr(k, s))}` +
+                  `${effTxt(s) ? " " + esc(effTxt(s)) : ""}` +
+                  `${coachEst(s) ? " (" + esc(coachEst(s)) + ")" : ""}</span>` +
+                  `${
+                    isWork(s.t) && r
+                      ? `<span class="muted">1RM ≈ ${fmtKg(Math.round(r * 10) / 10)} kg</span>`
+                      : ""
+                  }
+                </div>`
+                );
+              })
+              .join("");
+          })()}
+        </div>
+        ${typeof c === "string" ? c : ""}${c && c.h ? `<div class="excmp">${c.h}</div>` : ""}
+        </div>`,
+      );
+    });
+    b += ssWrap(w.ex || [], cards);
+    return b;
+  }
+
+  /* ---------- SDÍLENÍ SOUHRNU (F4-08) ----------
+     Tlačítko Sdílet na stránce tréninku (vWorkout, F3-19) otevře panel „Sdílet trénink“ (sheetShare) s náhledem
+     obrázku. Obrázek se kreslí na <canvas> (shrDraw), vždy 1080 px široký, Příběh 9:16 nebo Příspěvek 4:5,
+     tmavý nebo světlý, česky nebo anglicky, volitelně s fotkou (jen do obrázku, nikam se neukládá) a s postavou.
+     Písmo v pevných px, na volbě Velikost písma (F3-11) nezávisí. Postava se kreslí přímo z obrysů atlasu
+     (Path2D), ne přes obrázek, takže pravidla zabezpečení (CSP) se nemění. Volby panelu se pamatují v Local "shr".
+     Sdílení přes systémovou nabídku Androidu (navigator.share se souborem), jinak jen Uložit obrázek.
+     Panel: stav shr, shareOpen, Zpět = closeSheet; třída shr na .scrim = pevná výška, náhled .shr-prev vyplní
+     zbytek, ovládání v řádcích .shr-row je vždy vidět, Postava = tlačítko .shr-tog s aria-pressed. Kreslí
+     shrDraw(ctx, shrData(w, en), volby) na <canvas id="shrCv"> (náhled = canvas zmenšený přes CSS), výška
+     SHR_H (story 1920 / post 1350; story nechává nahoře a dole SHR_SAFE 250 px bez textu, Instagram je
+     překrývá; řádek s logem footY). Barvy SHR_PAL (skupiny partií stejné jako --g-*), texty SHR_TXT (cs / en;
+     anglicky name cviku, česky cz). Postava shrFigures z obrysů ATLAS.
+     Volby v Local shr (fmt, theme, lang, fig). Fotka jen v paměti (shr.img, ImageBitmap, políčko #shrPhotoIn
+     mimo panel, plné rozlišení do SHR_PH_MAX; closeSheet ji uvolní přes shrClose), výřez fx / fy a přiblížení
+     zoom (do shrZoomMax: nejvýš 3× a jen dokud je fotka ostrá) gesty v náhledu (shrPt, shrGest), klepnutí =
+     obrázek přes celou obrazovku shrFull (sheetNav o úroveň hlouběji), dvojí klepnutí = výchozí výřez. Bez
+     navigator.share LocalDownloads.save (umí i Blob s type).
+     Nový údaj na obrázku přidat do shrData a oba jazyky do SHR_TXT. */
+  const SHR_W = 1080;
+  const SHR_H = { story: 1920, post: 1350 };
+  const SHR_SAFE = 250; // příběh: okraj nahoře a dole, který překrývá Instagram (viz shrDraw)
+  const SHR_D = "Barlow Condensed",
+    SHR_B = "Barlow";
+  const SHR_MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  // texty obrázku; název tréninku a podpis „WORKOUT DENÍK“ se nepřekládají
+  const SHR_TXT = {
+    cs: {
+      kind: "TRÉNINK",
+      time: "ČAS",
+      vol: "OBJEM",
+      sets: "SÉRIE",
+      setsReps: "SÉRIE / OPAKOVÁNÍ",
+      ex: "CVIKY",
+      recs: "NOVÉ REKORDY",
+      mus: "PARTIE",
+      reps: "opak.",
+      pc: (n) => n + " %",
+      grp: MGRP,
+      rec: REC,
+    },
+    en: {
+      kind: "WORKOUT",
+      time: "DURATION",
+      vol: "VOLUME",
+      sets: "SETS",
+      setsReps: "SETS / REPS",
+      ex: "EXERCISES",
+      recs: "NEW RECORDS",
+      mus: "MUSCLES",
+      reps: "reps",
+      pc: (n) => n + "%",
+      grp: { chest: "Chest", back: "Back", sh: "Shoulders", arms: "Arms", legs: "Legs", core: "Core" },
+      rec: {
+        maxKg: "Max weight",
+        e1rm: "Est. 1RM",
+        bestSet: "Best set",
+        vol: "Exercise volume",
+        reps: "Max reps",
+        maxSec: "Longest hold",
+        totSec: "Total time",
+        maxKm: "Longest distance",
+        totKm: "Distance",
+        speed: "Top speed",
+        bestW: "Best set",
+        work: "Exercise work",
+        maxM: "Longest distance",
+      },
+    },
+  };
+  /* barvy obrázku (nezávislé na motivu appky); barvy skupin partií stejné jako --g-* v css/app.css,
+     fade = barva přechodu přes fotku (RGB), box = rámeček dlaždic, gold = hodnota rekordu */
+  const SHR_PAL = {
+    dark: {
+      bg: "#0c0e12",
+      glowA: "rgba(238,91,81,0.42)",
+      glowB: "rgba(57,135,229,0.22)",
+      accent: "#ee5b51",
+      ink: "#ffffff",
+      ink2: "rgba(255,255,255,.72)",
+      ink3: "rgba(255,255,255,.6)",
+      line: "rgba(255,255,255,.22)",
+      rowLine: "rgba(255,255,255,.10)",
+      fade: "5,7,9",
+      gold: "#ffe08a",
+      sil: "#262b33",
+      idle: "#3a414c",
+      mline: "#0c0e12",
+      glow: true,
+      g: {
+        chest: "#e66767",
+        back: "#3987e5",
+        sh: "#c98500",
+        arms: "#9085e9",
+        legs: "#199e70",
+        core: "#e87ba4",
+      },
+    },
+    light: {
+      bg: "#f4f1ec",
+      glowA: "rgba(207,58,49,0.20)",
+      glowB: "rgba(42,120,214,0.14)",
+      accent: "#cf3a31",
+      ink: "#13161b",
+      ink2: "rgba(19,22,27,.66)",
+      ink3: "rgba(19,22,27,.55)",
+      line: "rgba(19,22,27,.18)",
+      rowLine: "rgba(19,22,27,.10)",
+      fade: "246,244,240",
+      gold: "#a86b00",
+      sil: "#c9cfd8",
+      idle: "#9ea7b3",
+      mline: "#ffffff",
+      glow: false,
+      g: {
+        chest: "#e34948",
+        back: "#2a78d6",
+        sh: "#eda100",
+        arms: "#4a3aa7",
+        legs: "#1baf7a",
+        core: "#e87ba4",
+      },
+    },
+  };
+  // ikony údajů (obrys, mřížka 24 × 24)
+  const SHR_ICONS = {
+    time: "M20 13.5a8 8 0 1 1-16 0 8 8 0 1 1 16 0M12 9.5v4l2.6 1.8M9.5 2.5h5M12 2.5v3",
+    vol: "M8.6 10.2a4 4 0 1 1 6.8 0M7.5 20.5h9a6 6 0 1 0-9 0z", // závaží (činka je dole logo, F3-20)
+    sets: "M12 3 3 8l9 5 9-5-9-5M3 12.5l9 5 9-5M3 17l9 5 9-5",
+    ex: BOOK, // kniha jako záložka Cviky
+    // rec = medaile, kreslí shrMedal
+  };
+  // otevřený panel: {w, nav, fmt, theme, lang, fig, img (ImageBitmap fotky), fx, fy (výřez 0–1), blob, cov}
+  let shr = null;
+  let shrFullUrl = ""; // adresa (blob:) obrázku přes celou obrazovku, uvolní se při zavření
+
+  /* data obrázku z uloženého tréninku (vše se počítá, nic se neukládá) */
+  // číslo podle jazyka: „12 480“, „82,5“ / „12,480“, „82.5“
+  const shrNum = (v, en, dec) =>
+    (Math.round(v * 100) / 100).toLocaleString(en ? "en-US" : "cs-CZ", { maximumFractionDigits: dec || 0 });
+  // název cviku: česky český název z databáze (cz), anglicky původní (name)
+  function shrExName(exId, en) {
+    const e = exOf(exId);
+    return (en ? e.name : e.cz || e.name) || exId;
+  }
+  // série jako text („85 kg × 5“, „14 opak.“, „1:30“, „5 km · 25:00“)
+  function shrSetStr(kind, s, en) {
+    const X = SHR_TXT[en ? "en" : "cs"];
+    const kg = (v) => shrNum(v, en, 2) + " kg";
+    if (kind === "time") return fmtSec(s.sec || 0);
+    if (kind === "timew") return (s.kg ? kg(s.kg) + " · " : "") + fmtSec(s.sec || 0);
+    if (kind === "dist") return (s.km ? shrNum(s.km, en, 2) + " km · " : "") + fmtSec(s.sec || 0);
+    if (kind === "distw") return shrNum(s.m || 0, en) + " m" + (s.kg ? " · " + kg(s.kg) : "");
+    if (kind === "bw") return (s.reps || 0) + " " + X.reps;
+    if (kind === "bwplus") return (s.kg ? "+" + kg(s.kg) + " × " : "") + (s.reps || 0);
+    if (kind === "assist") return (s.kg ? "−" + kg(s.kg) + " × " : "") + (s.reps || 0);
+    return (s.kg ? kg(s.kg) + " × " : "") + (s.reps || 0);
+  }
+  // hodnota rekordu jako text (jako recFmt, ale podle jazyka)
+  function shrRecFmt(type, v, set, en) {
+    const X = SHR_TXT[en ? "en" : "cs"];
+    if (type === "reps") return shrNum(v, en) + " " + X.reps;
+    if (type === "bestSet" && set) {
+      return shrNum(set.load != null ? set.load : set.kg, en, 2) + " kg × " + set.reps;
+    }
+    if (type === "e1rm") return shrNum(v, en, 1) + " kg";
+    if (type === "vol") return shrNum(v, en) + " kg";
+    if (type === "maxSec" || type === "totSec") return fmtSec(v);
+    if (type === "maxKm" || type === "totKm") return shrNum(v, en, 2) + " km";
+    if (type === "speed") return shrNum(v, en, 1) + " km/h";
+    if (type === "bestW" && set) return shrSetStr("distw", set, en);
+    if (type === "work") return shrNum(v, en) + " kg·m";
+    if (type === "maxM") return shrNum(v, en) + " m";
+    return shrNum(v, en, 2) + " kg";
+  }
+  function shrData(w, en) {
+    const X = SHR_TXT[en ? "en" : "cs"];
+    const d = new Date(w.start);
+    const date = en
+      ? d.getDate() + " " + SHR_MONTHS_EN[d.getMonth()] + " " + d.getFullYear()
+      : fmtDate(w.start);
+    let reps = 0;
+    for (const e of w.ex || []) {
+      const k = kindOf(e.exId);
+      if (!hasReps(k)) continue;
+      for (const s of e.sets) {
+        if (isWork(s.t)) {
+          reps += +s.reps || 0;
+        }
+      }
+    }
+    const sets = wSets(w);
+    const ids = [...new Set((w.ex || []).map((e) => e.exId))];
+    // rekordy (1 na cvik, F3-25) podle pořadí druhů
+    const R = wRecs(w)
+      .slice()
+      .sort((a, b) => REC_ORDER.indexOf(a.type) - REC_ORDER.indexOf(b.type));
+    return {
+      title: w.title || "Trénink",
+      date: date + " · " + fmtTime(w.start),
+      stats: [
+        { ic: "time", lab: X.time, v: fmtSec(wDur(w) / 1000), u: "" },
+        { ic: "vol", lab: X.vol, v: shrNum(wVol(w), en), u: "kg" },
+        reps
+          ? { ic: "sets", lab: X.setsReps, v: sets + " / " + reps, u: "" }
+          : { ic: "sets", lab: X.sets, v: String(sets), u: "" },
+        { ic: "ex", lab: X.ex, v: String(ids.length), u: "" },
+        { ic: "rec", lab: X.recs, v: String(R.length), u: "", gold: recGold(R.map((r) => r.type)) },
+      ],
+      recs: R.map((r) => ({
+        ex: shrExName(r.exId, en),
+        t: X.rec[r.type] || r.type,
+        v: shrRecFmt(r.type, r.v, r.set, en),
+        gold: !!REC_BIG[r.type],
+      })),
+      ex: ids.map((id) => {
+        const kind = kindOf(id),
+          sets = exSetsIn(w, id);
+        const b = bestOf(kind, sets);
+        return {
+          n: shrExName(id, en),
+          s: sets.filter((s) => isWork(s.t)).length,
+          best: b ? shrSetStr(kind, b.s, en) : "",
+          ss: (w.ex || []).some((e) => e.exId === id && e.ss),
+        };
+      }),
+      mus: wMuscles(w),
+      musWeak: wSecOnly(w),
+    };
+  }
+
+  /* kreslení na canvas */
+  const shrFont = (weight, size, fam) => weight + " " + size + 'px "' + fam + '"';
+  function shrText(ctx, s, x, y, f, color, align, spacing) {
+    ctx.font = f;
+    ctx.fillStyle = color;
+    ctx.textAlign = align || "left";
+    ctx.letterSpacing = (spacing || 0) + "px";
+    ctx.fillText(s, x, y);
+    ctx.letterSpacing = "0px";
+  }
+  function shrWidth(ctx, s, f, spacing) {
+    ctx.font = f;
+    ctx.letterSpacing = (spacing || 0) + "px";
+    const w = ctx.measureText(s).width;
+    ctx.letterSpacing = "0px";
+    return w;
+  }
+  // zkrátí text na šířku s „…“
+  function shrFit(ctx, s, f, max, spacing) {
+    if (shrWidth(ctx, s, f, spacing) <= max) return s;
+    while (s.length > 1 && shrWidth(ctx, s + "…", f, spacing) > max) {
+      s = s.slice(0, -1);
+    }
+    return s.trimEnd() + "…";
+  }
+  function shrRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+  }
+  // smíchá dvě barvy #rrggbb (t = podíl první)
+  function shrMix(a, b, t) {
+    const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const A = p(a),
+      Bc = p(b);
+    const hex = (v) => Math.round(v).toString(16).padStart(2, "0");
+    return "#" + A.map((v, i) => hex(v * t + Bc[i] * (1 - t))).join("");
+  }
+  function shrGlow(ctx, x, y, r, color) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // logo appky: červený čtverec s činkou (jako icons/icon.svg)
+  function shrLogo(ctx, x, y, s) {
+    shrRect(ctx, x, y, s, s, s * 0.22);
+    ctx.fillStyle = "#cf3a31";
+    ctx.fill();
+    ctx.save();
+    ctx.translate(x + s / 2, y + s / 2);
+    ctx.scale((s * 12) / 512, (s * 12) / 512);
+    ctx.translate(-12, -12);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2.1;
+    ctx.lineCap = "round";
+    ctx.stroke(new Path2D(DUMBBELL));
+    ctx.restore();
+  }
+  // medaile zlatá / stříbrná (gold) jako medal() v appce, velikost s
+  function shrMedal(ctx, x, y, s, gold) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s / 24, s / 24);
+    ctx.lineWidth = 1.7;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = gold ? "#cf3a31" : "#2a78d6";
+    ctx.stroke(new Path2D(MEDAL_RIB));
+    ctx.beginPath();
+    ctx.arc(12, 15, 6, 0, 7);
+    ctx.fillStyle = gold ? "#f5c542" : "#d3d9e0";
+    ctx.fill();
+    ctx.strokeStyle = gold ? "#b87a06" : "#6f7882";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+  function shrIcon(ctx, name, x, y, s, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s / 24, s / 24);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.7;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke(new Path2D(SHR_ICONS[name]));
+    ctx.restore();
+  }
+  // obrysy postavy z atlasu (js/atlas.js) jako Path2D, připraví se jednou
+  const shrAtlas = {};
+  function shrAtlasOf(view) {
+    if (shrAtlas[view]) return shrAtlas[view];
+    const s = ATLAS[view];
+    const vb = s.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+    const list = [...s.matchAll(/<path d="([^"]+)"([^>]*)\/>/g)].map((m) => {
+      const a = m[2];
+      const fill = (a.match(/fill="([^"]+)"/) || [])[1] || "none";
+      const key = (fill.match(/--f-([a-z_]+)/) || [])[1] || null;
+      return {
+        p: new Path2D(m[1]),
+        fill,
+        key: key && key.startsWith("delt") ? "delts" : key,
+        stroke: /stroke=/.test(a),
+        sw: +((a.match(/stroke-width="([^"]+)"/) || [])[1] || 1),
+        even: /evenodd/.test(a),
+      };
+    });
+    shrAtlas[view] = { w: +vb[1], h: +vb[2], list };
+    return shrAtlas[view];
+  }
+  // postava (view = front / back) výšky h, partie v barvě skupiny, sytější = víc sérií; vrací šířku
+  function shrFigure(ctx, P, view, x, y, h, m, weak) {
+    const A = shrAtlasOf(view);
+    const k = h / A.h;
+    const mx = Math.max(0, ...Object.values(m)) || 1;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    for (const it of A.list) {
+      const g = it.key && m[it.key] ? P.g[MGRP_OF[it.key]] : null;
+      let col = null;
+      if (it.fill.startsWith("var(--sil")) {
+        col = P.sil;
+      } else if (g) {
+        // jen vedlejší partie slabě (jako v souhrnu)
+        const a = weak && weak[it.key] ? MUS_WEAK : 0.45 + (0.55 * m[it.key]) / mx;
+        col = shrMix(g, P.idle, a);
+      } else if (it.fill !== "none") {
+        col = P.idle;
+      }
+      if (col) {
+        ctx.fillStyle = col;
+        if (g && P.glow && !(weak && weak[it.key])) {
+          ctx.shadowColor = g;
+          ctx.shadowBlur = 28 / k;
+        }
+        ctx.fill(it.p, it.even ? "evenodd" : "nonzero");
+        ctx.shadowBlur = 0;
+      }
+      if (it.stroke) {
+        ctx.strokeStyle = P.mline;
+        ctx.lineWidth = it.sw;
+        ctx.stroke(it.p);
+      }
+    }
+    ctx.restore();
+    return A.w * k;
+  }
+  // postava zepředu a zezadu vedle sebe
+  function shrFigures(ctx, P, x, y, h, m, weak) {
+    const fw = shrFigure(ctx, P, "front", x, y, h, m, weak);
+    shrFigure(ctx, P, "back", x + fw - h * 0.03, y, h, m, weak);
+  }
+  // skupiny partií seřazené podle podílu: [{k, v, pc}]
+  function shrGroups(m) {
+    const g = {};
+    for (const k in m) {
+      const x = MGRP_OF[k];
+      if (x) {
+        g[x] = (g[x] || 0) + m[k];
+      }
+    }
+    const tot = Object.values(g).reduce((a, b) => a + b, 0);
+    return Object.keys(g)
+      .sort((a, b) => g[b] - g[a])
+      .map((k) => ({ k, v: g[k], pc: Math.round((g[k] / tot) * 100) }));
+  }
+  // pruh s poměrem skupin partií
+  function shrStack(ctx, P, x, y, w, h, G) {
+    const tot = G.reduce((a, b) => a + b.v, 0);
+    const gap = 6;
+    const free = w - gap * (G.length - 1);
+    let cx = x;
+    for (const g of G) {
+      const gw = (free * g.v) / tot;
+      shrRect(ctx, cx, y, gw, h, h / 2);
+      ctx.fillStyle = P.g[g.k];
+      ctx.fill();
+      cx += gw + gap;
+    }
+  }
+  // legenda skupin („● Hrudník 35 %“), zalomí se na další řádek; vrací výšku
+  function shrLegend(ctx, P, X, x, y, w, G) {
+    const fN = shrFont(500, 28, SHR_B),
+      fP = shrFont(700, 28, SHR_B);
+    let cx = x,
+      cy = y;
+    for (const g of G) {
+      const name = X.grp[g.k],
+        pc = X.pc(g.pc);
+      const iw = 28 + shrWidth(ctx, name, fN) + 10 + shrWidth(ctx, pc, fP);
+      if (cx > x && cx + iw > x + w) {
+        cx = x;
+        cy += 46;
+      }
+      ctx.beginPath();
+      ctx.arc(cx + 9, cy - 9, 9, 0, 7);
+      ctx.fillStyle = P.g[g.k];
+      ctx.fill();
+      shrText(ctx, name, cx + 28, cy, fN, P.ink2);
+      shrText(ctx, pc, cx + 28 + shrWidth(ctx, name, fN) + 10, cy, fP, P.ink);
+      cx += iw + 34;
+    }
+    return cy - y + 46;
+  }
+  /* fotka přes celou plochu (jako object-fit: cover), fx / fy = poloha výřezu 0–1, zoom = přiblížení;
+     přiblížit jde jen do SHR_ZOOM_MAX a jen dokud na bod obrázku připadá aspoň jeden bod fotky (ostrost) */
+  const SHR_ZOOM_MAX = 3;
+  const shrZoomMax = (img, w, h) =>
+    Math.max(1, Math.min(SHR_ZOOM_MAX, 1 / Math.max(w / img.width, h / img.height)));
+  function shrCover(ctx, img, w, h, fx, fy, zoom) {
+    const zMax = shrZoomMax(img, w, h);
+    const k = Math.max(w / img.width, h / img.height) * Math.min(zoom || 1, zMax);
+    const sw = w / k,
+      sh = h / k;
+    ctx.drawImage(img, (img.width - sw) * fx, (img.height - sh) * fy, sw, sh, 0, 0, w, h);
+    return { k, zMax, slackX: img.width - sw, slackY: img.height - sh };
+  }
+  // název tréninku velkým písmem: zmenší se, aby se vešel, dlouhý se zalomí na 2 řádky (a pak zkrátí);
+  // y = účaří prvního řádku, vrací výšku druhého řádku (0 = jeden řádek)
+  function shrTitle(ctx, s, x, y, maxW, size, color) {
+    s = s.toUpperCase();
+    const fits = (t, sz) => shrWidth(ctx, t, shrFont(700, sz, SHR_D), 1) <= maxW;
+    const min1 = Math.round(size * 0.66);
+    let sz = size;
+    while (!fits(s, sz) && sz > min1) {
+      sz -= 4;
+    }
+    if (fits(s, sz) || s.indexOf(" ") < 0) {
+      const f = shrFont(700, sz, SHR_D);
+      shrText(ctx, shrFit(ctx, s, f, maxW, 1), x, y, f, color, "left", 1);
+      return 0;
+    }
+    // dva řádky: první co nejdelší, zbytek na druhý (zmenšuje se nejvýš na 64 px)
+    sz = Math.round(size * 0.8);
+    let lines;
+    for (;;) {
+      const words = s.split(" ");
+      let a = words.shift();
+      while (words.length && fits(a + " " + words[0], sz)) {
+        a += " " + words.shift();
+      }
+      lines = [a, words.join(" ")];
+      if ((fits(lines[0], sz) && fits(lines[1], sz)) || sz <= 64) break;
+      sz -= 4;
+    }
+    const f = shrFont(700, sz, SHR_D);
+    const lh = Math.round(sz * 0.98);
+    shrText(ctx, shrFit(ctx, lines[0], f, maxW, 1), x, y, f, color, "left", 1);
+    shrText(ctx, shrFit(ctx, lines[1], f, maxW, 1), x, y + lh, f, color, "left", 1);
+    return lh;
+  }
+  /* nakreslí celý obrázek: D = shrData, o = volby panelu {fmt, theme, lang, fig, img, fx, fy} */
+  function shrDraw(ctx, D, o) {
+    const P = SHR_PAL[o.theme === "light" ? "light" : "dark"];
+    const X = SHR_TXT[o.lang === "en" ? "en" : "cs"];
+    const W = SHR_W,
+      H = SHR_H[o.fmt] || SHR_H.story;
+    const story = o.fmt !== "post";
+    const img = o.img;
+    const L = 72;
+    const G = shrGroups(D.mus);
+    let cov = null;
+    ctx.canvas.width = W;
+    ctx.canvas.height = H;
+    ctx.textBaseline = "alphabetic";
+    // pozadí: fotka s přechodem zleva (pod údaji), jinak barva appky se září
+    if (img) {
+      cov = shrCover(ctx, img, W, H, o.fx, o.fy, o.zoom);
+      let g = ctx.createLinearGradient(0, 0, W, 0);
+      g.addColorStop(0, "rgba(" + P.fade + ",.94)");
+      g.addColorStop(0.36, "rgba(" + P.fade + ",.8)");
+      g.addColorStop(0.62, "rgba(" + P.fade + ",.15)");
+      g.addColorStop(1, "rgba(" + P.fade + ",0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.fillStyle = P.bg;
+      ctx.fillRect(0, 0, W, H);
+      shrGlow(ctx, W - 80, 60, 760, P.glowA);
+      shrGlow(ctx, 60, H - 120, 820, P.glowB);
+    }
+    /* příběh: Instagram (i WhatsApp) přes horní okraj kreslí profilovou fotku, jméno a pruh průběhu a přes
+       spodní pole pro odpověď, proto nahoře a dole zůstává SHR_SAFE px bez textu (doporučení Instagramu) */
+    const footY = story ? H - SHR_SAFE - 40 : H - 84; // střed řádku s logem
+    // hlavička: TRÉNINK, datum, název
+    let y = story ? SHR_SAFE + 40 : 100;
+    shrText(ctx, X.kind, L, y, shrFont(600, 26, SHR_B), P.ink2, "left", 7);
+    ctx.fillStyle = P.accent;
+    ctx.fillRect(L, y + 22, 60, 4);
+    shrText(ctx, D.date, L, y + 72, shrFont(500, 26, SHR_B), P.ink2, "left", 3);
+    y += story ? 215 : 200;
+    const colW = img ? 330 : W - 2 * L;
+    y += shrTitle(ctx, D.title, L - 3, y, img ? 520 : W - 2 * L, img ? 120 : 150, P.ink);
+    y += story ? 70 : 60;
+    const divider = (yy) => {
+      ctx.fillStyle = P.line;
+      ctx.fillRect(L, yy, colW, 2);
+      ctx.fillStyle = P.ink;
+      ctx.fillRect(L, yy - 1, 90, 4);
+    };
+    divider(y);
+    y += story ? 80 : 70;
+    const fig = o.fig && G.length;
+    // příspěvek s fotkou a postavou: postava místo řádku s názvy partií; aby se vešla (i pod název
+    // na 2 řádky), řádky s údaji se podle potřeby přiblíží (nejvýš na 86 px)
+    const figMin = 170;
+    const postFig = img && fig && !story;
+    const room = footY - 60 - 30 - figMin - (y + 36);
+    // údaje s ikonami: pod sebou (s fotkou nebo s postavou vpravo), jinak ve dvou sloupcích
+    const step = story ? 104 : postFig ? Math.max(86, Math.min(106, Math.floor(room / 5))) : 106;
+    const stat = (s, x, yy) => {
+      if (s.ic === "rec") {
+        shrMedal(ctx, x, yy - 4, 50, s.gold);
+      } else {
+        shrIcon(ctx, s.ic, x, yy - 4, 50, P.accent);
+      }
+      shrText(ctx, s.lab, x + 76, yy + 6, shrFont(600, 22, SHR_B), P.ink2, "left", 4);
+      const fv = shrFont(700, 58, SHR_D);
+      shrText(ctx, s.v, x + 74, yy + 64, fv, P.ink);
+      if (s.u) {
+        shrText(ctx, s.u, x + 74 + shrWidth(ctx, s.v, fv) + 10, yy + 64, shrFont(500, 34, SHR_B), P.ink3);
+      }
+    };
+    if (img || fig) {
+      const top = y;
+      for (const s of D.stats) {
+        stat(s, L, y);
+        y += step;
+      }
+      if (!img) {
+        const fh = Math.min(step * 5 - 20, 550);
+        shrFigures(ctx, P, W - L - (1.042 * fh - 40), top - 30, fh, D.mus, D.musWeak);
+      }
+    } else {
+      D.stats.forEach((s, i) => {
+        stat(s, L + (i % 2) * 470, y + Math.floor(i / 2) * (step + 20));
+      });
+      y += 3 * (step + 20);
+    }
+    y += story ? 6 : 22;
+    // partie
+    if (G.length) {
+      divider(y - 30);
+      y += 14;
+      const postFh = footY - 60 - y - 30;
+      if (postFig && postFh >= 120) {
+        // příspěvek s fotkou: postava místo řádku s názvy partií, pruh pod ní
+        shrFigures(ctx, P, L - 6, y - 16, postFh, D.mus, D.musWeak);
+        shrStack(ctx, P, L, y - 16 + postFh + 14, colW, 8, G);
+      } else if (img) {
+        shrText(ctx, X.mus, L, y, shrFont(600, 22, SHR_B), P.ink2, "left", 4);
+        const names = G.slice(0, 3)
+          .map((g) => X.grp[g.k].toUpperCase())
+          .join(" · ");
+        const fN = shrFont(700, 30, SHR_D);
+        shrText(ctx, shrFit(ctx, names, fN, colW, 2), L, y + 40, fN, P.ink, "left", 2);
+        shrStack(ctx, P, L, y + 62, colW, 8, G);
+        y += 110;
+        if (fig && story) {
+          // příběh s fotkou: postava vlevo pod partiemi
+          const fh = Math.min(footY - 56 - y, 360);
+          if (fh >= 140) {
+            shrFigures(ctx, P, L - 6, y, fh, D.mus, D.musWeak);
+          }
+        }
+      } else {
+        shrText(ctx, X.mus, L, y, shrFont(600, 22, SHR_B), P.ink2, "left", 4);
+        shrStack(ctx, P, L, y + 26, colW, 12, G);
+        y += 86 + shrLegend(ctx, P, X, L, y + 86, colW, G) + 18;
+      }
+    }
+    // bez fotky: nejvýš 4 zlaté rekordy (bez „+ N dalších“), bez rekordu nejvýš 4 cviky
+    if (!img) {
+      const rowH = 66,
+        w = W - 2 * L;
+      const room = Math.min(4, Math.floor((footY - 116 - y) / rowH));
+      const list = D.recs.length ? D.recs : D.ex;
+      if (room >= 2 && list.length) {
+        shrText(ctx, D.recs.length ? X.recs : X.ex, L, y + 10, shrFont(600, 22, SHR_B), P.ink2, "left", 4);
+        list.slice(0, room).forEach((r, i) => {
+          const ry = y + 22 + i * rowH;
+          const by = ry + rowH * 0.64;
+          if (i) {
+            ctx.fillStyle = P.rowLine;
+            ctx.fillRect(L, ry, w, 2);
+          }
+          if (D.recs.length) {
+            const fv = shrFont(700, 36, SHR_D),
+              fN = shrFont(600, 29, SHR_B),
+              fT = shrFont(500, 25, SHR_B);
+            const vw = shrWidth(ctx, r.v, fv);
+            shrMedal(ctx, L, ry + rowH * 0.66 - 31, 36, r.gold);
+            const name = shrFit(ctx, r.ex, fN, w - vw - 260);
+            const nw = shrWidth(ctx, name, fN);
+            shrText(ctx, name, L + 52, by, fN, P.ink);
+            shrText(ctx, shrFit(ctx, r.t, fT, w - vw - 90 - nw), L + 52 + nw + 14, by, fT, P.ink3);
+            shrText(ctx, r.v, L + w, ry + rowH * 0.66, fv, P.gold, "right");
+          } else {
+            const fB = shrFont(700, 30, SHR_D),
+              fN = shrFont(600, 28, SHR_B),
+              fS = shrFont(500, 21, SHR_B);
+            const bw = shrWidth(ctx, r.best, fB);
+            const nx = L + (r.ss ? 22 : 0);
+            if (r.ss) {
+              // supersérie (F4-05): tyrkysový proužek
+              shrRect(ctx, L, ry + rowH * 0.2, 6, rowH * 0.6, 3);
+              ctx.fillStyle = "#14b8a6";
+              ctx.fill();
+            }
+            shrText(ctx, r.best, L + w, ry + rowH * 0.66, fB, P.ink, "right");
+            shrText(ctx, r.s + "×", L + w - bw - 22, by, fS, P.ink3, "right");
+            shrText(ctx, shrFit(ctx, r.n, fN, w - bw - 110 - (nx - L)), nx, by, fN, P.ink);
+          }
+        });
+      }
+    }
+    // podpis: logo a název appky
+    const ls = 56;
+    shrLogo(ctx, L, footY - ls / 2, ls);
+    shrText(ctx, "WORKOUT DENÍK", L + ls + 20, footY + 11, shrFont(700, 32, SHR_D), P.ink, "left", 3);
+    return cov;
+  }
+
+  /* panel „Sdílet trénink“ */
+  // načte písma obrázku (i znaky s háčky a čárkami), jinak by canvas kreslil náhradním písmem
+  let shrFontsOk = null;
+  function shrFonts() {
+    if (!shrFontsOk) {
+      const t = "AaŽžČčŘřŠšĚěŮůÍíÁáÉéÚúÝýŤťĎďŇň0123456789";
+      shrFontsOk = Promise.all(
+        [
+          shrFont(500, 40, SHR_B),
+          shrFont(600, 40, SHR_B),
+          shrFont(700, 40, SHR_B),
+          shrFont(700, 40, SHR_D),
+        ].map((f) => document.fonts.load(f, t)),
+      ).catch(() => null);
+    }
+    return shrFontsOk;
+  }
+  // výchozí motiv obrázku podle motivu appky
+  function shrAppTheme() {
+    const t = themePref();
+    if (t === "light" || t === "dark") return t;
+    return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  function shrPrefs() {
+    const p = Local.get("shr", {});
+    return {
+      fmt: p.fmt === "post" ? "post" : "story",
+      theme: p.theme === "light" || p.theme === "dark" ? p.theme : shrAppTheme(),
+      lang: p.lang === "en" ? "en" : "cs",
+      fig: !!p.fig,
+    };
+  }
+  function shrSavePrefs() {
+    Local.set("shr", { fmt: shr.fmt, theme: shr.theme, lang: shr.lang, fig: shr.fig });
+  }
+  // otevře panel pro trénink w (ze stránky tréninku F3-19, Zpět panel zavře a fotku zahodí přes closeSheet)
+  function shareOpen(w) {
+    if (shr && shr.img && shr.img.close) {
+      shr.img.close();
+    }
+    shr = Object.assign(
+      {
+        w,
+        nav: { lv: 1, back: closeSheet },
+        img: null,
+        fx: 0.5,
+        fy: 0.25,
+        zoom: 1,
+        blob: null,
+      },
+      shrPrefs(),
+    );
+    sheetShare();
+  }
+  // uvolní fotku (a náhled přes obrazovku) z paměti; volá se při zavření panelu i kroku zpět
+  function shrClose() {
+    if (shr && shr.img && shr.img.close) {
+      shr.img.close();
+    }
+    if (shrFullUrl) {
+      URL.revokeObjectURL(shrFullUrl);
+      shrFullUrl = "";
+    }
+    shr = null;
+  }
+  const shrSeg = (k, opts) =>
+    `<div class="seg seg-wide">
+      ${opts
+        .map(
+          ([v, l]) =>
+            `<button data-act="shrOpt" data-k="${k}" data-v="${v}" aria-pressed="${shr[k] === v}">` +
+            `${esc(l)}</button>`,
+        )
+        .join("")}
+    </div>`;
+  // řádek s fotkou (Android sám nabídne fotoaparát nebo galerii) a přepínacím tlačítkem Postava
+  function shrPhotoBtns() {
+    return (
+      (shr.img
+        ? `<label class="btn grow" for="shrPhotoIn">Změnit fotku</label>
+          <button class="btn grow" data-act="shrPhotoDel">Odebrat</button>`
+        : '<label class="btn grow" for="shrPhotoIn">Přidat fotku</label>') +
+      `<button class="btn grow shr-tog" data-act="shrFig" aria-pressed="${!!shr.fig}">Postava</button>`
+    );
+  }
+  function sheetShare(noanim) {
+    if (!shr) return;
+    shrInput();
+    // náhled vyplní místo nad ovládáním (panel má pevnou výšku, nic se neposouvá)
+    const b = `<div class="shr-prev"><canvas id="shrCv" class="shr-cv${shr.img ? " drag" : ""}"
+        width="${SHR_W}" height="${SHR_H[shr.fmt]}" aria-label="Náhled obrázku"></canvas></div>
+      ${shrSeg("fmt", [
+        ["post", "Příspěvek 4:5"],
+        ["story", "Příběh 9:16"],
+      ])}
+      <div class="shr-row">
+        ${shrSeg("theme", [
+          ["dark", "Tmavý"],
+          ["light", "Světlý"],
+        ])}
+        ${shrSeg("lang", [
+          ["cs", "CZ"],
+          ["en", "EN"],
+        ])}
+      </div>
+      <div class="shr-row" id="shrPh">${shrPhotoBtns()}</div>`;
+    openSheet(
+      "Sdílet trénink",
+      b,
+      `<button class="btn grow" data-act="shrSave">Uložit obrázek</button>
+      <button class="btn primary grow" data-act="shrShare">Sdílet</button>`,
+      noanim,
+      Object.assign({}, shr.nav, { re: () => sheetShare(true), cls: "shr" }),
+    );
+    shrRender();
+  }
+  // překreslí náhled (obrázek v plném rozlišení, na obrazovce zmenšený přes CSS)
+  let shrFrame = 0;
+  function shrRender() {
+    if (shrFrame) return;
+    shrFrame = requestAnimationFrame(async () => {
+      shrFrame = 0;
+      const c = document.getElementById("shrCv");
+      if (!c || !shr) return;
+      await shrFonts();
+      if (!shr) return;
+      shr.blob = null;
+      shr.cov = shrDraw(c.getContext("2d"), shrData(shr.w, shr.lang === "en"), shr);
+    });
+  }
+  // změna volby: přepne tlačítko a překreslí, panel se neotvírá znovu
+  function shrOpt(k, v) {
+    if (!shr) return;
+    shr[k] = v;
+    shrSavePrefs();
+    document
+      .querySelectorAll('[data-act="shrOpt"][data-k="' + k + '"]')
+      .forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
+    shrRender();
+  }
+  // políčko pro výběr fotky je mimo panel (jako photoInputs), aby přežilo překreslení
+  function shrInput() {
+    if (document.getElementById("shrPhotoIn")) return;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<input type="file" id="shrPhotoIn" accept="image/*" hidden>',
+    );
+  }
+  /* vybraná fotka: v plném rozlišení (kvůli ostrosti při přiblížení), jen obří fotky (50 Mpx a víc)
+     se zmenší na SHR_PH_MAX px, aby Chrome nedošla paměť; otočená podle EXIF, jen v paměti */
+  const SHR_PH_MAX = 4096;
+  async function shrPhoto(input) {
+    const f = input.files && input.files[0];
+    input.value = "";
+    if (!f || !shr) return;
+    let bmp;
+    try {
+      bmp = await createImageBitmap(f, { imageOrientation: "from-image" });
+    } catch (e) {
+      try {
+        bmp = await createImageBitmap(f);
+      } catch (e2) {
+        toast("Fotku se nepodařilo načíst.", "err");
+        return;
+      }
+    }
+    const k = Math.min(1, SHR_PH_MAX / Math.max(bmp.width, bmp.height));
+    if (k < 1) {
+      const small = await createImageBitmap(bmp, {
+        resizeWidth: Math.round(bmp.width * k),
+        resizeHeight: Math.round(bmp.height * k),
+        resizeQuality: "high",
+      });
+      bmp.close();
+      bmp = small;
+    }
+    if (!shr) {
+      bmp.close();
+      return;
+    }
+    if (shr.img && shr.img.close) {
+      shr.img.close();
+    }
+    shr.img = bmp;
+    shr.fx = 0.5;
+    shr.fy = 0.25;
+    shr.zoom = 1;
+    shrPhotoUi();
+  }
+  function shrPhotoDel() {
+    if (!shr) return;
+    if (shr.img && shr.img.close) {
+      shr.img.close();
+    }
+    shr.img = null;
+    shrPhotoUi();
+  }
+  // po změně fotky: tlačítka a posouvání v náhledu
+  function shrPhotoUi() {
+    const ph = document.getElementById("shrPh"),
+      c = document.getElementById("shrCv");
+    if (ph) {
+      ph.innerHTML = shrPhotoBtns();
+    }
+    if (c) {
+      c.classList.toggle("drag", !!shr.img);
+    }
+    shrRender();
+  }
+  /* gesta v náhledu: jeden prst posouvá výřez fotky, dva prsty přibližují (kolem místa mezi prsty),
+     klepnutí otevře celý obrázek přes obrazovku, dvojí klepnutí vrátí fotku do výchozí velikosti a polohy */
+  const shrPt = new Map(); // prsty na náhledu: pointerId → {x, y}
+  let shrGest = null; // začátek gesta: {fx, fy, zoom, x, y, d (vzdálenost prstů), moved}
+  let shrTapAt = 0,
+    shrTapTimer = 0;
+  // bod náhledu v px obrázku
+  function shrCanvasPt(c, x, y) {
+    const r = c.getBoundingClientRect();
+    return { x: ((x - r.left) * SHR_W) / r.width, y: ((y - r.top) * SHR_W) / r.width };
+  }
+  // střed mezi prsty (u jednoho prstu prst) a jejich vzdálenost
+  function shrPtMid() {
+    const ps = [...shrPt.values()];
+    if (ps.length < 2) return { x: ps[0].x, y: ps[0].y, d: 0 };
+    return {
+      x: (ps[0].x + ps[1].x) / 2,
+      y: (ps[0].y + ps[1].y) / 2,
+      d: Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y),
+    };
+  }
+  // výchozí stav gesta (znovu i po přidání nebo zvednutí prstu); moved a t zůstávají z celého dotyku
+  function shrGestStart() {
+    const m = shrPtMid();
+    shrGest = {
+      fx: shr.fx,
+      fy: shr.fy,
+      zoom: shr.zoom,
+      cov: shr.cov,
+      x: m.x,
+      y: m.y,
+      d: m.d,
+      moved: shrGest ? shrGest.moved : false,
+      t: shrGest ? shrGest.t : Date.now(),
+    };
+  }
+  document.addEventListener("pointerdown", (ev) => {
+    if (!shr || ev.target.id !== "shrCv") return;
+    shrPt.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    ev.target.setPointerCapture(ev.pointerId);
+    if (shrPt.size === 1) {
+      shrGest = null;
+    }
+    shrGestStart();
+  });
+  document.addEventListener("pointermove", (ev) => {
+    if (!shrPt.has(ev.pointerId) || !shr || !shrGest) return;
+    shrPt.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const c = document.getElementById("shrCv");
+    const g = shrGest,
+      cov = g.cov;
+    const mid = shrPtMid();
+    if (Math.hypot(mid.x - g.x, mid.y - g.y) > 8 || shrPt.size > 1) {
+      g.moved = true;
+    }
+    if (!c || !shr.img || !cov || !g.moved) return;
+    // nové přiblížení podle roztažení prstů
+    let zoom = g.zoom;
+    if (mid.d > 0 && g.d > 0) {
+      zoom = Math.max(1, Math.min(cov.zMax, (g.zoom * mid.d) / g.d));
+    }
+    // bod fotky, který byl na začátku pod prsty, zůstane pod prsty
+    const W = SHR_W,
+      H = SHR_H[shr.fmt] || SHR_H.story;
+    const img = shr.img;
+    const k0 = Math.max(W / img.width, H / img.height);
+    const a = shrCanvasPt(c, g.x, g.y),
+      b = shrCanvasPt(c, mid.x, mid.y);
+    const srcX = cov.slackX * g.fx + a.x / cov.k,
+      srcY = cov.slackY * g.fy + a.y / cov.k;
+    const k = k0 * zoom;
+    const slackX = img.width - W / k,
+      slackY = img.height - H / k;
+    const clamp = (v) => Math.max(0, Math.min(1, v));
+    shr.zoom = zoom;
+    shr.fx = slackX > 0 ? clamp((srcX - b.x / k) / slackX) : 0.5;
+    shr.fy = slackY > 0 ? clamp((srcY - b.y / k) / slackY) : 0.5;
+    shrRender();
+  });
+  const shrGestEnd = (ev) => {
+    if (!shrPt.has(ev.pointerId)) return;
+    shrPt.delete(ev.pointerId);
+    const g = shrGest;
+    if (shrPt.size) {
+      // zbyl jeden prst: pokračuje posun od aktuálního stavu
+      shrGestStart();
+      return;
+    }
+    shrGest = null;
+    if (!g || g.moved || ev.type === "pointercancel" || Date.now() - g.t > 500 || !shr) return;
+    // klepnutí: s fotkou počká, jestli nepřijde druhé (dvojí klepnutí = výchozí velikost)
+    clearTimeout(shrTapTimer);
+    if (shr.img && Date.now() - shrTapAt < 320) {
+      shrTapAt = 0;
+      shr.zoom = 1;
+      shr.fx = 0.5;
+      shr.fy = 0.25;
+      shrRender();
+      return;
+    }
+    shrTapAt = Date.now();
+    shrTapTimer = setTimeout(shrFull, shr.img ? 320 : 0);
+  };
+  document.addEventListener("pointerup", shrGestEnd);
+  document.addEventListener("pointercancel", shrGestEnd);
+  /* celý obrázek přes obrazovku (jako prohlížení fotek u cviku), Zpět vrátí panel */
+  async function shrFull() {
+    if (!shr || !document.getElementById("shrCv")) return;
+    const f = await shrFile();
+    if (!f || !shr) return;
+    shrFullUrl = URL.createObjectURL(f);
+    kkEnd();
+    document.getElementById("sheetRoot").innerHTML =
+      `<div class="pv shr-full" role="dialog" aria-modal="true" aria-label="Náhled obrázku">
+      <div class="pv-h">
+        <button class="iconbtn" data-act="shrFullBack" aria-label="Zpět">${IC.back}</button>
+        <b>Náhled obrázku</b>
+      </div>
+      <div class="shr-full-b" data-act="shrFullBack"><img src="${shrFullUrl}" alt="Obrázek tréninku"></div>
+      <div class="pv-f row">
+        <button class="btn grow" data-act="shrSave">Uložit obrázek</button>
+        <button class="btn primary grow" data-act="shrShare">Sdílet</button>
+      </div>
+    </div>`;
+    document.body.style.overflow = "hidden";
+    sheetNav = { lv: shr.nav.lv + 1, back: shrFullClose, re: shrFull };
+  }
+  function shrFullClose() {
+    if (shrFullUrl) {
+      URL.revokeObjectURL(shrFullUrl);
+      shrFullUrl = "";
+    }
+    sheetShare(true);
+  }
+  // hotový obrázek jako PNG soubor (připravený se pamatuje do další změny)
+  async function shrFile() {
+    const c = document.getElementById("shrCv");
+    if (!shr || (!c && !shr.blob)) return null;
+    if (!shr.blob) {
+      shr.blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+    }
+    if (!shr.blob) return null;
+    const d = new Date(shr.w.start);
+    const name = FILE_P + "-trenink-" + d.getFullYear() + "-" + d2(d.getMonth() + 1) + "-" + d2(d.getDate());
+    return new File([shr.blob], name + ".png", { type: "image/png" });
+  }
+  async function shrSave() {
+    const f = await shrFile();
+    if (!f) return;
+    await LocalDownloads.save({ filename: f.name, data: f, type: "image/png" });
+    toast("Obrázek uložen do Stažených souborů");
+  }
+  // sdílení přes systémovou nabídku; kde nejde, obrázek se uloží
+  async function shrShare() {
+    const f = await shrFile();
+    if (!f) return;
+    if (!navigator.canShare || !navigator.canShare({ files: [f] })) {
+      toast("Sdílení tady nejde, obrázek se uloží.");
+      shrSave();
+      return;
+    }
+    try {
+      await navigator.share({ files: [f] });
+    } catch (e) {
+      if (e && e.name === "NotAllowedError") {
+        // příprava obrázku trvala moc dlouho; podruhé je hotový a sdílení se otevře hned
+        toast("Klepni na Sdílet ještě jednou.");
+      }
+    }
+  }
+
+  /* ---------- KALENDÁŘ (F3-06) ----------
+     Historie → Kalendář: měsíc, kolečko v barvě fitka, pod ním název tréninku (víc tréninků = kolečko
+     rozdělené na barvy a „2×“), tečka = měření v Tělo, čárkované kolečko = rozdělaný trénink.
+     Filtr fitek skryje tréninky z jiných fitek, streak a volné dny se počítají vždy ze všech fitek.
+     Otevře se vždy aktuální měsíc (S.calM = 0), přepíná se šipkami nebo swipem.
+     Dnešek a budoucí dny bez záznamu otevřou panel Naplánovat, naplánovaný den panel plánu (F4-07, popis
+     v sekci PLÁNOVANÉ TRÉNINKY); vCal(all, list, mv) s mv = stránka Přeplánovat.
+     Historie má přepínač S.histView (cal výchozí / list, Local histView). vCal vykreslí měsíc S.calM (0 =
+     aktuální, goTab("hist") ho vynuluje; calShift, swipe na [data-cal]). Tréninky podle dne wByDay (klíč
+     dayKey, použít i pro heatmapu F3-07), měření bodyByDay, streak calStreak, volné dny calRest. Klepnutí
+     sheetCalDay: jedna věc rovnou, víc = výběr, z něj stránka tréninku openWorkout (Zpět výběr znovu otevře
+     přes navFrame) nebo sheetBody s nav zpět do výběru. */
+  const dayKey = (t) => {
+    const d = new Date(t);
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  };
+  const dayStart = (t) => new Date(t).setHours(0, 0, 0, 0);
+  // tréninky podle dne (klíč dayKey), v rámci dne od nejstaršího; poslouží i roční heatmapě (F3-07)
+  function wByDay(ws) {
+    const m = {};
+    for (const w of ws) {
+      (m[dayKey(w.start)] = m[dayKey(w.start)] || []).push(w);
+    }
+    for (const k in m) {
+      m[k].sort((a, b) => a.start - b.start);
+    }
+    return m;
+  }
+  function bodyByDay() {
+    const m = {};
+    for (const [id, b] of Object.entries(S.body || {})) {
+      (m[dayKey(b.date)] = m[dayKey(b.date)] || []).push(Object.assign({ id }, b));
+    }
+    return m;
+  }
+  // týdny po sobě (po–ne) aspoň s jedním tréninkem; rozběhnutý týden bez tréninku řadu nepřeruší
+  function calStreak(all) {
+    const wk = new Set(all.map((w) => startOfWeek(w.start)));
+    let t = startOfWeek(Date.now()),
+      n = 0;
+    if (!wk.has(t)) {
+      t = startOfWeek(t - 3 * DAY);
+    }
+    while (wk.has(t)) {
+      n++;
+      t = startOfWeek(t - 3 * DAY);
+    } // −3 dny a zpět na pondělí: bez chyby při změně času
+    return n;
+  }
+  // dny od posledního tréninku (dnes cvičil nebo rozdělaný trénink = 0, bez tréninků null)
+  function calRest(all) {
+    if (S.active) return 0;
+    if (!all.length) return null;
+    return Math.round((dayStart(Date.now()) - dayStart(all[0].start)) / DAY);
+  }
+  const calMonth = () => {
+    const n = new Date();
+    return S.calM || new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+  };
+  const calMonthName = (d) => MONTHS_FULL[d.getMonth()].replace(/^./, (c) => c.toUpperCase());
+  // mv = den plánu, který se přeplánovává (stránka Přeplánovat, F4-07): bez souhrnů, volné dny od dneška jdou vybrat
+  function vCal(all, list, mv) {
+    const m0 = new Date(calMonth()),
+      y = m0.getFullYear(),
+      mo = m0.getMonth(),
+      now = new Date();
+    const byDay = wByDay(list),
+      byAll = wByDay(all),
+      bDay = bodyByDay();
+    const today = dayKey(now),
+      endToday = dayStart(now) + DAY,
+      first = all.length ? dayStart(all[all.length - 1].start) : endToday; // volné dny až od prvního tréninku
+    const act = !mv && S.active && (S.histGym === "all" || S.active.gymId === S.histGym) ? S.active : null;
+    const streak = calStreak(all),
+      rest = calRest(all);
+    const startToday = dayStart(now);
+    // dny od posledního tréninku, v den tréninku „Dnes trénink“ (F3-24)
+    const restNum = rest == null ? "–" : rest === 0 ? "Dnes" : rest;
+    const restTxt =
+      rest === 0 ? "trénink" : (rest == null ? "dní" : plural(rest, "den", "dny", "dní")) + " od tréninku";
+    let h = "";
+    // Přeplánovat (mv): jen kalendář, bez dlaždic a souhrnu měsíce
+    if (!mv) {
+      h +=
+        `<div class="kpis cal-k">
+        <div class="kpi">
+          <b>${icon("flame", "flame")}${streak}</b>
+          <span>${plural(streak, "týden", "týdny", "týdnů")} v řadě</span>
+        </div>
+        <div class="kpi">
+          <b>${restNum}</b>` +
+        `<span>${restTxt}</span>
+        </div>
+      </div>`;
+    }
+    const isNow = y === now.getFullYear() && mo === now.getMonth();
+    h +=
+      `<div class="card cal${mv ? " mv" : ""}" data-cal="1">
+      <div class="cal-nav">
+        <button class="iconbtn" data-act="calM" data-v="-1" aria-label="Předchozí měsíc">
+          ${IC.back}
+        </button>
+        ${
+          isNow
+            ? '<b class="cal-t">'
+            : '<button class="cal-t" data-act="calM" data-v="0" title="Zpět na aktuální měsíc">'
+        }` +
+      `${calMonthName(m0)} ${y}${isNow ? "</b>" : icon("today") + "</button>"}
+        <button class="iconbtn" data-act="calM" data-v="1" aria-label="Další měsíc">${IC.next}</button>
+      </div>`;
+    h += `<div class="cal-g">
+      ${["po", "út", "st", "čt", "pá", "so", "ne"].map((d) => `<div class="cal-wd">${d}</div>`).join("")}`;
+    for (let i = (m0.getDay() + 6) % 7; i > 0; i--) {
+      h += "<div></div>";
+    }
+    const dim = new Date(y, mo + 1, 0).getDate();
+    let nW = 0,
+      nRest = 0,
+      nBody = 0;
+    for (let d = 1; d <= dim; d++) {
+      const t = new Date(y, mo, d).getTime(),
+        k = dayKey(t),
+        ws = byDay[k] || [],
+        fut = t >= endToday,
+        bs = bDay[k] || [],
+        a = act && k === today ? act : null;
+      if (!fut && t >= first && !byAll[k] && !(S.active && k === today)) {
+        nRest++;
+      }
+      nW += ws.length;
+      if (bs.length) {
+        nBody++;
+      }
+      let cls = "cal-c",
+        st = "";
+      if (ws.length) {
+        cls += " on";
+        const c = ws.map((w) => gymColor(w.gymId));
+        st =
+          c.length > 1
+            ? "background:conic-gradient(" +
+              c
+                .map(
+                  (x, i) =>
+                    x +
+                    " " +
+                    Math.round((i * 100) / c.length) +
+                    "% " +
+                    Math.round(((i + 1) * 100) / c.length) +
+                    "%",
+                )
+                .join(",") +
+              ")"
+            : "background:" + c[0];
+      } else if (a) {
+        cls += " act";
+        st = "border-color:" + gymColor(a.gymId);
+      }
+      // plán (F4-07): jen nesplněný, dnes a dál; kolečko obrysem v barvě fitka, název šablony šedě
+      let pl = t >= startToday ? planOf(k) : null;
+      if (pl && planDone(k, pl, all)) {
+        pl = null;
+      }
+      if (pl && !ws.length && !a) {
+        cls += " plan";
+        st = "border-color:" + (pl.gymId ? gymColor(pl.gymId) : "var(--ink-3)");
+      }
+      const lab = ws.length > 1 ? ws.length + "×" : ws.length ? ws[0].title : a ? a.title : "";
+      const plLab = pl && !lab ? pl.t.name : "";
+      const aria =
+        fmtDay(t) +
+        (ws.length ? ": " + ws.map((w) => w.title).join(", ") : "") +
+        (bs.length ? ", měření" : "") +
+        (a ? ", rozdělaný trénink" : "") +
+        (pl ? ", naplánováno: " + pl.t.name : "");
+      const off = ' tabindex="-1" aria-disabled="true"';
+      // Přeplánovat: jen volné dny od dneška; jinak plán, tréninky a měření, prázdný den od dneška = Naplánovat
+      const tap = mv
+        ? t < startToday || S.plan[k]
+          ? off
+          : ` data-act="planMove" data-v="${k}"`
+        : pl && !ws.length && !bs.length && !a
+          ? ` data-act="planDay" data-v="${k}"`
+          : a && !ws.length && !bs.length
+            ? ' data-act="calActive"'
+            : ws.length || bs.length
+              ? ` data-act="calDay" data-v="${k}"`
+              : t >= startToday
+                ? ` data-act="planNew" data-v="${k}"`
+                : off;
+      const offCls = mv && tap === off ? " off" : "";
+      h +=
+        `<button class="cal-d${k === today ? " today" : ""}${fut ? " fut" : ""}${pl ? " pl" : ""}${offCls}"${tap}
+          aria-label="${esc(aria)}">
+        <span class="${cls}"${st ? ` style="${st}"` : ""}>${d}` +
+        `${bs.length ? '<i class="cal-b"></i>' : ""}</span>
+        ${lab ? `<span class="cal-l">${esc(lab)}</span>` : ""}
+        ${plLab ? `<span class="cal-l pl">${esc(plLab)}</span>` : ""}
+      </button>`;
+    }
+    h += "</div></div>";
+    if (mv) return h;
+    h +=
+      `<div class="small muted num cal-sum">
+      ${calMonthName(m0)}: <b>${nW}</b> ${plural(nW, "trénink", "tréninky", "tréninků")}` +
+      `${S.histGym !== "all" ? " (" + esc(gymName(S.histGym)) + ")" : ""} · <b>${nRest}</b> ` +
+      `${plural(nRest, "volný den", "volné dny", "volných dnů")}` +
+      `${
+        nBody
+          ? ` · <i class="cal-b"></i> <b>${nBody}</b> ${plural(nBody, "den", "dny", "dní")} s měřením`
+          : ""
+      }
+    </div>`;
+    return h;
+  }
+  // klepnutí na den: jedna věc se otevře rovnou, víc (tréninky, měření) = výběr
+  function sheetCalDay(k, noanim) {
+    const ws = wByDay(derive().all.filter((w) => S.histGym === "all" || w.gymId === S.histGym))[k] || [],
+      bs = bodyByDay()[k] || [];
+    // nesplněný plán dne (F4-07): dnes s tréninkem nebo měřením je ve výběru jako další položka
+    let pl = planDay(k) >= dayStart(Date.now()) ? planOf(k) : null;
+    if (pl && planDone(k, pl, derive().all)) {
+      pl = null;
+    }
+    if (!ws.length && !bs.length) {
+      if (pl) {
+        sheetPlanDay(k, noanim);
+      } else {
+        closeSheet();
+      }
+      return;
+    }
+    if (ws.length + bs.length === 1 && !pl) {
+      if (ws.length) {
+        openWorkout(ws[0]);
+      } else {
+        sheetBody(bs[0].id);
+      }
+      return;
+    }
+    let b = '<div class="stack list">';
+    for (const w of ws) {
+      b += `<button class="hw" data-act="calW" data-v="${esc(w.id)}" data-m="${w.mk}" data-k="${k}">
+        <div class="row">
+          <h3 class="grow">${esc(w.title)}</h3>
+          ${w.gymId ? gymPill(w.gymId) : ""}
+        </div>
+        <div class="line num">
+          <span>${fmtTime(w.start)}</span>
+          ${durLabel(w)}
+          <span>${fmtInt(wVol(w))} kg</span>
+          <span>${wSets(w)} sérií</span>
+        </div>
+      </button>`;
+    }
+    for (const x of bs) {
+      b += `<button class="hw" data-act="calBody" data-v="${esc(x.id)}" data-k="${k}">
+        <div class="row"><h3 class="grow"><i class="cal-b"></i> Měření</h3></div>
+        <div class="line num">
+          ${BODY_F.filter(([f]) => x[f] !== undefined && x[f] !== null && x[f] !== "")
+            .slice(0, 3)
+            .map(([f, l, u]) => `<span>${esc(l)} <b>${fmtKg(+x[f])}</b> ${esc(u)}</span>`)
+            .join("")}
+        </div>
+      </button>`;
+    }
+    if (pl) {
+      b += `<button class="hw" data-act="calPlan" data-k="${k}">
+        <div class="row">
+          <h3 class="grow">${esc(pl.t.name)}</h3>
+          ${pl.gymId ? gymPill(pl.gymId) : ""}
+        </div>
+        <div class="line"><span>Naplánovaný trénink</span></div>
+      </button>`;
+    }
+    const d = new Date(ws.length ? ws[0].start : bs[0].date);
+    openSheet(fmtDay(d.getTime()) + " " + d.getFullYear(), `${b}</div>`, null, noanim);
+  }
+  function calShift(v) {
+    if (!v) {
+      S.calM = 0;
+    } else {
+      const m = new Date(calMonth());
+      S.calM = new Date(m.getFullYear(), m.getMonth() + v, 1).getTime();
+    }
+    scheduleRender();
+  }
+  // swipe doleva/doprava po kalendáři přepne měsíc
+  {
+    let x0 = null,
+      y0 = 0;
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        x0 =
+          e.touches.length === 1 && e.target.closest && e.target.closest("[data-cal]")
+            ? e.touches[0].clientX
+            : null;
+        if (x0 != null) {
+          y0 = e.touches[0].clientY;
+        }
+      },
+      { passive: true },
+    );
+    document.addEventListener(
+      "touchend",
+      (e) => {
+        if (x0 == null) return;
+        const t = e.changedTouches[0],
+          dx = t.clientX - x0,
+          dy = t.clientY - y0;
+        x0 = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          calShift(dx < 0 ? 1 : -1);
+        }
+      },
+      { passive: true },
+    );
+  }
+
+  /* ---------- PLÁNOVANÉ TRÉNINKY (F4-07) ----------
+     Na den (dnes a dál) jde naplánovat jednu šablonu i s fitkem. Plán je v dokumentu config/plan
+     ({items: {dayKey: {tplId, gymId}}}, S.plan), v záloze nepovinné pole "plan" (starší zálohy ho nemají).
+     Historie → Kalendář: klepnutí na dnešek nebo budoucí den bez plánu otevře panel Naplánovat (sheetPlan: čipy
+     fitek, šablony fitka, ostatní po tlačítku, klepnutí na šablonu plán uloží; pevná výška jako výběr cviků, aby
+     čipy při přepnutí fitka neposkakovaly). Naplánovaný den má kolečko jen obrysem
+     v barvě fitka a pod ním název šablony (plné kolečko = odcvičeno, čárkované = rozdělaný trénink); plány se ukazují
+     i s filtrem fitek. Klepnutí na naplánovaný den = panel plánu (sheetPlanDay): Začít trénink (jen dnes), Změnit
+     šablonu nebo fitko, Přeplánovat, Zrušit plán (neutrální, plán jde vytvořit znovu, bez potvrzení).
+     Přeplánovat = stránka se šipkou ← (route replan, S.replan = den plánu): kalendář vCal v režimu výběru, minulé
+     dny a dny s plánem zešedlé, klepnutí na volný den plán přesune a vrátí do Historie (planMove), ← nic nemění.
+     Záložka Trénink: v naplánovaný den pod Začít prázdný trénink sekce „Naplánovaný trénink“ s kartou šablony
+     (tplCard se štítkem fitka plánu, když je vybrané jiné fitko); šablona zůstává i v seznamu Šablony. Fitko z plánu
+     je předvybrané (curGym), dokud ho nezměníš. Začít z plánu (klepnutí na kartu) začne ve fitku plánu,
+     ⋯ na kartě = panel plánu (sheetPlanDay s home, F2-13).
+     Plán platí jen se šablonou, která existuje a není skrytá (planOf). Splněný plán (ten den trénink z té šablony,
+     planDone) se na úvodu ani v kalendáři neukazuje. Zmeškané plány a plány smazaných nebo skrytých šablon maže
+     planClean (při startu a při každém zápisu plánu); smazané fitko = plán bez fitka. Opakování plánů ne. */
+  // den z klíče dayKey ("2026-10-12") jako čas začátku dne
+  function planDay(k) {
+    const [y, m, d] = String(k).split("-").map(Number);
+    return new Date(y, m - 1, d).getTime();
+  }
+  // doplní a vyčistí plány (načtení, záloha): jen platné klíče dne a id šablony
+  function planNorm(items) {
+    const out = {};
+    for (const [k, p] of Object.entries(items || {})) {
+      if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(k) || !p || typeof p.tplId !== "string") continue;
+      out[k] = { tplId: p.tplId, gymId: typeof p.gymId === "string" ? p.gymId : null };
+    }
+    return out;
+  }
+  // platný plán dne (šablona existuje a není skrytá), jinak null; smazané fitko = bez fitka
+  function planOf(k) {
+    const p = S.plan[k];
+    const t = p && S.templates[p.tplId];
+    if (!t || t.hidden) return null;
+    return { tplId: p.tplId, gymId: gymOn(p.gymId) ? p.gymId : null, t }; // archivované = bez fitka (F2-06)
+  }
+  // splněný plán: ten den už je trénink z naplánované šablony
+  function planDone(k, p, all) {
+    return all.some((w) => w.tplId === p.tplId && dayKey(w.start) === k);
+  }
+  // dnešní nesplněný plán (pro úvod a předvybrané fitko), jinak null
+  function planToday() {
+    const k = dayKey(Date.now());
+    const p = planOf(k);
+    if (!p || planDone(k, p, derive().all)) return null;
+    return p;
+  }
+  // smaže zmeškané plány a plány šablon, které už nejdou začít; zapisuje jen při změně
+  function planClean() {
+    const today = dayStart(Date.now());
+    const items = {};
+    let gone = false;
+    for (const [k, p] of Object.entries(S.plan)) {
+      if (planDay(k) < today || !planOf(k)) {
+        gone = true;
+      } else {
+        items[k] = p;
+      }
+    }
+    if (gone) {
+      put("config/plan", { items });
+    }
+  }
+  // uloží (p = {tplId, gymId}) nebo smaže (p = null) plán dne k
+  function planSet(k, p) {
+    const items = Object.assign({}, S.plan);
+    if (p) {
+      items[k] = { tplId: p.tplId, gymId: p.gymId || null };
+    } else {
+      delete items[k];
+    }
+    put("config/plan", { items });
+    planClean();
+  }
+  let planGym = null, // fitko vybrané v panelu Naplánovat
+    planOther = false, // ukázané ostatní šablony v panelu Naplánovat
+    planBack = false, // panel Naplánovat otevřený z panelu plánu (Zpět se do něj vrátí)
+    planFromList = false, // panel plánu otevřený z výběru dne v kalendáři (Zpět se do něj vrátí)
+    planHome = false; // panel plánu otevřený přes ⋯ na úvodu (F2-13)
+  // nadpis panelu dne: „Dnes · po 12. 10.“ nebo „st 14. 10.“
+  const planTitle = (k) => (k === dayKey(Date.now()) ? "Dnes · " : "") + fmtDay(planDay(k));
+  /* panel Naplánovat: čipy fitek, šablony vybraného fitka, ostatní po tlačítku; klepnutí na šablonu plán uloží.
+     fresh = nové otevření (fitko z plánu dne, jinak vybrané fitko; back = z panelu plánu), jinak překreslení */
+  function sheetPlan(k, fresh, back, noanim) {
+    if (fresh) {
+      const p = planOf(k);
+      planGym = p && p.gymId ? p.gymId : curGym();
+      planOther = false;
+      planBack = !!back;
+      delete CK.planGym; // čipy fitek od začátku, vybrané fitko se posune do zorného pole
+    }
+    const tpls = tplVisible();
+    const here = tpls.filter(([, t]) => tplHere(t, planGym));
+    const other = tpls.filter(([, t]) => !tplHere(t, planGym));
+    const row = ([id, t]) =>
+      `<button class="hw" data-act="planPick" data-v="${id}" data-k="${k}">
+        <div class="row"><h3 class="grow">${esc(t.name)}</h3></div>
+        <div class="line"><span>${esc((t.items || []).map((i) => exName(i.exId)).join(", "))}</span></div>
+      </button>`;
+    let b = '<div class="stack">';
+    if (gymsOn().length > 1) {
+      b += `<div class="chips" data-ck="planGym">
+        ${gymsOn()
+          .map(
+            (g) =>
+              `<button class="chip" data-act="planGym" data-v="${g.id}" data-k="${k}"
+                  aria-pressed="${planGym === g.id}">
+                <span class="sw" style="background:${gymColor(g.id)}"></span>
+                ${esc(g.name)}
+              </button>`,
+          )
+          .join("")}
+      </div>`;
+    }
+    if (!tpls.length) {
+      b += '<div class="empty">Zatím žádné šablony. Vytvoř si je na záložce Trénink.</div>';
+    } else if (!here.length && !planOther) {
+      planOther = true; // bez šablon pro fitko rovnou ostatní (jako na úvodu)
+    }
+    if (here.length) {
+      b += `<div class="stack list">${here.map(row).join("")}</div>`;
+    }
+    if (other.length && !planOther) {
+      b += `<button class="btn block" data-act="planOther" data-k="${k}">Ostatní šablony</button>`;
+    } else if (other.length) {
+      b += `<div class="subh">Ostatní šablony</div>
+        <div class="stack list">${other.map(row).join("")}</div>`;
+    }
+    b += "</div>";
+    const root = document.getElementById("sheetRoot");
+    saveChipScroll(root); // překreslení po výběru fitka: čipy zůstanou posunuté jako předtím
+    // pevná výška panelu (třída plan): čipy fitek při přepnutí fitka neposkakují
+    const nav = planBack
+      ? { lv: planFromList ? 3 : 2, back: () => sheetPlanDay(k, true, planFromList, planHome), cls: "plan" }
+      : { cls: "plan" };
+    openSheet("Naplánovat · " + planTitle(k), b, null, noanim, nav);
+    restoreChipScroll(root);
+  }
+  // panel naplánovaného dne: karta šablony, Začít (jen dnes), Změnit, Přeplánovat, Zrušit plán;
+  // fromList = otevřený z výběru dne (den s tréninkem nebo měřením), Zpět se do výběru vrátí;
+  // home = ⋯ u naplánovaného tréninku na úvodu (F2-13): bez karty a Začít, navíc Upravit šablonu
+  function sheetPlanDay(k, noanim, fromList, home) {
+    planFromList = !!fromList;
+    planHome = !!home;
+    const p = planOf(k);
+    if (!p) {
+      closeSheet();
+      return;
+    }
+    const t = p.t;
+    if (home) {
+      openSheet(
+        "Naplánovaný trénink · " + t.name,
+        `<div class="stack">
+          <button class="btn block" data-act="editTpl" data-v="${p.tplId}">Upravit šablonu</button>
+          <button class="btn block" data-act="planChange" data-v="${k}">Změnit šablonu nebo fitko</button>
+          <button class="btn block" data-act="planReplan" data-v="${k}">Přeplánovat</button>
+          <button class="btn block" data-act="planDel" data-v="${k}">Zrušit plán</button>
+        </div>`,
+        null,
+        noanim,
+      );
+      return;
+    }
+    const today = k === dayKey(Date.now());
+    const body = `<div class="card tpl">
+        ${tplHead(t.name, p.gymId ? [p.gymId] : [])}
+        <p>${esc((t.items || []).map((i) => exName(i.exId)).join(", "))}</p>
+      </div>`;
+    const foot = `<div class="stack list" style="width:100%">
+        ${today ? `<button class="btn primary full" data-act="planStart" data-v="${k}">Začít trénink</button>` : ""}
+        <button class="btn full" data-act="planChange" data-v="${k}">Změnit šablonu nebo fitko</button>
+        <button class="btn full" data-act="planReplan" data-v="${k}">Přeplánovat</button>
+        <button class="btn full" data-act="planDel" data-v="${k}">Zrušit plán</button>
+      </div>`;
+    openSheet(
+      planTitle(k),
+      body,
+      foot,
+      noanim,
+      fromList ? { lv: 2, back: () => sheetCalDay(k, true) } : null,
+    );
+  }
+  // začne naplánovaný trénink ve fitku plánu (během tréninku se zeptá jako Začít u šablony)
+  function planStart(k) {
+    const p = planOf(k);
+    if (!p) return;
+    closeSheet();
+    if (p.gymId) {
+      S.selGym = p.gymId;
+    }
+    if (S.active) {
+      sheetRun({ tpl: p.tplId });
+      return;
+    }
+    startWorkout(p.tplId);
+  }
+  // stránka Přeplánovat: kalendář v režimu výběru dne (vCal s mv)
+  function planReplan(k) {
+    const f = navFrame();
+    closeSheet();
+    S.nav.push(f); // Zpět (←) vrátí do Historie s otevřeným panelem plánu
+
+    S.replan = k;
+    S.planNew = null;
+    go("replan");
+  }
+  // S.planNew = Naplánovat šablonu z panelu šablony (F2-13): stejný kalendář, klepnutí na den plán vytvoří
+  function vReplan() {
+    const nw = S.planNew,
+      nt = nw && S.templates[nw.tplId];
+    const p = nw ? nt && !nt.hidden && { t: nt, gymId: nw.gymId } : S.replan && planOf(S.replan);
+    if (!p) {
+      // plán nebo šablona mezitím zmizely: zpět do Historie
+      S.route = "hist";
+      S.nav = [];
+      S.planNew = null;
+      return vHist();
+    }
+    const sub = p.t.name + (p.gymId ? " · " + gymName(p.gymId) : "");
+    let h = topbar(
+      nw ? "Naplánovat" : "Přeplánovat",
+      sub,
+      `<button class="iconbtn" data-act="wBack" aria-label="Zpět">${IC.back}</button>`,
+    );
+    const { all } = derive();
+    return h + vCal(all, all, true);
+  }
+  // přesune plán ze dne S.replan na den k (Naplánovat: vytvoří plán S.planNew) a vrátí se, odkud se přišlo
+  function planMove(k) {
+    if (S.plan[k] || planDay(k) < dayStart(Date.now())) return;
+    if (S.planNew) {
+      planSet(k, S.planNew);
+      S.planNew = null;
+      planBackFrom();
+      toast("Naplánováno na " + fmtDay(planDay(k)));
+      return;
+    }
+    const from = S.replan,
+      p = S.plan[from];
+    if (!p) return;
+    const items = Object.assign({}, S.plan);
+    delete items[from];
+    items[k] = p;
+    put("config/plan", { items });
+    planBackFrom();
+    toast("Přeplánováno na " + fmtDay(planDay(k)));
+  }
+  // ze stránky Přeplánovat / Naplánovat zpět, odkud se přišlo, bez znovu otevřeného panelu
+  function planBackFrom() {
+    const f = S.nav[S.nav.length - 1];
+    if (f) {
+      f.re = null;
+    }
+    navBack();
+  }
+
+  /* ---------- STATISTIKY (F3-13) ----------
+     Statistiky (F3-13): route stats, vStats vykreslí přepínač částí STATS_PARTS nad filtrem fitek a jednu
+     část: statsOver (Přehled), statsMus (Partie), statsEx (Cviky). Otevřená část S.statsPart
+     (Local statsPart, výchozí over, akce statsPart posune nahoru). Fitko S.statsGym a období S.statsRange
+     jsou společné pro všechny části. Nová sekce Statistik patří do jedné z částí, ne pod ně. */
+  const RANGES = [
+    ["7d", "7 dní", 7],
+    ["30d", "30 dní", 30],
+    ["3m", "3M", 91],
+    ["6m", "6M", 182],
+    ["1y", "Rok", 365],
+    ["all", "Vše", null],
+  ];
+  function rangeSince(k) {
+    const r = RANGES.find((x) => x[0] === k);
+    return r && r[2] ? Date.now() - r[2] * DAY : -Infinity;
+  }
+  function rangeSeg(act, cur) {
+    return `<div class="seg seg-wide">${RANGES.map(
+      ([k, l]) => `<button data-act="${act}" data-v="${k}" aria-pressed="${cur === k}">${l}</button>`,
+    ).join("")}</div>`;
+  }
+  function filtW(g) {
+    return derive().all.filter((w) => g === "all" || w.gymId === g);
+  }
+  const wDur = (w) => Math.max(0, (w.end || w.start) - w.start);
+  function fmtVol(v) {
+    return v >= 10000 ? fmtKg(Math.round(v / 100) / 10) + " t" : fmtInt(v) + " kg";
+  }
+  function fmtHours(ms) {
+    const h = ms / 3600000;
+    return h >= 10 ? fmtInt(h) + " h" : fmtDurS(ms);
+  }
+  // souhrn za seznam tréninků
+  function summarize(ws) {
+    const s = { n: ws.length, dur: 0, vol: 0, sets: 0, recs: 0, ex: {}, gyms: {}, mus: {} };
+    for (const w of ws) {
+      s.dur += wDur(w);
+      s.vol += wVol(w);
+      s.sets += wSets(w);
+      s.recs += wRecs(w).length;
+      s.gyms[w.gymId] = (s.gyms[w.gymId] || 0) + 1;
+      for (const e of w.ex || []) {
+        const n = e.sets.filter((x) => isWork(x.t)).length;
+        const r = s.ex[e.exId] || (s.ex[e.exId] = { sets: 0, n: 0, vol: 0 });
+        r.sets += n;
+        r.n++;
+        {
+          const k = kindOf(e.exId);
+          for (const x of e.sets) {
+            if (isWork(x.t)) {
+              r.vol += setVol(k, x, w.start);
+            }
+          }
+        }
+        for (const k of exPri(exOf(e.exId))) {
+          s.mus[k] = (s.mus[k] || 0) + n;
+        }
+      }
+    }
+    for (const id in s.ex) {
+      s.ex[id].n = ws.filter((w) => (w.ex || []).some((e) => e.exId === id)).length;
+    }
+    return s;
+  }
+  // pruhy: r = {label, v, txt, sw: barva s tečkou, col: barva pruhu bez tečky, cls: třída hodnoty, act, id}
+  function hbarList(rows, stk) {
+    if (!rows.length) return '<div class="muted small">Nic.</div>';
+    const mx = Math.max(...rows.map((r) => r.v)) || 1;
+    return `<div class="hbars${stk ? " stk" : ""}">
+      ${rows
+        .map((r) => {
+          const bg = r.sw || r.col;
+          return `<div class="hbar"${r.act ? ` role="button" data-act="${r.act}" data-v="${esc(r.id)}"` : ""}>
+              <span class="hl" title="${esc(r.label)}">
+                ${r.sw ? `<span class="sw" style="background:${r.sw}"></span>` : ""}${esc(r.label)}
+              </span>
+              <div class="t" style="width:${Math.max(2, (r.v / mx) * 100)}%${bg ? ";background:" + bg : ""}"></div>
+              <span class="v${r.cls ? " " + r.cls : ""}">${esc(r.txt || String(r.v))}</span>
+            </div>`;
+        })
+        .join("")}
+    </div>`;
+  }
+  function topExRows(s, n) {
+    return Object.entries(s.ex)
+      .sort((a, b) => b[1].sets - a[1].sets || b[1].n - a[1].n)
+      .slice(0, n)
+      .map(([id, r]) => ({
+        id,
+        act: "openEx",
+        label: exName(id),
+        v: r.sets,
+        txt: r.n + "× · " + r.sets + " " + plural(r.sets, "série", "série", "sérií"),
+      }));
+  }
+  function gymRows(s) {
+    return Object.entries(s.gyms)
+      .sort((a, b) => b[1] - a[1])
+      .map(([g, n]) => ({
+        label: gymName(g),
+        v: n,
+        sw: gymColor(g),
+        txt: n + "× · " + Math.round((n / s.n) * 100) + " %",
+      }));
+  }
+  function summaryBlock(s, withGyms, p) {
+    let h = kpiGrid(s, p);
+    h += `<div class="subh">Nejčastější cviky</div>${hbarList(topExRows(s, 5), true)}`;
+    if (withGyms) {
+      h += `<div class="subh">Podle fitek</div>${hbarList(gymRows(s))}`;
+    }
+    return h;
+  }
+  // kalendářní období, pa = začátek předchozího stejného období (konec = a, F3-27)
+  function calPeriods() {
+    const now = new Date();
+    const y = now.getFullYear(),
+      m = now.getMonth();
+    const lm = new Date(y, m - 1, 1),
+      lmE = new Date(y, m, 1);
+    const hy =
+      m >= 6
+        ? { a: new Date(y, 0, 1), b: new Date(y, 6, 1), l: "Leden–červen " + y, pa: new Date(y - 1, 6, 1) }
+        : {
+            a: new Date(y - 1, 6, 1),
+            b: new Date(y, 0, 1),
+            l: "Červenec–prosinec " + (y - 1),
+            pa: new Date(y - 1, 0, 1),
+          };
+    return {
+      month: {
+        a: lm.getTime(),
+        b: lmE.getTime(),
+        pa: new Date(y, m - 2, 1).getTime(),
+        l: MONTHS_FULL[lm.getMonth()].replace(/^./, (c) => c.toUpperCase()) + " " + lm.getFullYear(),
+        short: "Minulý měsíc",
+      },
+      half: { a: hy.a.getTime(), b: hy.b.getTime(), pa: hy.pa.getTime(), l: hy.l, short: "Pololetí" },
+      year: {
+        a: new Date(y - 1, 0, 1).getTime(),
+        pa: new Date(y - 2, 0, 1).getTime(),
+        b: new Date(y, 0, 1).getTime(),
+        l: "Rok " + (y - 1),
+        short: "Minulý rok",
+      },
+    };
+  }
+  function bucketsFor(range, ws) {
+    const now = Date.now();
+    let unit, count, start;
+    const sod = (t) => {
+      const d = new Date(t);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    };
+    const som = (t) => {
+      const d = new Date(t);
+      return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+    };
+    if (range === "7d") {
+      unit = "day";
+      count = 7;
+      start = sod(now) - 6 * DAY;
+    } else if (range === "30d") {
+      unit = "week";
+      count = 5;
+      start = startOfWeek(now) - 4 * 7 * DAY;
+    } else if (range === "3m") {
+      unit = "week";
+      count = 13;
+      start = startOfWeek(now) - 12 * 7 * DAY;
+    } else if (range === "6m") {
+      unit = "week";
+      count = 26;
+      start = startOfWeek(now) - 25 * 7 * DAY;
+    } else if (range === "1y") {
+      unit = "month";
+      count = 12;
+      const d = new Date();
+      start = new Date(d.getFullYear(), d.getMonth() - 11, 1).getTime();
+    } else {
+      unit = "month";
+      const first = ws.length ? ws[ws.length - 1].start : now;
+      const a = new Date(first),
+        b = new Date();
+      count = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth() + 1;
+      start = som(first);
+      if (count > 36) {
+        unit = "quarter";
+        const qa = new Date(a.getFullYear(), Math.floor(a.getMonth() / 3) * 3, 1);
+        start = qa.getTime();
+        count = Math.ceil(((b.getFullYear() - qa.getFullYear()) * 12 + b.getMonth() - qa.getMonth() + 1) / 3);
+      }
+    }
+    const B = [];
+    for (let i = 0; i < count; i++) {
+      let t;
+      if (unit === "day") {
+        t = start + i * DAY;
+      } else if (unit === "week") {
+        t = start + i * 7 * DAY;
+      } else {
+        const d = new Date(start);
+        d.setMonth(d.getMonth() + i * (unit === "quarter" ? 3 : 1));
+        t = d.getTime();
+      }
+      B.push({ t, count: 0, vol: 0, sets: 0, dur: 0, unit });
+    }
+    const key = (t) => {
+      if (unit === "day") return sod(t);
+      if (unit === "week") return startOfWeek(t);
+      const d = new Date(t);
+      return new Date(
+        d.getFullYear(),
+        unit === "quarter" ? Math.floor(d.getMonth() / 3) * 3 : d.getMonth(),
+        1,
+      ).getTime();
+    };
+    const idx = {};
+    B.forEach((b, i) => (idx[b.t] = i));
+    for (const w of ws) {
+      const i = idx[key(w.start)];
+      if (i == null) continue;
+      const b = B[i];
+      b.count++;
+      b.vol += wVol(w);
+      b.sets += wSets(w);
+      b.dur += wDur(w) / 60000;
+    }
+    const lab = (b) => {
+      const d = new Date(b.t);
+      if (unit === "day") return ["ne", "po", "út", "st", "čt", "pá", "so"][d.getDay()];
+      if (unit === "week") return fmtDateS(b.t);
+      if (unit === "quarter") {
+        return "Q" + (Math.floor(d.getMonth() / 3) + 1) + " " + String(d.getFullYear()).slice(2);
+      }
+      return MONTHS[d.getMonth()] + (d.getMonth() === 0 || count <= 12 ? "" : "");
+    };
+    const tipLab = (b) => {
+      const d = new Date(b.t);
+      if (unit === "day") return fmtDay(b.t);
+      if (unit === "week") return "týden od " + fmtDateS(b.t);
+      if (unit === "quarter") return "Q" + (Math.floor(d.getMonth() / 3) + 1) + " " + d.getFullYear();
+      return MONTHS_FULL[d.getMonth()] + " " + d.getFullYear();
+    };
+    const every = count <= 13 ? 1 : count <= 26 ? 4 : Math.ceil(count / 8);
+    return B.map((b, i) => ({
+      x: b.t,
+      label: i % every === (count - 1) % every ? lab(b) : "",
+      tip: tipLab(b),
+      count: b.count,
+      vol: b.vol,
+      sets: b.sets,
+      dur: b.dur,
+    }));
+  }
+  // části záložky Statistiky (F3-13): přepínač nad filtrem fitek, fitko a období platí pro všechny
+  const STATS_PARTS = [
+    ["over", "Přehled"],
+    ["mus", "Partie"],
+    ["ex", "Cviky"],
+  ];
+  function vStats() {
+    const g = S.statsGym,
+      range = S.statsRange;
+    const wsAll = filtW(g);
+    const since = rangeSince(range);
+    const ws = wsAll.filter((w) => w.start >= since);
+    const s = summarize(ws);
+    let h = topbar("Statistiky", g === "all" ? "Všechna fitka" : gymName(g));
+    h += `<div class="seg seg-wide mb-in">${STATS_PARTS.map(
+      ([k, l]) =>
+        `<button data-act="statsPart" data-v="${k}" aria-pressed="${S.statsPart === k}">${l}</button>`,
+    ).join("")}</div>`;
+    h += gymChips("statsGym", g, true);
+    const c = { g, range, since, wsAll, ws, s };
+    if (S.statsPart === "mus") return h + statsMus(c);
+    if (S.statsPart === "ex") return h + statsEx(c);
+    return h + statsOver(c);
+  }
+  // Přehled: období s dlaždicemi, Průběh, Podle fitek, souhrn za kalendářní období
+  function statsOver({ g, range, wsAll, ws, s }) {
+    const pr = rangePrev(range);
+    let h = `<section class="sec cont">
+      ${rangeSeg("statsRange", range)}
+      <div class="mt-in">${kpiGrid(s, pr && prevSum(wsAll, pr.a, pr.b))}</div>
+    </section>`;
+    // graf
+    const m = S.statsMetric;
+    const lab = { count: "Tréninky", sets: "Pracovní série", vol: "Objem (kg)", dur: "Čas (min)" };
+    const bars = bucketsFor(range, ws.length ? ws : wsAll);
+    h += `<section class="sec">
+      <div class="sec-h">
+        <h2>Průběh</h2>
+        <div class="seg">
+          ${Object.keys(lab)
+            .map(
+              (k) =>
+                `<button data-act="statsMetric" data-v="${k}" aria-pressed="${m === k}">` +
+                `${{ count: "Tréninky", sets: "Série", vol: "Objem", dur: "Čas" }[k]}</button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="card">
+        ${chartPh(
+          {
+            type: "bar",
+            label: lab[m],
+            unit: "",
+            fmt: m === "vol" ? "vol" : m === "dur" ? "min" : "",
+            whole: m === "count" || m === "sets",
+            bars: bars.map((b) => ({ x: b.x, label: b.label, tip: b.tip, v: b[m] })),
+          },
+          180,
+        )}
+      </div>
+    </section>`;
+    if (g === "all") {
+      h += `<section class="sec">
+        <div class="sec-h"><h2>Podle fitek</h2></div>
+        <div class="card">${hbarList(gymRows(s))}</div>
+      </section>`;
+    }
+    // kalendářní souhrny
+    const P = calPeriods();
+    const pk = S.sumPeriod;
+    const p = P[pk];
+    const ps = summarize(wsAll.filter((w) => w.start >= p.a && w.start < p.b));
+    h += `<section class="sec">
+      <div class="sec-h"><h2>Souhrn · ${esc(p.l)}</h2></div>
+      <div class="seg seg-wide mb-in">
+        ${Object.entries(P)
+          .map(
+            ([k, v]) =>
+              `<button data-act="sumPeriod" data-v="${k}" aria-pressed="${pk === k}">${v.short}</button>`,
+          )
+          .join("")}
+      </div>
+      <div class="card">
+        ${
+          ps.n
+            ? summaryBlock(ps, g === "all", prevSum(wsAll, p.pa, p.a))
+            : '<div class="muted small">V tomto období žádný trénink.</div>'
+        }
+      </div>
+    </section>`;
+    return h;
+  }
+  // Partie: období, postava a pruhy podle partií
+  function statsMus({ range, s }) {
+    let h = `<section class="sec cont">${rangeSeg("statsRange", range)}</section>`;
+    const mv = Object.entries(s.mus).sort((a, b) => b[1] - a[1]);
+    h += `<section class="sec">
+      <div class="sec-h"><h2>Pracovní série podle partie</h2></div>
+      <div class="card">
+        ${
+          mv.length
+            ? musFigs(s.mus, true, true) +
+              mgStack(s.mus) +
+              hbarList(mv.map(([k, v]) => ({ label: MUSCLE_MAP.NAMES[k], v, sw: mgCol(k) })))
+            : '<div class="muted small">V tomto období nic.</div>'
+        }
+        <div class="xs muted mt-list">Počítá se hlavní partie cviku.</div>
+      </div>
+    </section>`;
+    return h;
+  }
+  // Cviky: období, Největší zlepšení (F3-26), Bez zlepšení, seznam cvičených cviků s hledáním a filtrem partie
+  /* Statistiky → Cviky: cviky bez zlepšení (F4-06), jen cvičené posledních 30 dní (ve vybraném fitku).
+     Nezávislé na volbě období, filtr fitka platí. */
+  function statsStag(g) {
+    if (!S.cfg.stagOn) return "";
+    const from = Date.now() - STAG_RECENT;
+    const rows = [];
+    for (const ctx in stags()) {
+      const x = stags()[ctx];
+      // kontext po změně „vázáno na fitko“ u cviku už neplatí
+      if (recCtx(x.exId, x.ss[x.ss.length - 1].w.gymId) !== ctx) continue;
+      if (!x.ss.some((q) => q.w.start >= from && (g === "all" || q.w.gymId === g))) continue;
+      const info = stagOfCtx(x);
+      if (info) {
+        rows.push(info);
+      }
+    }
+    if (!rows.length) return "";
+    rows.sort((a, b) => b.last.w.start - a.last.w.start);
+    return `<section class="sec">
+      <div class="sec-h"><h2>Bez zlepšení</h2><span class="xs muted">${rows.length}</span></div>
+      <div class="stack list">
+        ${rows
+          .map((r) => {
+            const ex = exOf(r.exId);
+            return (
+              `<button class="exrow" data-act="openEx" data-v="${esc(r.exId)}" data-p="stats">
+              <div class="grow">
+                <div class="n">${esc(ex.name)}</div>
+                ${ex.cz ? `<div class="cz">${esc(ex.cz)}</div>` : ""}
+                <div class="m">
+                  ${esc(stagSince(r))} · naposledy ${esc(fmtDateS(r.last.w.start))}` +
+              `${r.gymDep && g === "all" ? " · " + esc(gymName(r.gymId)) : ""}
+                </div>
+              </div>
+              <div class="r">${r.n}<small>${plural(r.n, "trénink", "tréninky", "tréninků")}</small></div>
+            </button>`
+            );
+          })
+          .join("")}
+      </div>
+    </section>`;
+  }
+  /* ---------- POROVNÁNÍ S PŘEDCHOZÍM OBDOBÍM (F3-27) ----------
+     Porovnání s předchozím obdobím (F3-27): dlaždice Přehledu ukazují pod číslem rozdíl proti stejně dlouhému
+     období těsně před vybraným (30 dní = 31.–60. den zpět), Souhrn minulý měsíc / pololetí / rok proti
+     předchozímu kalendářnímu období. Platí filtr fitka. Vzhled jako v souhrnu tréninku (`dHtml`): Tréninky,
+     Objem (v tunách, bez procent) a Série zeleně / červeně, Čas a Ø délka šedě, Rekordy bez rozdílu (na začátku jich
+     padá víc, rozdíl by klamal). Rozdíl se neukáže (`prevSum` vrátí null), když předchozí období neexistuje
+     (Vše), sahá před první uložený trénink nebo v něm nebyl žádný trénink. Nic se neukládá.
+     Hlavní funkce: prevSum, kpiGrid(s, p), rangePrev, calPeriods (pa). */
+  // souhrn předchozího období [a, b) ze seznamu tréninků, null když nejde porovnat
+  function prevSum(wsAll, a, b) {
+    if (!isFinite(a)) return null;
+    const all = derive().all;
+    const first = all.length ? all[all.length - 1].start : Infinity;
+    if (first > a) return null;
+    const ps = summarize(wsAll.filter((w) => w.start >= a && w.start < b));
+    return ps.n ? ps : null;
+  }
+  // předchozí období k období Přehledu: [od, do), u Vše null
+  function rangePrev(k) {
+    const r = RANGES.find((x) => x[0] === k);
+    if (!r || !r[2]) return null;
+    const since = rangeSince(k);
+    return { a: since - r[2] * DAY, b: since };
+  }
+  // dlaždice souhrnu, p = souhrn předchozího období (rozdíly pod čísly, F3-27)
+  function kpiGrid(s, p) {
+    const avg = (x) => (x.n ? x.dur / x.n : 0);
+    const mins = (ms) => Math.round(ms / 60000);
+    // rozdíl objemu vždy v tunách na desetiny, bez procent
+    const tons = (kg) => fmtKg(Math.round(kg / 100) / 10) + " t";
+    const kpi = (v, l, dl) => `<div class="kpi"><b>${v}</b><span>${l}</span>${p ? dl : ""}</div>`;
+    const dDur = (a, b) => (p ? dHtml(mins(a) - mins(b), (m) => fmtHours(m * 60000), "dl", true) : "");
+    return `<div class="kpis k6">
+      ${kpi(s.n, "Tréninky", p ? dHtml(s.n - p.n, String, "dl") : "")}
+      ${kpi(fmtHours(s.dur), "Čas", dDur(s.dur, p && p.dur))}
+      ${kpi(fmtVol(s.vol), "Objem", p ? dHtml(s.vol - p.vol, tons, "dl") : "")}
+      ${kpi(fmtInt(s.sets), "Série", p ? dHtml(s.sets - p.sets, fmtInt, "dl") : "")}
+      ${kpi(s.recs, "Rekordy", "")}
+      ${kpi(s.n ? fmtDurS(avg(s)) : "–", "Ø délka", s.n ? dDur(avg(s), p && avg(p)) : "")}
+    </div>`;
+  }
+  /* ---------- PROGRES PO CVICÍCH (F3-26) ----------
+     Statistiky → Cviky odpovídají na „zlepšuji se?“: u každého cviku aktuální hodnota a změna za zvolené
+     období, řazení Naposledy | Zlepšení (S.exSort, Local exSort) a blok Největší zlepšení (5 cviků s největší
+     změnou v %, místo Nejčastějších cviků). Nic se neukládá, počítá se z derive().byEx.
+     Ukazatel (progMetric) podle druhu cviku: váha × opakování odh. 1RM, ale když mají pracovní série obvykle
+     (medián) víc než PROG_HI_REPS opakování, max. zátěž (odhad 1RM je tam nepřesný); vlastní váha nejvíc
+     opakování v sérii (aby zlepšení nedělala tělesná hmotnost, jako stagnace F4-06); se zátěží a s dopomocí
+     odh. 1RM včetně tělesné hmotnosti (jako graf na stránce cviku); na čas nejdelší výdrž, na čas se zátěží
+     max. zátěž (F4-14, jinak by přidaná váha při stejné výdrži vyšla jako 0 %), vzdálenost se zátěží taky
+     max. zátěž (F4-16); vzdálenost tempo
+     (km/h, jako rekordy). Funkci může převzít i F3-28 (výchozí graf stránky cviku).
+     Změna (progOf): nejlepší hodnota z prvních PROG_EDGE tréninků v období proti nejlepší z posledních
+     PROG_EDGE, jen když je v období aspoň PROG_MIN tréninků s cvikem rozložených aspoň na PROG_SPAN dní, jinak
+     null (v seznamu –). Procenta vždy celá (progPct), změna pod 1 % = 0. Pokles šedě, ne červeně (není chyba).
+     Kontext jako rekordy a stagnace: cvik vázaný na fitko se počítá v každém fitku zvlášť, u Všech fitek má
+     každé fitko vlastní řádek. Platí filtr fitka a období, hledání a partie jen pro seznam. Bez zlepšení
+     (statsStag) zůstává nezávislé na období, proto může být cvik v obou blocích. Vysvětlení v HELP.prog. */
+  const PROG_EDGE = 2; // kolik tréninků na začátku a na konci období se porovnává
+  const PROG_MIN = 3; // nejméně tréninků s cvikem v období
+  const PROG_SPAN = 14 * DAY; // nejkratší rozpětí mezi prvním a posledním tréninkem v období
+  const PROG_HI_REPS = 10; // nad tolik opakování (medián) se místo odh. 1RM bere max. zátěž
+  // medián opakování pracovních sérií ve výskytech cviku ss
+  function repsMedian(ss) {
+    const reps = [];
+    for (const x of ss) {
+      for (const s of x.e.sets) {
+        if (isWork(s.t) && +s.reps > 0) {
+          reps.push(+s.reps);
+        }
+      }
+    }
+    if (!reps.length) return 0;
+    reps.sort((a, b) => a - b);
+    return reps[Math.floor(reps.length / 2)];
+  }
+  /* ukazatel cviku pro porovnání: {key: pole ve výskytu z derive().byEx, l: popisek, unit, fmt: hodnota jako
+     text, fmtD: změna jako text bez znaménka}; ss = výskyty, podle kterých se rozhodne o max. zátěži */
+  function progMetric(exId, ss) {
+    const kind = kindOf(exId);
+    const kg = (v) => fmtKg(Math.round(v * 10) / 10);
+    if (kind === "timew" || kind === "distw") {
+      return { key: "maxKg", l: "max. zátěž", fmt: kg, fmtD: (d) => kg(d) + " kg" };
+    }
+    if (kind === "time") {
+      return { key: "maxSec", l: "výdrž", fmt: fmtSec, fmtD: fmtSec };
+    }
+    if (kind === "dist") {
+      return { key: "speed", l: "tempo km/h", fmt: kg, fmtD: (d) => kg(d) + " km/h" };
+    }
+    if (kind === "bw") {
+      return { key: "maxReps", l: "opak.", fmt: fmtInt, fmtD: (d) => fmtInt(d) + " opak." };
+    }
+    if (kind === "wr" && repsMedian(ss) > PROG_HI_REPS) {
+      return { key: "maxKg", l: "max. zátěž", fmt: kg, fmtD: (d) => kg(d) + " kg" };
+    }
+    return { key: "best", l: "odh. 1RM", fmt: (v) => fmtKg(Math.round(v)), fmtD: (d) => kg(d) + " kg" };
+  }
+  // změna v celých procentech (−0 → 0)
+  const progPct = (p) => Math.round(p.pct) || 0;
+  /* hodnota a změna cviku v jednom kontextu: ss = výskyty od nejnovějšího (jen jedno fitko u vázaného cviku),
+     since = začátek období. Vrací {m: ukazatel, v: aktuální hodnota, d: změna, pct} (d a pct null = málo
+     dat), nebo null, když cvik ukazatel nemá (např. série bez hodnot). */
+  function progOf(exId, ss, since) {
+    const inR = ss.filter((x) => x.w.start >= since);
+    const m = progMetric(exId, inR.length ? inR : ss);
+    const vals = ss.filter((x) => x[m.key] > 0);
+    if (!vals.length) return null;
+    const best = (list) => Math.max(...list.map((x) => x[m.key]));
+    const r = { m, v: best(vals.slice(0, PROG_EDGE)), d: null, pct: null };
+    const sel = vals.filter((x) => x.w.start >= since);
+    if (sel.length < PROG_MIN || sel[0].w.start - sel[sel.length - 1].w.start < PROG_SPAN) return r;
+    const from = best(sel.slice(-PROG_EDGE));
+    r.d = r.v - from;
+    r.pct = (r.d / from) * 100;
+    return r;
+  }
+  // změna jako text s trojúhelníkem (pct = v procentech); pokles šedě
+  function progChg(p, pct) {
+    if (p.d == null) return '<span class="flat">–</span>';
+    const pc = progPct(p);
+    if (!pc) return `<span class="flat">${SAME}</span>`;
+    const txt = pct ? Math.abs(pc) + " %" : p.m.fmtD(Math.abs(p.d));
+    return pc > 0
+      ? `<span class="gain">${TRI.up} +${txt}</span>`
+      : `<span class="flat">${TRI.down} −${txt}</span>`;
+  }
+  /* řádky seznamu Cviky: jeden za cvik, u cviku vázaného na fitko při Všech fitkách jeden za každé fitko
+     ({id, ex, gymId (jen vázaný cvik cvičený ve víc fitkách, jinak null), n, inR, last, p: progOf}) */
+  function progRows(g, since) {
+    const { byEx } = derive();
+    const rows = [];
+    for (const id in byEx) {
+      const ex = exOf(id);
+      const all = byEx[id].filter((x) => g === "all" || x.w.gymId === g);
+      if (!all.length) continue;
+      const groups = {};
+      for (const x of all) {
+        const k = ex.gymDep && g === "all" ? x.w.gymId : "*";
+        (groups[k] = groups[k] || []).push(x);
+      }
+      // název fitka v řádku, jen když cvik vázaný na fitko má řádky ve víc fitkách
+      const multi = Object.keys(groups).length > 1;
+      for (const k in groups) {
+        const ss = groups[k];
+        rows.push({
+          id,
+          ex,
+          gymId: multi ? k : null,
+          n: ss.length,
+          inR: ss.filter((x) => x.w.start >= since).length,
+          last: ss[0].w.start,
+          p: progOf(id, ss, since),
+        });
+      }
+    }
+    return rows;
+  }
+  // blok Největší zlepšení: 5 řádků s největší kladnou změnou v %, bez nich se neukáže
+  function progBest(rows) {
+    const top = rows
+      .filter((r) => r.p && r.p.d != null && progPct(r.p) > 0)
+      .sort((a, b) => b.p.pct - a.p.pct)
+      .slice(0, 5);
+    if (!top.length) return "";
+    const list = top.map((r) => ({
+      id: r.id,
+      act: "openEx",
+      label: r.ex.name + (r.gymId ? " · " + gymName(r.gymId) : ""),
+      v: r.p.pct,
+      col: "var(--good)",
+      cls: "gain",
+      txt: "+" + progPct(r.p) + " %",
+    }));
+    return `<section class="sec">
+      <div class="sec-h"><h2>Největší zlepšení</h2>${helpBtn("prog")}</div>
+      <div class="card">${hbarList(list, true)}</div>
+    </section>`;
+  }
+  // řazení Zlepšení: cviky se změnou podle % (největší nahoře), pak bez změny podle posledního tréninku
+  function progSort(a, b) {
+    const ha = a.p && a.p.d != null,
+      hb = b.p && b.p.d != null;
+    if (ha !== hb) return ha ? -1 : 1;
+    if (ha && progPct(a.p) !== progPct(b.p)) return b.p.pct - a.p.pct;
+    return b.last - a.last;
+  }
+  function statsEx({ g, range, since }) {
+    let h = `<section class="sec cont">${rangeSeg("statsRange", range)}</section>`;
+    const all = progRows(g, since);
+    h += progBest(all);
+    h += statsStag(g);
+    // seznam cviků
+    const pct = S.exSort === "prog";
+    const rows = all.filter((r) => mfMatch(r.ex, S.exMuscle) && exMatch(r.ex, S.exSearch));
+    rows.sort(pct ? progSort : (a, b) => b.last - a.last);
+    // počet cviků jako nadpis, pod hledáním filtr partií vlevo a řazení vpravo (F3-41)
+    h += `<section class="sec">
+      ${cntHead(rows.length)}
+      <input class="inp" id="exSearch" data-f="exSearch" placeholder="Hledat cvik (anglicky i česky)…"
+          value="${esc(S.exSearch)}">
+      <div class="row mt-in">
+        ${mfChip("stats")}
+        <div class="seg" style="margin-left:auto">
+          <button data-act="exSort" data-v="last" aria-pressed="${!pct}">Naposledy</button>
+          <button data-act="exSort" data-v="prog" aria-pressed="${pct}">Zlepšení</button>
+        </div>
+      </div>
+      <div class="stack list mt-in">`;
+    for (const r of rows.slice(0, S.exLimit || 60)) {
+      const p = r.p;
+      h +=
+        `<button class="exrow" data-act="openEx" data-v="${esc(r.id)}">
+        <div class="grow">
+          <div class="n">${esc(r.ex.name)}</div>
+          ${r.ex.cz ? `<div class="cz">${esc(r.ex.cz)}</div>` : ""}
+          <div class="m">
+            ${esc(MUSCLES[exGroup(r.ex)] || "")}${r.gymId ? " · " + esc(gymName(r.gymId)) : ""} · ${r.n}×` +
+        `${range !== "all" ? " (" + r.inR + "× v období)" : ""} · naposledy ${fmtDateS(r.last)}
+          </div>
+        </div>
+        <div class="r">
+          ${p ? `${esc(p.m.fmt(p.v))}<small>${p.m.l}</small><span class="chg">${progChg(p, pct)}</span>` : "–"}
+        </div>
+      </button>`;
+    }
+    if (rows.length > (S.exLimit || 60)) {
+      h += '<button class="btn block" data-act="exMore">Další cviky</button>';
+    }
+    h += "</div></section>";
+    return h;
+  }
+
+  /* ---------- FILTR PARTIÍ A VYBAVENÍ (F3-41) ----------
+     Záložka Cviky, panel Přidat cviky / Nahradit cvik a Statistiky → Cviky mají místo řádků čipů jeden řádek
+     filtrů: čip Partie ▾ (a Vybavení ▾, ve výběru i Jen cviky z historie). Bez výběru čip otevře panel
+     (sheetMf, sheetEq), s výběrem ukazuje hodnotu s křížkem („Paže ×“) a klepnutí výběr zruší (akce mfOpen,
+     eqOpen). Panel Partie: Všechny partie, pak každá skupina MPICK s nadpisem a čipy (u skupiny s víc partiemi
+     „Celá záda“ + jednotlivé partie). Panel Vybavení: čipy pod sebou, Všechno vybavení a pak abecedně. Hodnota filtru: "all", "g:<skupina z MGRP>" nebo partie z MKEYS;
+     cvik do filtru patří, když ji má mezi hlavními partiemi (mfMatch, libovolná hlavní, ne jen první).
+     Uložená hodnota z doby před F3-41 (skupiny MUSCLES) se při startu převede přes mfNorm (u MPICK), neznámá
+     = "all".
+     Kde je který stav: MF[from] (list = S.exlM / S.exlEq v Local, picker = pick.m / pick.eq, stats =
+     S.exMuscle). Panel nad výběrem cviků je o úroveň výš (Zpět vrátí výběr), jinde zavře panel.
+     Pod filtry je místo nadpisu sekce počet cviků („18 cviků“, .cnt-h) a vpravo ovládání (řazení, zeměkoule,
+     plus); když se při velkém písmu nevejde, tlačítka se zalomí pod počet. */
+  // cvik patří do filtru partií: hledá se ve všech hlavních partiích
+  function mfMatch(e, v) {
+    if (v === "all") return true;
+    const pri = exPri(e);
+    if (v.startsWith("g:")) return pri.some((k) => MGRP_OF[k] === v.slice(2));
+    return pri.includes(v);
+  }
+  const mfLabel = (v) => (v.startsWith("g:") ? MGRP[v.slice(2)] : MUSCLE_MAP.NAMES[v]);
+  const MF = {
+    list: {
+      get: () => S.exlM,
+      set: (v) => {
+        S.exlM = v;
+        lsSet("exlM", v);
+        S.exlLimit = 0;
+      },
+      eq: () => S.exlEq,
+      setEq: (v) => {
+        S.exlEq = v;
+        lsSet("exlEq", v);
+        S.exlLimit = 0;
+      },
+    },
+    picker: {
+      get: () => pick.m,
+      set: (v) => {
+        pick.m = v;
+        pick.limit = 0;
+      },
+      eq: () => pick.eq,
+      setEq: (v) => {
+        pick.eq = v;
+        pick.limit = 0;
+      },
+    },
+    stats: {
+      get: () => S.exMuscle,
+      set: (v) => {
+        S.exMuscle = v;
+      },
+    },
+  };
+  // čip filtru: bez výběru název a šipka (otevře panel), s výběrem hodnota a křížek (zruší výběr)
+  function fltChip(act, from, name, val) {
+    const on = val !== null;
+    return `<button class="chip fchip" data-act="${act}" data-v="${from}" aria-pressed="${on}"
+        aria-label="${esc(on ? name + ": " + val + ", zrušit" : name)}">
+      ${esc(on ? val : name)}${icon(on ? "close" : "down")}
+    </button>`;
+  }
+  const mfChip = (from) => {
+    const v = MF[from].get();
+    return fltChip("mfOpen", from, "Partie", v === "all" ? null : mfLabel(v));
+  };
+  const eqChip = (from) => {
+    const v = MF[from].eq();
+    return fltChip("eqOpen", from, "Vybavení", v === "all" ? null : EQUIP[v]);
+  };
+  // počet cviků místo nadpisu sekce, vpravo tlačítka (id = pro přepsání počtu při psaní ve výběru)
+  function cntHead(n, btns, id) {
+    return `<div class="sec-h cnt-h">
+      <h2${id ? ` id="${id}"` : ""}>${n} ${plural(n, "cvik", "cviky", "cviků")}</h2>
+      ${btns ? `<div class="sec-btns">${btns}</div>` : ""}
+    </div>`;
+  }
+  // panel s volbami filtru; nad výběrem cviků o úroveň výš, Zpět vrátí výběr
+  function mfSheet(from, title, body, re) {
+    openSheet(
+      title,
+      body,
+      "",
+      false,
+      from === "picker" ? { lv: 2, back: () => renderPicker(true), re } : { re },
+    );
+  }
+  function sheetMf(from) {
+    const cur = MF[from].get();
+    const chip = (v, label) =>
+      `<button class="chip" data-act="mfSet" data-v="${from}|${v}" aria-pressed="${cur === v}">` +
+      `${esc(label)}</button>`;
+    // každá skupina má nadpis, ve stejném pořadí jako formulář cviku; skupina s víc partiemi i „Celá …“
+    let b = `<div class="chips fwrap">${chip("all", "Všechny partie")}</div>`;
+    for (const [g, keys] of MPICK) {
+      b += `<div class="mf-h"><i style="background:var(--g-${g})"></i>${esc(MGRP[g])}</div>
+        <div class="chips fwrap">
+          ${keys.length > 1 ? chip("g:" + g, MF_ALL[g]) : ""}
+          ${keys.map((k) => chip(k, MUSCLE_MAP.NAMES[k])).join("")}
+        </div>`;
+    }
+    mfSheet(from, "Partie", b, () => sheetMf(from));
+  }
+  const MF_ALL = { back: "Celá záda", arms: "Celé paže", core: "Celé břicho", legs: "Celé nohy" };
+  function sheetEq(from) {
+    const cur = MF[from].eq();
+    // čipy pod sebou: Všechno vybavení, pak abecedně
+    const opts = Object.entries(EQUIP).sort((a, b) => a[1].localeCompare(b[1], "cs"));
+    const b = `<div class="chips fcol">
+      ${[["all", "Všechno vybavení"]]
+        .concat(opts)
+        .map(
+          ([k, l]) =>
+            `<button class="chip" data-act="eqSet" data-v="${from}|${k}" aria-pressed="${cur === k}">
+              ${esc(l)}
+            </button>`,
+        )
+        .join("")}
+    </div>`;
+    mfSheet(from, "Vybavení", b, () => sheetEq(from));
+  }
+  // po výběru ve filtru: výběr cviků se překreslí, jinde se panel zavře a překreslí stránka
+  function mfDone(from) {
+    if (from === "picker") {
+      renderPicker(true);
+      return;
+    }
+    closeSheet();
+    scheduleRender();
+  }
+
+  /* ---------- ZÁLOŽKA CVIKY (F0-05) ----------
+     Route ex (vExList), filtry S.exlM / S.exlEq / S.exlSort v localStorage. Hledání přes exMatch (po slovech,
+     bez diakritiky, se synonymy; sekce HLEDÁNÍ CVIKŮ, F1-06). Bez rozdělení podle fitka (to má jen výběr
+     cviků). Řádek filtrů a počet cviků místo nadpisu Seznam: sekce FILTR PARTIÍ A VYBAVENÍ (F3-41). */
+  function vExList() {
+    const { byEx } = derive();
+    const all = Object.entries(S.exLib);
+    const nHid = all.filter(([, e]) => e.archived).length;
+    if (!nHid) {
+      S.exlHid = false;
+    }
+    const rows = all
+      .filter(
+        ([, e]) =>
+          // skrytých je málo, filtry partie a vybavení se na ně nepoužijí (jen hledání)
+          (S.exlHid
+            ? !!e.archived
+            : !e.archived && mfMatch(e, S.exlM) && (S.exlEq === "all" || e.equip === S.exlEq)) &&
+          exMatch(e, S.exlQ),
+      )
+      .map(([id, e]) => {
+        const l = byEx[id];
+        return { id, e, n: l ? l.length : 0, last: l ? l[0].w.start : 0, rel: l ? 0 : exRel(e, S.exlQ) };
+      });
+    // Naposledy: cvičené nahoře od posledního, pod nimi ostatní podle shody s hledáním (F1-06) a abecedy;
+    // A–Z: všechny podle abecedy
+    const az = (a, b) => a.e.name.localeCompare(b.e.name, "cs");
+    rows.sort(S.exlSort === "az" ? az : (a, b) => b.last - a.last || b.rel - a.rel || az(a, b));
+    const lim = S.exlLimit || 100;
+    let h = topbar("Cviky");
+    h += `<input class="inp" id="exlQ" data-f="exlQ" placeholder="Hledat cvik (anglicky i česky)…"
+        value="${esc(S.exlQ)}" autocomplete="off">`;
+    // řádek filtrů (F3-41), skryté cviky jako další filtr
+    h += `<div class="row wrap-r mt-in">
+      ${mfChip("list")}${eqChip("list")}
+      ${
+        nHid
+          ? `<button class="chip" data-act="exlHid" aria-pressed="${S.exlHid}">Skryté (${nHid})</button>`
+          : ""
+      }
+    </div>`;
+    // místo nadpisu Seznam počet cviků, vpravo řazení, online databáze a nový cvik (F3-41);
+    // u skrytých cviků vysvětlení pod tlačítkem s otazníkem (F3-21)
+    h += `<section class="sec">
+    ${cntHead(
+      rows.length,
+      `<div class="seg">
+        ${[
+          ["last", "Naposledy"],
+          ["az", "A–Z"],
+        ]
+          .map(
+            ([k, l]) =>
+              `<button data-act="exlSort" data-v="${k}" aria-pressed="${S.exlSort === k}">${l}</button>`,
+          )
+          .join("")}
+      </div>
+      ${S.exlHid ? helpBtn("hidden") : ""}
+      ${icoBtn("fedbOpen", "globe", "Hledat v online databázi", "list")}
+      ${icoBtn("exlNew", "plus", "Nový cvik")}`,
+    )}`;
+    if (!rows.length) {
+      h +=
+        `<div class="empty">
+        Nic neodpovídá hledání nebo filtru.` +
+        `${
+          S.exlQ.trim() && !S.exlHid
+            ? `<br>
+            <button class="btn sm mt-in" data-act="fedbOpen" data-v="list">
+              Hledat „${esc(S.exlQ.trim())}“ online
+            </button>`
+            : ""
+        }` +
+        `</div>`;
+    }
+    h += '<div class="stack list">';
+    for (const r of rows.slice(0, lim)) {
+      const e = r.e;
+      h +=
+        `<button class="exrow" data-act="openEx" data-v="${esc(r.id)}">
+        <div class="grow">
+          <div class="n">
+            ${nameWithIcons(e.name, e.gymDep ? gdIcon() : "")}` +
+        `${e.custom ? ' <span class="xs muted">(vlastní)</span>' : ""}
+          </div>
+          ${e.cz ? `<div class="cz">${esc(e.cz)}</div>` : ""}
+          <div class="m">
+            ${esc(
+              exPri(e)
+                .map((k) => MUSCLE_MAP.NAMES[k])
+                .join(", ") ||
+                MUSCLES[e.muscle] ||
+                "",
+            )} ` +
+        `· ${esc(EQUIP[e.equip] || "")}` +
+        `${r.n ? " · " + r.n + "× · naposledy " + fmtDateS(r.last) : ""}
+          </div>
+        </div>
+      </button>`;
+    }
+    if (rows.length > lim) {
+      h += `<button class="btn block" data-act="exlMore">Další cviky (${rows.length - lim})</button>`;
+    }
+    h += "</div></section>";
+    return h;
+  }
+
+  /* ---------- GRAFY CVIKU (F3-42) ----------
+     Stránka cviku → Statistiky: grafy se vybírají čipy v řadě za sebou (posouvá se do strany, jako výběr údaje
+     v Těle), vybraný graf v S.detailMetric. Které grafy cvik má, určuje exCharts(kind) podle typu cviku:
+     - s opakováním: Odh. 1RM, Max zátěž, Objem série (největší opakování × zátěž jedné série), Objem tréninku,
+       Opakování celkem (součet opakování pracovních sérií), Max opak.,
+     - na čas: Nejdelší výdrž, Čas celkem, u cviku na čas se zátěží navíc Max zátěž,
+     - vzdálenost: Nejdelší, Vzdálenost, Tempo,
+     - vzdálenost se zátěží (F4-16): Max zátěž, Práce série (největší kg × m jedné série), Práce tréninku, Nejdelší.
+     Hodnoty počítá exSum (setVol, totReps, maxKg i pro timew, work a setWork pro distw), nic se neukládá, stará
+     data fungují hned.
+     Max zátěž u cviku na čas je jen graf, ne osobní rekord. Dlaždice nahoře: u cviku na čas nebo vzdálenost
+     je místo Objemu (vždy 0 kg) Čas celkem za období, u vzdálenosti se zátěží Práce v kg·m (exTile3). Nový graf =
+     nová položka v exCharts. */
+  // grafy cviku: klíč → [název čipu, hodnota z exSum, jednotka]
+  function exCharts(kind) {
+    if (kind === "distw") {
+      return {
+        max: ["Max zátěž", "maxKg", " kg"],
+        swork: ["Práce série", "setWork", " kg·m"],
+        work: ["Práce tréninku", "work", " kg·m"],
+        m: ["Nejdelší", "maxM", " m"],
+      };
+    }
+    if (kind === "dist") {
+      return {
+        km: ["Nejdelší", "maxKm", " km"],
+        tkm: ["Vzdálenost", "totKm", " km"],
+        speed: ["Tempo", "speed", " km/h"],
+      };
+    }
+    if (isTimed(kind)) {
+      const m = { sec: ["Nejdelší výdrž", "maxSec", " s"], tsec: ["Čas celkem", "totSec", " s"] };
+      if (kind === "timew") {
+        m.max = ["Max zátěž", "maxKg", " kg"];
+      }
+      return m;
+    }
+    return {
+      e1rm: ["Odh. 1RM", "best", " kg"],
+      max: ["Max zátěž", "maxKg", " kg"],
+      svol: ["Objem série", "setVol", " kg"],
+      vol: ["Objem tréninku", "vol", " kg"],
+      treps: ["Opakování celkem", "totReps", "×"],
+      reps: ["Max opak.", "maxReps", "×"],
+    };
+  }
+  // třetí dlaždice souhrnu za období: Objem, u cviku na čas nebo vzdálenost Čas celkem, u vzdálenosti se zátěží
+  // Práce v kg·m (sel = výskyty cviku)
+  function exTile3(kind, sel) {
+    if (kind === "distw") {
+      const work = sel.reduce((a, s) => a + s.work, 0);
+      return `<div class="kpi"><b>${fmtInt(work)}</b><span>Práce kg·m</span></div>`;
+    }
+    if (isTimed(kind)) {
+      const sec = sel.reduce((a, s) => a + s.totSec, 0);
+      return `<div class="kpi"><b>${fmtSec(sec)}</b><span>Čas</span></div>`;
+    }
+    const vol = sel.reduce((a, s) => a + s.vol, 0);
+    return `<div class="kpi"><b>${fmtVol(vol)}</b><span>Objem</span></div>`;
+  }
+
+  /* ---------- STRÁNKA CVIKU (F0-05, F3-31, F3-28, F3-49) ----------
+     Route exd (vExDetail), záložky Popis | Statistiky | Historie (S.exPart "info" | "stats" | "hist"),
+     bez počtu záznamů v názvu. openEx volí záložku podle toho, odkud se přišlo (data-p ji vynutí): ze záložky
+     Cviky Statistiky, když má cvik záznam, jinak Popis.
+     Statistiky (F3-28): filtr fitek, období a dlaždice, graf, Bez zlepšení, Osobní rekordy (bez bloku
+     Poslední rekordy, ten opakoval kartu rekordů a medaile v historii); Bez zlepšení a Osobní rekordy
+     ukazují jen fitka podle filtru fitek. Historie (vExHist): filtr fitek
+     a tréninky se sériemi (25, pak Starší), štítek fitka přes gymPill na každé kartě.
+     Klepnutí na kartu historie (F3-49) otevře stránku tréninku (openWorkout, odtud Upravit), karta
+     rozdělaného tréninku vrací do tréninku. Zpět ze stránky tréninku vede na stejný cvik, záložku, filtr
+     fitka a místo: navFrame si u stránky cviku pamatuje S.exDetail, S.exPart, S.detailGym a S.exHistLimit
+     (f.exd), protože ze stránky tréninku jde otevřít jiný cvik.
+     Filtr fitek (exGymChips) jen u cviku vázaného na fitko cvičeného ve 2 a víc fitkách, výběr S.detailGym
+     je společný pro Statistiky i Historii; první čip je na Statistikách „Všechna (zvlášť)“ (čára za každé
+     fitko), na Historii „Všechna“.
+     Rozdělaný trénink (jen ✓ série) a výběr fitka podle tréninku, odkud se přišlo: sekce F3-34 (exLive).
+     Vázáno na fitko (F3-31): na stránce jen informace v řádku s vybavením („Kladka · vázáno na fitko“ + ikona,
+     klepnutí = gdTip), u nevázaného cviku nic. Měnit jde jen ve formuláři Upravit / Nový cvik (#x-gd), aby se
+     způsob počítání statistik nepřepnul omylem jedním klepnutím. */
+  function vExDetail() {
+    const id = S.exDetail;
+    const ex = exOf(id);
+    const live = exLive(id); // rozdělaný trénink (F3-34)
+    const list = exListLive(id, live);
+    const gymsWith = [...new Set(list.map((s) => s.w.gymId))].sort((a, b) => gymIdx(a) - gymIdx(b));
+    // vybrané fitko mezi čipy není (cvik se v něm ještě necvičil): všechna fitka
+    if (S.detailGym !== "all" && !gymsWith.includes(S.detailGym)) {
+      S.detailGym = "all";
+    }
+    let h = topbar(
+      ex.name,
+      ex.cz || "",
+      `<button class="iconbtn" data-act="exBack" aria-label="Zpět">${IC.back}</button>`,
+      "czsub",
+    );
+    h += `<div class="seg seg-wide mb-in">
+      ${[
+        ["info", "Popis"],
+        ["stats", "Statistiky"],
+        ["hist", "Historie"],
+      ]
+        .map(
+          ([k, l]) =>
+            `<button data-act="exPart" data-v="${k}" aria-pressed="${S.exPart === k}">${l}</button>`,
+        )
+        .join("")}
+    </div>`;
+    if (S.exPart !== "stats" && S.exPart !== "hist") {
+      // popis
+      h +=
+        `<div class="card exinfo">
+        ${photoAddBtn(id)}${photoGallery(ex, id)}${exTags(ex)}` +
+        `${
+          ex.desc
+            ? `<p class="desc">${esc(ex.desc)}</p>`
+            : '<p class="desc muted">Popis provedení zatím chybí.</p>'
+        }
+        <div class="row wrap-r" style="justify-content:space-between">
+          <a class="link" href="${esc(exLink(ex))}" target="_blank" rel="noopener">` +
+        `${esc(exLinkLabel(ex))}${icon("ext")}</a>
+          <span class="xs muted">` +
+        `${esc(EQUIP[ex.equip] || "")}${ex.gymDep ? " · vázáno na fitko" + gdIcon(true) : ""}</span>
+        </div>
+      </div>`;
+      h += machInfo(ex, id); // nastavení stroje po fitkách (F1-07)
+      if (ex.archived) {
+        h += `<div class="card small mt-in">
+          <b>Skrytý cvik.</b> <span class="muted">Nenabízí se při přidávání do tréninku. Vrátíš ho
+            přes Upravit cvik → Zobrazit.</span>
+        </div>`;
+      }
+      h += `<p class="small muted mt-in">
+        ${
+          list.length
+            ? `Cvičeno ${list.length}× · naposledy ${fmtDate(list[0].w.start)} ` +
+              `<button class="linkbtn" data-act="exPart" data-v="stats"
+                style="color:var(--accent-2);font-weight:600">Statistiky${icon("next")}</button>`
+            : "S tímto cvikem zatím nemáš žádný záznam."
+        }
+      </p>`;
+      // akce cviku na konci stránky jako u uloženého tréninku (F3-30)
+      h += `<div class="stack mt-out">
+        <button class="btn block" data-act="editExDetail" data-v="${esc(id)}">Upravit</button>
+        <button class="btn block" data-act="dupEx" data-v="${esc(id)}">Duplikovat</button>
+      </div>`;
+      return h;
+    }
+    if (!list.length) {
+      return `${h}
+      <div class="empty">S tímto cvikem zatím nemáš žádný záznam.</div>`;
+    }
+    if (S.exPart === "hist") {
+      return h + vExHist(id, ex, list, gymsWith, live);
+    }
+    // statistiky
+    h += `<p class="xs muted mb-in" style="margin-top:0">${
+      ex.gymDep
+        ? `Vázáno na fitko${gdIcon()}: počítá se zvlášť pro každé fitko.`
+        : "Nevázáno na fitko: data ze všech fitek se sčítají."
+    } Změníš přes Upravit.</p>`;
+    h += exGymChips(ex, gymsWith, "Všechna (zvlášť)");
+    const kind = kindOf(id);
+    const M = exCharts(kind); // grafy podle typu cviku (F3-42)
+    // vybraný graf cvik nemá (např. „Odh. 1RM“ u planku) → první graf, který má
+    if (!M[S.detailMetric]) {
+      S.detailMetric = Object.keys(M)[0];
+    }
+    const since = rangeSince(S.detailRange);
+    let sel = list.filter((s) => s.w.start >= since && s.nWork > 0);
+    if (ex.gymDep && S.detailGym !== "all") {
+      sel = sel.filter((s) => s.w.gymId === S.detailGym);
+    }
+    // souhrn za období
+    let ps = 0;
+    for (const s of sel) {
+      ps += s.nWork;
+    }
+    const prIn = (start, gymId) =>
+      start >= since && (!ex.gymDep || S.detailGym === "all" || gymId === S.detailGym);
+    let pr = (recs().byEx[id] || []).filter((r) => r.main && prIn(r.w.start, r.gymId)).length;
+    // rekord z rozdělaného tréninku (F3-34), nejvýš 1 jako u uloženého
+    if (live && live.lr.ex.length && prIn(live.list[0].w.start, live.list[0].w.gymId)) {
+      pr++;
+    }
+    h += `<section class="sec cont">
+      ${rangeSeg("detailRange", S.detailRange)}
+      <div class="kpis k4 mt-in">
+        <div class="kpi"><b>${sel.length}</b><span>Tréninky</span></div>
+        <div class="kpi"><b>${ps}</b><span>Série</span></div>
+        ${exTile3(kind, sel)}
+        <div class="kpi"><b>${pr}</b><span>Rekordy</span></div>
+      </div>
+    </section>`;
+    const key = M[S.detailMetric][1];
+    let series;
+    if (ex.gymDep) {
+      const by = {};
+      for (const s of sel) {
+        (by[s.w.gymId] = by[s.w.gymId] || []).push(s);
+      }
+      series = Object.keys(by)
+        .sort((a, b) => gymIdx(a) - gymIdx(b))
+        .map((g) => ({
+          name: gymName(g),
+          color: gymColor(g),
+          pts: by[g]
+            .map((s) => ({ x: s.w.start, y: s[key], s }))
+            .filter((p) => p.y > 0)
+            .reverse(),
+        }));
+    } else {
+      series = [
+        {
+          name: "Všechna fitka",
+          color: "var(--chart)",
+          pts: sel
+            .map((s) => ({ x: s.w.start, y: s[key], s }))
+            .filter((p) => p.y > 0)
+            .reverse(),
+        },
+      ];
+    }
+    h += `<section class="sec">
+      <div class="chips" data-ck="detailMetric">
+        ${Object.keys(M)
+          .map(
+            (k) =>
+              `<button class="chip" data-act="detailMetric" data-v="${k}"
+                  aria-pressed="${S.detailMetric === k}">${M[k][0]}</button>`,
+          )
+          .join("")}
+      </div>`;
+    h +=
+      `<div class="card mt-in">
+        ${chartPh(
+          {
+            type: "line",
+            label: M[S.detailMetric][0],
+            unit: M[S.detailMetric][2],
+            yUnit: M[S.detailMetric][2].trim(),
+            fmt:
+              M[S.detailMetric][2] === " s"
+                ? "sec"
+                : S.detailMetric === "vol" || S.detailMetric === "svol"
+                  ? "vol"
+                  : "",
+            whole: ["reps", "treps", "work", "swork", "m"].includes(S.detailMetric),
+            series,
+          },
+          200,
+        )}` +
+      `${
+        series.length > 1
+          ? `<div class="legend">${series
+              .map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`)
+              .join("")}</div>`
+          : ""
+      }
+    </div>
+    </section>`;
+    // stagnace (F4-06): u vázaného cviku zvlášť pro každé fitko (podle filtru fitka)
+    const stagList = (ex.gymDep ? gymsWith.filter((g) => S.detailGym === "all" || S.detailGym === g) : [null])
+      .map((g) => stagInfo(id, g))
+      .filter(Boolean);
+    if (stagList.length) {
+      h += `<section class="sec">
+        <div class="sec-h"><h2>Bez zlepšení</h2></div>
+        <div class="card stack inner">
+          ${stagList
+            .map(
+              (x) =>
+                `<div class="row" style="align-items:flex-start">
+                  <span class="stag-ico" aria-hidden="true">${IC.stag}</span>
+                  <div class="grow">
+                    <b>${esc(stagCount(x.n))}</b>
+                    ${
+                      x.gymDep
+                        ? `<span class="pill">
+                          <span class="sw" style="background:${gymColor(x.gymId)}"></span>
+                          ${esc(gymName(x.gymId))}
+                        </span>`
+                        : ""
+                    }
+                    <div class="xs muted">
+                      ${esc(stagSince(x, true))} nic lepšího · naposledy ${esc(fmtDateS(x.last.w.start))}
+                    </div>
+                  </div>
+                </div>`,
+            )
+            .join("")}
+        </div>
+      </section>`;
+    }
+    // rekordy
+    const R = recs();
+    // u vázaného cviku jen fitka podle filtru fitek (jako Bez zlepšení)
+    const ctxs = ex.gymDep
+      ? gymsWith
+          .filter((g) => S.detailGym === "all" || S.detailGym === g)
+          .map((g) => ({ g, name: gymName(g), b: exBestLive(id, g, live) }))
+      : [{ g: null, name: "", b: exBestLive(id, null, live) }];
+    h += `<section class="sec">
+        <div class="sec-h">
+          <h2>Osobní rekordy</h2>
+          ${helpBtn("exRec:" + id)}
+        </div>
+        <div class="stack list">`;
+    for (const c of ctxs) {
+      if (!c.b) continue;
+      h +=
+        `<div class="card recgrid">
+          ${
+            ex.gymDep
+              ? `<div class="rg-h">
+                <span class="pill">
+                  <span class="sw" style="background:${gymColor(c.g)}"></span>
+                  ${esc(c.name)}
+                </span>
+              </div>`
+              : ""
+          }` +
+        `${REC_ORDER.filter((t) => c.b[t])
+          .map((t) => {
+            const r = c.b[t];
+            const sub =
+              t === "e1rm" || t === "maxKg"
+                ? setStr(kindOf(id), r.set) + " · "
+                : t === "bestSet"
+                  ? fmtInt(r.v) + " kg · "
+                  : t === "bestW"
+                    ? fmtInt(r.v) + " kg·m · "
+                    : "";
+            return `<div class="rg-r">
+              <span class="rg-l">${REC[t]}</span>
+              <b>${esc(recFmt(t, r.v, r.set))}</b>
+              <span class="rg-s">${sub}${fmtDate(r.w.start)}${r.w.live ? " · probíhá" : ""}</span>
+            </div>`;
+          })
+          .join("")}` +
+        `</div>`;
+    }
+    h += "</div>";
+    h += "</section>"; // jak se rekordy počítají: panel s otazníkem v nadpisu (F3-21)
+    return h;
+  }
+
+  // filtr fitek na stránce cviku (S.detailGym), jen u vázaného cviku ze 2 a víc fitek; all = první čip
+  function exGymChips(ex, gymsWith, all) {
+    if (!ex.gymDep || gymsWith.length < 2) return "";
+    return `<div class="sec">
+      <div class="chips" data-ck="detailGym">
+        <button class="chip" data-act="detailGym" data-v="all"
+            aria-pressed="${S.detailGym === "all"}">
+          ${esc(all)}
+        </button>
+        ${gymsWith
+          .map(
+            (g) =>
+              `<button class="chip" data-act="detailGym" data-v="${g}"
+                  aria-pressed="${S.detailGym === g}">
+                <span class="sw" style="background:${gymColor(g)}"></span>
+                ${esc(gymName(g))}
+              </button>`,
+          )
+          .join("")}
+      </div>
+    </div>`;
+  }
+
+  // záložka Historie (F3-28): filtr fitek a tréninky se sériemi, nejnovější nahoře
+  function vExHist(id, ex, list, gymsWith, live) {
+    let h = exGymChips(ex, gymsWith, "Všechna");
+    const sel =
+      ex.gymDep && gymsWith.length > 1 && S.detailGym !== "all"
+        ? list.filter((s) => s.w.gymId === S.detailGym)
+        : list;
+    const R = recs();
+    h += `<section class="sec cont">
+      <div class="stack list">`;
+    for (const s of sel.slice(0, S.exHistLimit || 25)) {
+      // medaile: zlatá za rekord, stříbrná za zlepšení (F3-25), bez počtu; rozdělaný trénink: živý rekord
+      const imp = s.w.live
+        ? live.lr.ex.slice(0, 1).map((type) => ({ type }))
+        : (R.byEx[id] || []).filter((r) => r.w.id === s.w.id);
+      // klepnutí na kartu (F3-49): uložený trénink = jeho stránka, rozdělaný = návrat do tréninku
+      const open = s.w.live
+        ? 'data-act="tab" data-v="train"'
+        : `data-act="openW" data-v="${esc(s.w.id)}" data-m="${s.w.mk}"`;
+      h +=
+        `<button class="card exh-w" ${open}>
+        <div class="row small">
+          <b class="grow">
+            ${fmtDay(s.w.start)} ${new Date(s.w.start).getFullYear()}` +
+        `${s.w.live ? " · probíhá" : ""}${imp.length ? " " + recCount(imp, "") : ""}
+          </b>
+          ${s.w.gymId ? gymPill(s.w.gymId) : ""}
+        </div>
+        <div class="small num mt-lbl">
+          ${s.e.sets
+            .map(
+              (st) =>
+                `<span class="${st.t === "w" ? "muted" : ""}">${
+                  st.t !== "n"
+                    ? `<span class="lbl ${st.t}" style="font-weight:700">${st.t.toUpperCase()}</span> `
+                    : ""
+                }${esc(setStr(s.kind, st))}${effTxt(st) ? " " + esc(effTxt(st)) : ""}</span>`,
+            )
+            .join(" · ")}
+        </div>
+      </button>`;
+    }
+    if (sel.length > (S.exHistLimit || 25)) {
+      h += '<button class="btn block" data-act="exHistMore">Starší</button>';
+    }
+    h += "</div></section>";
+    return h;
+  }
+
+  /* ---------- STATISTIKY CVIKU S ROZDĚLANÝM TRÉNINKEM (F3-34) ----------
+     Stránka cviku (Statistiky i Historie) ukazuje i rozdělaný trénink (S.active), jen jeho odškrtnuté série
+     (✓), stejně jako živé medaile (liveRecords). Jde do dlaždic, grafu, Osobních rekordů (hodnota
+     s „probíhá“) a Historie (karta nahoře, „probíhá“). Do derive() se nepřidává: z něj se počítá Minule,
+     předvyplnění, návrh progrese, Bez zlepšení i rekordy a trénink by se srovnával sám se sebou.
+     exLive(id) = {list (souhrny exSum jako v derive().byEx, w.live), m (exMetrics), ctx (recCtx), lr
+     (liveRecords prvního výskytu cviku)} nebo null; exListLive(id, live) = derive().byEx[id] + rozdělaný trénink,
+     od nejnovějšího; exBestLive(id, g, live) = nejlepší hodnoty kontextu (R.best) přepsané lepšími z rozdělaného
+     tréninku.
+     Fitko (openEx, exOpenGym): stránka otevřená z tréninku (rozdělaného i upravovaného) nebo ze stránky
+     uloženého tréninku vybere u cviku vázaného na fitko čip fitka toho tréninku. Když fitko mezi čipy není
+     (cvik se tam ještě necvičil), vExDetail vrátí výběr na „Všechna“. Odjinud (Cviky, Statistiky, šablona)
+     „Všechna“. */
+  const LIVE_ID = "live";
+  function exLive(id) {
+    const d = S.active;
+    if (!d) return null;
+    const i = d.ex.findIndex((x) => x.exId === id);
+    if (i < 0) return null;
+    // hodnoty série jsou v rozdělaném tréninku text, souhrny počítají s čísly
+    const conv = (s) =>
+      Object.assign({}, s, {
+        kg: num(s.kg) || 0,
+        reps: num(s.reps) || 0,
+        sec: parseSec(s.sec) || 0,
+        km: num(s.km) || 0,
+        m: num(s.m) || 0,
+      });
+    const entries = d.ex
+      .filter((x) => x.exId === id)
+      .map((x) => ({ exId: id, sets: x.sets.filter((s) => s.done).map(conv) }))
+      .filter((x) => x.sets.length);
+    if (!entries.length) return null;
+    const w = { id: LIVE_ID, live: true, start: d.start, gymId: d.gymId, ex: entries };
+    const allSets = entries.flatMap((e) => e.sets);
+    return {
+      list: entries.map((e) => exSum(w, e)),
+      m: exMetrics(id, allSets, d.start),
+      ctx: recCtx(id, d.gymId),
+      lr: liveRecords(d, i),
+    };
+  }
+  function exListLive(id, live) {
+    const base = derive().byEx[id] || [];
+    if (!live) return base;
+    return live.list.concat(base).sort((a, b) => b.w.start - a.w.start);
+  }
+  // nejlepší hodnoty cviku v kontextu (g = fitko, null = všechna) včetně rozdělaného tréninku
+  function exBestLive(id, g, live) {
+    const ctx = id + "|" + (g == null ? "*" : g);
+    const b = recs().best[ctx];
+    if (!live || !live.m || live.ctx !== ctx) return b;
+    const out = Object.assign({}, b);
+    const w = live.list[0].w;
+    for (const type in live.m) {
+      const cur = live.m[type];
+      if (!out[type] || cur.v > out[type].v + EPS) {
+        out[type] = { v: cur.v, set: cur.set, w };
+      }
+    }
+    return out;
+  }
+  // fitko pro filtr stránky cviku podle toho, odkud se otevírá (u nevázaného cviku vždy „all“)
+  function exOpenGym(exId) {
+    let gymId = null;
+    if (S.route === "train" && S.active) {
+      gymId = S.active.gymId;
+    } else if (S.route === "edit" && S.editDraft) {
+      gymId = S.editDraft.gymId;
+    } else if (S.route === "wd" && S.wDetail) {
+      const o = S.wDetail;
+      const w = S.months[o.mk] && S.months[o.mk][o.id];
+      gymId = w ? w.gymId : null;
+    }
+    return exCtxGym(exId, gymId) || "all";
+  }
+
+  /* ---------- FOTKY U CVIKU (F2-05) ----------
+     Vlastní fotky (stroj, nastavení) a vybrané fotky z free-exercise-db. Jsou v IndexedDB v úložišti
+     "photos" (klíč = id), ne v dokumentech Store: fronta zápisů v localStorage by je neunesla.
+     Záznam: {id, exId, gymId (null = bez fitka), at, first, w, h, mime, size, src, blob},
+     src = "fedb:<id>/<n>" u fotky z online databáze. S.photos = popisy bez obrázku, phBlob = obrázky
+     (Blob z IndexedDB, v paměti je jen odkaz), zobrazují se přes blob: adresy (CSP img-src blob:).
+     Galerie (stránka cviku a info o cviku ve výběru): postava, fotka „první“ (jen jedna u cviku, platí
+     ve všech fitkách), fotky aktuálního fitka (photoGym), bez fitka, jiných fitek; ve skupině od nejstarší.
+     Před uložením se fotka zmenší (PH_MAX px, JPEG), tím zmizí i údaje z fotoaparátu (poloha GPS).
+     Záloha: fotky jen v souboru s přepínačem „Zálohovat i fotky“, body obnovy je nemají; obnova fotky
+     jen přidává (Nahradit vše přepíše jen fotky se stejným id), maže se jen ručně.
+     Zápis jen photoSave / photoDel / photoUpdate (ne přes put), zobrazení photoUrl, zmenšení photoShrink
+     (PH_MAX). Galerie photoGallery, pořadí photosOf, pozice galPos (galRestore po vykreslení, galReset při
+     otevření stránky cviku). Celá obrazovka openViewer / pv (panel v sheetRoot, Zpět přes sheetNav) má stejné
+     snímky jako galerie (pvIds: PV_FIG = postava, pak fotky), tah dolů zavře (pvDrag, PV_CLOSE_DY). Z online
+     databáze fedbPhotos / fp (shoda fedbMatch, jinak hledání), ve formuláři Nový cvik exEd.fxPh; stahuje se
+     přes <img crossorigin> a canvas (fedbImg), ne fetch. Záloha photosExport (přepínač Local bkPhotos),
+     obnova photosImport. copyFromMain kopíruje i photos. */
+  const PH_MAX = 1280,
+    PH_Q = 0.82;
+  const phBlob = new Map(), // id fotky → Blob
+    phUrl = new Map(); // id fotky → blob: adresa
+  const galPos = {}; // kolikátý snímek galerie je vidět (klíč = id cviku), 0 = postava
+  let phAdd = null, // přidání fotek z telefonu: {exId, items: [{blob, w, h, url}], gym, first}
+    pv = null, // fotka přes celou obrazovku: {exId, id, from ("exd" / "info"), gymOpen}
+    fp = null; // fotky z online databáze: {exId, x (záznam FEDB), q, search, sel, gym, first}
+
+  // popisy fotek při startu (obrázky zůstávají v IndexedDB, v paměti je jen odkaz na ně)
+  async function photosLoad() {
+    try {
+      const rows = await Idb.all("photos");
+      for (const [id, rec] of rows) {
+        photoKeep(id, rec);
+      }
+      photoInputs();
+      S.photosOn = true;
+      scheduleRender();
+    } catch (e) {
+      console.warn("fotky", e);
+    }
+  }
+  // záznam fotky → S.photos (popis) a phBlob (obrázek)
+  function photoKeep(id, rec) {
+    const meta = Object.assign({}, rec, { id });
+    delete meta.blob;
+    S.photos[id] = meta;
+    if (phBlob.get(id) !== rec.blob) {
+      photoUrlDrop(id);
+      phBlob.set(id, rec.blob);
+    }
+  }
+  function photoUrlDrop(id) {
+    const u = phUrl.get(id);
+    if (u) {
+      URL.revokeObjectURL(u);
+      phUrl.delete(id);
+    }
+  }
+  // blob: adresa obrázku (vytvoří se při prvním zobrazení)
+  function photoUrl(id) {
+    let u = phUrl.get(id);
+    if (!u && phBlob.get(id)) {
+      u = URL.createObjectURL(phBlob.get(id));
+      phUrl.set(id, u);
+    }
+    return u || "";
+  }
+  const photoId = () => "ph" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const photoErr = (e) =>
+    e && e.code === "quota_exceeded"
+      ? "Úložiště v telefonu je plné, fotka se neuložila."
+      : "Fotku se nepodařilo uložit.";
+  // uloží celý záznam fotky (i s obrázkem)
+  async function photoSave(rec) {
+    await Idb.put("photos", rec.id, rec);
+    photoKeep(rec.id, rec);
+  }
+  async function photoDel(id) {
+    await Idb.del("photos", id);
+    delete S.photos[id];
+    photoUrlDrop(id);
+    phBlob.delete(id);
+  }
+  // změna popisu fotky (fitko, první); „první“ může být jen jedna fotka cviku, ostatním se vypne
+  async function photoUpdate(id, change) {
+    const p = S.photos[id];
+    if (!p) return;
+    if (change.first) {
+      for (const o of Object.values(S.photos)) {
+        if (o.exId === p.exId && o.first && o.id !== id) {
+          await photoSave(Object.assign({}, o, { first: false, blob: phBlob.get(o.id) }));
+        }
+      }
+    }
+    await photoSave(Object.assign({}, p, change, { blob: phBlob.get(id) }));
+  }
+  // fitko, podle kterého se řadí fotky: rozdělaný nebo upravovaný trénink, jinak vybrané fitko
+  function photoGym() {
+    const fromEdit = S.route === "edit" || (S.route === "exd" && S.prevRoute === "edit");
+    const d = fromEdit ? S.editDraft : S.active;
+    return (d && d.gymId) || curGym();
+  }
+  // fotky cviku v pořadí galerie
+  function photosOf(exId) {
+    const gym = photoGym();
+    const rank = (p) => (p.first ? 0 : p.gymId && p.gymId === gym ? 1 : !p.gymId ? 2 : 3);
+    return Object.values(S.photos)
+      .filter((p) => p.exId === exId)
+      .sort(
+        (a, b) => rank(a) - rank(b) || (rank(a) === 3 ? gymIdx(a.gymId) - gymIdx(b.gymId) : 0) || a.at - b.at,
+      );
+  }
+  const gymExists = (id) => S.cfg.gyms.some((g) => g.id === id);
+  // štítek fitka na fotce (fitko, které už neexistuje = „Smazané fitko“)
+  function photoTag(p) {
+    if (!p.gymId) return '<span class="gal-tag">Bez fitka</span>';
+    if (!gymExists(p.gymId)) return '<span class="gal-tag">Smazané fitko</span>';
+    return `<span class="gal-tag">
+      <span class="sw" style="background:${gymColor(p.gymId)}"></span>${esc(gymName(p.gymId))}
+    </span>`;
+  }
+  const galDots = (n, cur) =>
+    `<div class="gal-dots" aria-hidden="true">` +
+    `${Array.from({ length: n }, (_, i) => `<i${i === cur ? ' class="on"' : ""}></i>`).join("")}</div>`;
+  // galerie: první snímek je postava, pak fotky, pod nimi tečky; cvik bez fotek má jen postavu jako dřív
+  function photoGallery(ex, exId) {
+    const list = photosOf(exId);
+    if (!list.length) return exFigures(ex);
+    const cur = Math.min(galPos[exId] || 0, list.length);
+    return `<div class="gal">
+      <div class="gal-track" data-gal="${esc(exId)}">
+        <button type="button" class="gal-s fig" data-act="phView" data-v="${PV_FIG}" data-ex="${esc(exId)}"
+            aria-label="Postava přes celou obrazovku">${exFigures(ex)}</button>
+        ${list
+          .map(
+            (p, i) =>
+              `<button type="button" class="gal-s" data-act="phView" data-v="${esc(p.id)}"
+                  aria-label="Fotka ${i + 1} z ${list.length}">
+                <img src="${photoUrl(p.id)}" alt="">
+                ${photoTag(p)}${p.first ? `<span class="gal-pin">${icon("star")}První</span>` : ""}
+              </button>`,
+          )
+          .join("")}
+      </div>
+      ${galDots(list.length + 1, cur)}
+    </div>`;
+  }
+  /* PŘIDAT FOTKU IKONOU V ROHU KARTY (F3-51): na stránce cviku místo řádku tlačítek Vyfotit / Z galerie /
+     Z online databáze ikona fotoaparátu s pluskem (IC.photoAdd) vpravo nahoře v kartě Popis, na všech
+     snímcích galerie stejně. Klepnutí otevře panel Přidat fotku (sheetPhotoAdd): Fotoaparát (rovnou
+     fotoaparát), Galerie, Online databáze. Fotoaparát a Galerie jsou popisky políček phCamIn / phPickIn
+     (výběr souboru musí začít přímo klepnutím), panel se zavře až po klepnutí (akce phAddPick). Štítek
+     „První“ na fotce je proto vlevo nahoře (.gal-pin). */
+  function photoAddBtn(exId) {
+    if (!S.photosOn) return "";
+    return `<button class="btn sm ico gal-addb" data-act="phAddMenu" data-v="${esc(exId)}"
+        aria-label="Přidat fotku">${IC.photoAdd}</button>`;
+  }
+  function sheetPhotoAdd(exId) {
+    openSheet(
+      "Přidat fotku",
+      `<div class="stack">
+        <label class="btn block" for="phCamIn" data-act="phAddPick">Fotoaparát</label>
+        <label class="btn block" for="phPickIn" data-act="phAddPick">Galerie</label>
+        <button class="btn block" data-act="phFedb" data-v="${esc(exId)}">Online databáze</button>
+      </div>`,
+    );
+  }
+  /* políčka pro výběr souboru jsou mimo #app: překreslení stránky, zatímco je otevřený fotoaparát
+     nebo galerie, by je jinak nahradilo a vybraná fotka by se ztratila */
+  function photoInputs() {
+    if (document.getElementById("phCamIn")) return;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<input type="file" id="phCamIn" accept="image/*" capture="environment" hidden>
+      <input type="file" id="phPickIn" accept="image/*" multiple hidden>`,
+    );
+  }
+  // index snímku, na kterém galerie stojí (snímky jsou široké jako galerie + mezera)
+  function galIndex(el) {
+    const a = el.children[0],
+      b = el.children[1];
+    const step = b ? b.offsetLeft - a.offsetLeft : el.clientWidth;
+    return Math.max(0, Math.min(el.children.length - 1, Math.round(el.scrollLeft / (step || 1))));
+  }
+  function galScrollTo(el, i) {
+    const s = el.children[i];
+    if (s) {
+      el.scrollLeft = s.offsetLeft - el.children[0].offsetLeft;
+    }
+  }
+  // po vykreslení nastaví galerie na naposledy viděný snímek
+  function galRestore(root) {
+    (root || document).querySelectorAll(".gal-track[data-gal]").forEach((el) => {
+      galScrollTo(el, galPos[el.dataset.gal] || 0);
+    });
+  }
+  function galReset() {
+    for (const k in galPos) {
+      delete galPos[k];
+    }
+  }
+  // posun galerie prstem: tečky, zapamatovaná pozice, u fotky přes celou obrazovku popisky
+  document.addEventListener(
+    "scroll",
+    (ev) => {
+      const el = ev.target;
+      if (!el.classList || !el.classList.contains("gal-track")) return;
+      const i = galIndex(el);
+      const dots = el.parentNode.querySelector(".gal-dots");
+      if (dots) {
+        dots.querySelectorAll("i").forEach((d, k) => d.classList.toggle("on", k === i));
+      }
+      if (el.dataset.gal) {
+        galPos[el.dataset.gal] = i;
+      }
+      if (el.dataset.pvx && pvx && i !== pvx.k) {
+        pvx.k = i; // F3-50: zvětšená fotka z online databáze
+        fxViewerChrome();
+      }
+      if (el.dataset.pv && pv) {
+        const id = el.children[i] && el.children[i].dataset.id;
+        if (id && id !== pv.id) {
+          pv.id = id;
+          pv.gymOpen = false;
+          pvChrome();
+        }
+      }
+    },
+    true,
+  );
+
+  /* zmenší obrázek (soubor z telefonu nebo načtený <img>) na nejvýš PH_MAX px a uloží jako JPEG;
+     orientaci podle fotoaparátu (EXIF) otočí prohlížeč, ostatní údaje z fotky se nepřenesou */
+  async function photoShrink(src) {
+    let bmp;
+    try {
+      bmp = await createImageBitmap(src, { imageOrientation: "from-image" });
+    } catch (e) {
+      bmp = await createImageBitmap(src);
+    }
+    const k = Math.min(1, PH_MAX / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * k)),
+      h = Math.max(1, Math.round(bmp.height * k));
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; // průhledné PNG na bílém pozadí
+    ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) {
+      bmp.close();
+    }
+    const blob = await new Promise((ok, ko) => {
+      c.toBlob((b) => (b ? ok(b) : ko(new Error("toBlob"))), "image/jpeg", PH_Q);
+    });
+    return { blob, w, h };
+  }
+  // nový záznam fotky ze zmenšeného obrázku
+  const photoRec = (exId, it, gymId, at, src) =>
+    Object.assign(
+      {
+        id: photoId(),
+        exId,
+        gymId: gymId || null,
+        at,
+        first: false,
+        w: it.w,
+        h: it.h,
+        mime: it.blob.type || "image/jpeg",
+        size: it.blob.size,
+        blob: it.blob,
+      },
+      src ? { src } : {},
+    );
+
+  /* přidání fotek z telefonu: soubory z Vyfotit / Z galerie → zmenšit → okno s volbou fitka */
+  async function photoFiles(inp) {
+    const files = [...(inp.files || [])];
+    inp.value = "";
+    if (!files.length || !S.exDetail) return;
+    const exId = S.exDetail;
+    toast(files.length > 1 ? "Zpracovávám fotky…" : "Zpracovávám fotku…");
+    const items = [];
+    for (const f of files) {
+      try {
+        const it = await photoShrink(f);
+        it.url = URL.createObjectURL(it.blob);
+        items.push(it);
+      } catch (e) {
+        console.warn("fotka", e);
+      }
+    }
+    if (!items.length) {
+      toast(files.length > 1 ? "Fotky se nepodařilo načíst." : "Fotku se nepodařilo načíst.");
+      return;
+    }
+    if (items.length < files.length) {
+      toast("Některé fotky se nepodařilo načíst.");
+    }
+    phAdd = { exId, items, gym: exOf(exId).gymDep ? photoGym() : null, first: false };
+    renderPhAdd();
+  }
+  // výběr fitka pro fotku (chips, v = id fitka, "" = bez fitka)
+  function phGymChips(act, cur) {
+    return `<div class="chips" data-ck="${act}">
+      <button class="chip" data-act="${act}" data-v="" aria-pressed="${!cur}">Bez fitka</button>
+      ${S.cfg.gyms
+        .filter((g) => !g.archived || g.id === cur) // archivované fitko nejde vybrat (F2-06)
+        .map(
+          (g) =>
+            `<button class="chip" data-act="${act}" data-v="${g.id}" aria-pressed="${cur === g.id}">` +
+            `<span class="sw" style="background:${gymColor(g.id)}"></span>${esc(g.name)}</button>`,
+        )
+        .join("")}
+    </div>`;
+  }
+  const photosWord = (n) => (n > 1 ? n + " " + plural(n, "fotku", "fotky", "fotek") : "fotku");
+  function renderPhAdd(noanim) {
+    const a = phAdd,
+      n = a.items.length,
+      size = a.items.reduce((s, it) => s + it.blob.size, 0);
+    const b = `<div class="thumbs">
+        ${a.items.map((it) => `<div class="th"><img src="${it.url}" alt=""></div>`).join("")}
+      </div>
+      <div class="lbl-f">Fitko</div>
+      ${phGymChips("phAddGym", a.gym)}
+      <div class="xs muted">„Bez fitka“ = fotka se ukáže ve všech fitkách.</div>
+      <label class="switch">
+        <input type="checkbox" data-act="phAddFirst" ${a.first ? "checked" : ""}>
+        <span>Nastavit jako první<br><span class="xs muted">Hned za postavou, před ostatními
+            fotkami.</span></span>
+      </label>
+      <div class="xs muted">Po zmenšení ${fmtSize(size)}, uloží se jen v tomto telefonu.</div>`;
+    openSheet(
+      n > 1 ? "Přidat fotky (" + n + ")" : "Přidat fotku",
+      b,
+      `<button class="btn grow" data-act="closeSheet">Zrušit</button>
+      <button class="btn primary grow" data-act="phAddSave">Uložit ${photosWord(n)}</button>`,
+      noanim,
+    );
+  }
+  async function phAddSave() {
+    const a = phAdd;
+    if (!a) return;
+    phAdd = null;
+    const ids = [];
+    try {
+      const at = Date.now();
+      for (let k = 0; k < a.items.length; k++) {
+        const rec = photoRec(a.exId, a.items[k], a.gym, at + k);
+        await photoSave(rec);
+        ids.push(rec.id);
+      }
+      if (a.first && ids.length) {
+        await photoUpdate(ids[0], { first: true });
+      }
+      toast(ids.length > 1 ? "Fotky uloženy" : "Fotka uložena");
+    } catch (e) {
+      toast(photoErr(e));
+    }
+    for (const it of a.items) {
+      URL.revokeObjectURL(it.url);
+    }
+    closeSheet();
+    galShow(a.exId, ids[0]);
+  }
+  // galerie cviku ukáže danou fotku (po přidání, po návratu z celé obrazovky)
+  function galShow(exId, id) {
+    const i = photosOf(exId).findIndex((p) => p.id === id);
+    if (i >= 0) {
+      galPos[exId] = i + 1;
+    }
+    scheduleRender();
+  }
+
+  /* fotka přes celou obrazovku: stejné snímky jako galerie (postava, pak fotky), posun prstem, fitko,
+     „první“, smazání; Zpět nebo tah dolů ji zavře. pv.id = id fotky, nebo PV_FIG = postava */
+  const PV_FIG = "fig",
+    PV_CLOSE_DY = 110; // o kolik px táhnout dolů, aby se zavřela
+  function openViewer(id, from, exId) {
+    const p = S.photos[id];
+    exId = p ? p.exId : exId;
+    if (!exId || (!p && id !== PV_FIG)) return;
+    pv = { exId, id, from, gymOpen: false };
+    renderViewer();
+  }
+  // snímky přes celou obrazovku v pořadí galerie: postava, pak id fotek
+  const pvIds = (exId) => [PV_FIG].concat(photosOf(exId).map((p) => p.id));
+  function renderViewer() {
+    const list = photosOf(pv.exId),
+      ids = pvIds(pv.exId);
+    if (!list.length) {
+      pvClose();
+      return;
+    }
+    if (!ids.includes(pv.id)) {
+      pv.id = ids[1];
+    }
+    kkEnd();
+    const root = document.getElementById("sheetRoot");
+    root.innerHTML = `<div class="pv" role="dialog" aria-modal="true" aria-label="Fotky cviku">
+      <div class="pv-h">
+        <button class="iconbtn" data-act="pvBack" aria-label="Zpět">${IC.back}</button>
+        <b id="pvCount"></b>
+        <span class="pv-name">${esc(exOf(pv.exId).name)}</span>
+      </div>
+      <div class="gal-track pv-track" data-pv="1">
+        <div class="pv-s pv-fig" data-id="${PV_FIG}">${exFigures(exOf(pv.exId))}</div>
+        ${list
+          .map((p) => `<div class="pv-s" data-id="${esc(p.id)}"><img src="${photoUrl(p.id)}" alt=""></div>`)
+          .join("")}
+      </div>
+      <div class="pv-f" id="pvFoot"></div>
+    </div>`;
+    document.body.style.overflow = "hidden";
+    sheetNav = { lv: pv.from === "info" ? exiLv() + 1 : 1, back: pvClose, re: renderViewer };
+    galScrollTo(root.querySelector(".pv-track"), ids.indexOf(pv.id));
+    pvChrome();
+  }
+  /* popisky přes celou obrazovku: kolikátá fotka, tečky (stejně jako galerie), fitko, smazat, první;
+     u postavy jsou ovládací prvky jen neviditelné, aby se výška fotek při posunu neměnila */
+  function pvChrome() {
+    const list = photosOf(pv.exId),
+      ids = pvIds(pv.exId),
+      fig = pv.id === PV_FIG,
+      i = list.findIndex((p) => p.id === pv.id),
+      p = fig ? list[0] : list[i];
+    const cnt = document.getElementById("pvCount"),
+      foot = document.getElementById("pvFoot");
+    if (!p || !cnt || !foot) return;
+    cnt.textContent = fig ? "Postava" : `Fotka ${i + 1} / ${list.length}`;
+    const gymTxt = !p.gymId ? "bez fitka" : gymExists(p.gymId) ? gymName(p.gymId) : "smazané fitko",
+      gymSw =
+        p.gymId && gymExists(p.gymId)
+          ? `<span class="sw" style="background:${gymColor(p.gymId)}"></span>`
+          : "";
+    foot.innerHTML = `${galDots(ids.length, ids.indexOf(pv.id))}
+      <div class="stack${fig ? " pv-off" : ""}"${fig ? ' aria-hidden="true"' : ""}>
+      <div class="row">
+        <button class="btn grow pv-gym" data-act="pvGym" aria-expanded="${pv.gymOpen}">
+          ${gymSw}
+          <span class="grow">Fitko: ${esc(gymTxt)}</span>${icon("down", pv.gymOpen ? "up" : "")}
+        </button>
+        <button class="btn danger" data-act="pvDel">Smazat</button>
+      </div>
+      ${pv.gymOpen ? phGymChips("pvSetGym", p.gymId) : ""}
+      <label class="switch">
+        <input type="checkbox" data-act="pvFirst" ${p.first ? "checked" : ""}>
+        <span>Nastavit jako první<br><span class="xs muted">Hned za postavou, před ostatními
+            fotkami.</span></span>
+      </label>
+      </div>`;
+    restoreChipScroll(foot);
+  }
+  // zavřít fotku: zpět na stránku cviku (na stejnou fotku) nebo do info o cviku
+  function pvClose() {
+    const v = pv;
+    pv = null;
+    if (!v) {
+      closeSheet();
+      return;
+    }
+    const i = pvIds(v.exId).indexOf(v.id);
+    galPos[v.exId] = Math.max(0, i); // galerie zůstane na stejném snímku (i na postavě)
+    if (v.from === "info") {
+      sheetExInfo(v.exId);
+    } else {
+      closeSheet();
+      scheduleRender();
+    }
+  }
+  function pvDelAsk() {
+    if (pv.id === PV_FIG) return;
+    openSheet(
+      "Smazat fotku?",
+      `<p>Fotka se smaže z telefonu. Smazání nejde vrátit (fotky nejsou v bodech
+        obnovy, jen v záloze do souboru s fotkami).</p>`,
+      `<button class="btn grow" data-act="pvDelNo">Zrušit</button>
+      <button class="btn primary grow" data-act="pvDelOk">Smazat</button>`,
+      false,
+      { lv: (pv.from === "info" ? exiLv() + 1 : 1) + 1, back: renderViewer, re: renderViewer },
+    );
+  }
+  // smaže zobrazenou fotku a ukáže tu, která byla za ní (poslední → ta před ní)
+  async function pvDelOk() {
+    if (!pv || pv.id === PV_FIG) return;
+    const idx = pvIds(pv.exId).indexOf(pv.id);
+    try {
+      await photoDel(pv.id);
+      toast("Fotka smazána");
+      const ids = pvIds(pv.exId);
+      pv.id = ids[Math.max(1, Math.min(idx, ids.length - 1))];
+    } catch (e) {
+      toast("Fotku se nepodařilo smazat.");
+    }
+    renderViewer();
+  }
+  // změna fotky zobrazené přes celou obrazovku (fitko, první), pak znovu vykreslit (pořadí se může změnit)
+  function pvUpdate(change) {
+    if (!pv || pv.id === PV_FIG) return;
+    photoUpdate(pv.id, change)
+      .catch((e) => toast(photoErr(e)))
+      .then(() => {
+        if (pv) {
+          pv.gymOpen = false;
+          renderViewer();
+        }
+      });
+  }
+
+  // tah dolů přes celou obrazovku ji zavře (jako galerie v telefonu); tah do strany = další snímek
+  let pvDrag = null;
+  document.addEventListener(
+    "touchstart",
+    (ev) => {
+      const tr = ev.target.closest && ev.target.closest(".pv-track");
+      pvDrag =
+        tr && ev.touches.length === 1
+          ? { tr, x: ev.touches[0].clientX, y: ev.touches[0].clientY, dy: 0, on: false }
+          : null;
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    "touchmove",
+    (ev) => {
+      if (!pvDrag) return;
+      const dx = ev.touches[0].clientX - pvDrag.x,
+        dy = ev.touches[0].clientY - pvDrag.y;
+      if (!pvDrag.on) {
+        if (Math.abs(dx) > 10 && Math.abs(dx) >= Math.abs(dy)) {
+          pvDrag = null; // posun do strany
+          return;
+        }
+        if (dy < 10) return;
+        pvDrag.on = true;
+        pvDrag.tr.style.transition = "none";
+      }
+      pvDrag.dy = Math.max(0, dy);
+      pvDrag.tr.style.transform = `translateY(${pvDrag.dy}px)`;
+      pvDrag.tr.style.opacity = String(Math.max(0.3, 1 - pvDrag.dy / 400));
+    },
+    { passive: true },
+  );
+  function pvDragEnd() {
+    const d = pvDrag;
+    pvDrag = null;
+    if (!d || !d.on) return;
+    if (d.dy > PV_CLOSE_DY && (pv || pvx)) {
+      navBack();
+      return;
+    }
+    d.tr.style.transition = "transform 0.15s, opacity 0.15s";
+    d.tr.style.transform = "";
+    d.tr.style.opacity = "";
+  }
+  document.addEventListener("touchend", pvDragEnd);
+  document.addEventListener("touchcancel", pvDragEnd);
+
+  /* ---------- FOTKY Z DATABÁZE PŘES CELOU OBRAZOVKU (F3-50) ----------
+     Náhledy fotek z free-exercise-db (formulář Nový cvik, sekce Fotky z databáze; panel Fotky z online
+     databáze na stránce cviku) jdou zvětšit: klepnutí na fotku ji otevře přes celou obrazovku (stejný vzhled
+     .pv jako uložené fotky, posun prstem na druhou fotku, tah dolů nebo Zpět zavře), kroužek v rohu náhledu
+     fotku rovnou vybere. Pod zvětšenou fotkou Vybrat k uložení / Zrušit výběr. Výběr je pořád stejný seznam:
+     exEd.fxPh (formulář), fp.sel (panel). Náhledy fxThumbs (akce fxView a výběr act), stav
+     pvx = {x, k, from ("form" / "fp"), lv}, vykreslení renderFxViewer / fxViewerChrome, zavření
+     fxViewerClose (vrátí formulář nebo panel). */
+  let pvx = null;
+  // dva náhledy vedle sebe: obrázek = zvětšit, kroužek = vybrat; saved(k) = fotka už je u cviku (jen zvětšit)
+  function fxThumbs(x, sel, act, saved) {
+    return `<div class="thumbs big">
+      ${[0, 1]
+        .map((k) => {
+          const isSaved = !!(saved && saved(k)),
+            on = sel.includes(k);
+          return `<div class="th${on ? " sel" : ""}${isSaved ? " saved" : ""}">
+            <button type="button" class="th-v" data-act="fxView" data-v="${k}"
+                aria-label="Zvětšit fotku ${k + 1}">
+              <img crossorigin="anonymous" src="${esc(fedbSrc(x, k))}" alt="">
+            </button>
+            ${
+              isSaved
+                ? '<span class="gal-tag">Už uložená</span>'
+                : `<button type="button" class="ck" data-act="${act}" data-v="${k}" aria-pressed="${on}"
+                    aria-label="Vybrat fotku ${k + 1}">${on ? IC.check : ""}</button>`
+            }
+          </div>`;
+        })
+        .join("")}
+    </div>`;
+  }
+  // seznam vybraných fotek pro otevřenou zvětšenou fotku
+  const fxViewerSel = () => (pvx.from === "fp" ? fp.sel : exEd.fxPh);
+  function openFxViewer(k, from) {
+    const x = from === "fp" ? fp && fp.x : exEd && exEd.fx;
+    if (!x) return;
+    pvx = { x, k, from, lv: from === "fp" ? (sheetNav ? sheetNav.lv : 1) + 1 : 1 };
+    renderFxViewer();
+  }
+  function renderFxViewer() {
+    kkEnd();
+    const root = document.getElementById("sheetRoot");
+    root.innerHTML = `<div class="pv" role="dialog" aria-modal="true" aria-label="Fotky z databáze">
+      <div class="pv-h">
+        <button class="iconbtn" data-act="pvBack" aria-label="Zpět">${IC.back}</button>
+        <b id="pvCount"></b>
+        <span class="pv-name">${esc(pvx.x.n)}</span>
+      </div>
+      <div class="gal-track pv-track" data-pvx="1">
+        ${[0, 1]
+          .map(
+            (k) =>
+              `<div class="pv-s"><img crossorigin="anonymous" src="${esc(fedbSrc(pvx.x, k))}" alt=""></div>`,
+          )
+          .join("")}
+      </div>
+      <div class="pv-f" id="pvFoot"></div>
+    </div>`;
+    document.body.style.overflow = "hidden";
+    sheetNav = { lv: pvx.lv, back: fxViewerClose, re: renderFxViewer };
+    galScrollTo(root.querySelector(".pv-track"), pvx.k);
+    fxViewerChrome();
+  }
+  // počet, tečky a tlačítko výběru pod zvětšenou fotkou
+  function fxViewerChrome() {
+    const cnt = document.getElementById("pvCount"),
+      foot = document.getElementById("pvFoot");
+    if (!pvx || !cnt || !foot) return;
+    cnt.textContent = `Fotka ${pvx.k + 1} / 2`;
+    const saved = pvx.from === "fp" && fedbSaved(fp.exId, pvx.x, pvx.k),
+      on = fxViewerSel().includes(pvx.k);
+    let btn = `<button class="btn primary block" data-act="fxSel">Vybrat k uložení</button>`;
+    if (saved) {
+      btn = '<div class="small muted">Fotka už je u cviku uložená.</div>';
+    } else if (on) {
+      btn = '<button class="btn block" data-act="fxSel">Zrušit výběr</button>';
+    }
+    foot.innerHTML = `${galDots(2, pvx.k)}
+      <div class="stack">${btn}</div>`;
+  }
+  // zavřít zvětšenou fotku: zpět do panelu Fotky z online databáze, nebo do formuláře (s novým výběrem)
+  function fxViewerClose() {
+    const v = pvx;
+    pvx = null;
+    if (v && v.from === "fp" && fp) {
+      renderFp(true);
+      return;
+    }
+    closeSheet();
+    scheduleRender();
+  }
+
+  /* fotky z online databáze free-exercise-db: u cviku se shodou rovnou jeho fotky, jinak hledání;
+     stáhnou se jen vybrané (přes <img> s CORS a canvas, bez fetch, v CSP stačí img-src) */
+  function fedbPhotos(exId) {
+    fp = { exId, x: null, q: exOf(exId).name, search: false, sel: [], gym: null, first: false };
+    renderFp();
+  }
+  // stejný cvik v online databázi: shoda s výchozí databází (h) nebo cvik převzatý z ní (src)
+  function fedbMatch(exId) {
+    const ex = exOf(exId);
+    const src = ex.src && ex.src.startsWith("fedb:") ? ex.src.slice(5) : null;
+    return FEDB.find((x) => !x.ni && (x.h === exId || x.id === src)) || null;
+  }
+  const fedbSrc = (x, n) => FEDB_IMG + x.id + "/" + n + ".jpg";
+  // fotka z online databáze už je u cviku uložená
+  const fedbSaved = (exId, x, n) =>
+    Object.values(S.photos).some((p) => p.exId === exId && p.src === "fedb:" + x.id + "/" + n);
+  function renderFp(noanim) {
+    const title = "Fotky z online databáze";
+    const sub = !!(fp.x && fp.search);
+    const nav = {
+      lv: sub ? 2 : 1,
+      back: sub ? fpBack : closeSheet,
+      re: () => renderFp(true),
+    };
+    if (typeof FEDB === "undefined") {
+      openSheet(
+        title,
+        '<div class="empty" id="fpLoad">Načítám online databázi…</div>',
+        '<button class="btn grow" data-act="closeSheet">Zrušit</button>',
+        noanim,
+        nav,
+      );
+      fedbLoad()
+        .then(() => {
+          if (fp) {
+            renderFp(true);
+          }
+        })
+        .catch(() => {
+          const el = document.getElementById("fpLoad");
+          if (el) {
+            el.innerHTML = `Online databázi se nepodařilo načíst. Poprvé je potřeba internet, potom
+              funguje i offline.<br>
+              <button class="btn sm mt-in" data-act="fpRetry">Zkusit znovu</button>`;
+          }
+        });
+      return;
+    }
+    if (!fp.x && !fp.search) {
+      fp.x = fedbMatch(fp.exId);
+      fp.search = !fp.x;
+    }
+    if (!fp.x) {
+      const direct = fedbMatch(fp.exId);
+      const b = `<p class="small">
+          ${
+            direct
+              ? "Najdi cvik v online databázi a vyber jeho fotky."
+              : `Cvik <b>${esc(exOf(fp.exId).name)}</b> v online databázi nemá přímou shodu. Najdi
+                podobný a vyber jeho fotky.`
+          }
+        </p>
+        <input class="inp" id="fpQ" data-f="fpQ" value="${esc(fp.q)}" autocomplete="off"
+            placeholder="Název anglicky i česky">
+        <div class="stack list" id="fpList"></div>`;
+      openSheet(title, b, '<button class="btn grow" data-act="closeSheet">Zrušit</button>', noanim, nav);
+      refreshFp();
+      return;
+    }
+    const x = fp.x,
+      n = fp.sel.length;
+    const b = `<p class="small">
+        Fotky cviku <b>${esc(x.n)}</b>${x.cz ? ` (${esc(x.cz)})` : ""} z databáze free-exercise-db
+        (volné dílo). Klepnutím fotku zvětšíš, kroužkem ji vybereš k uložení do telefonu.
+      </p>
+      ${fxThumbs(x, fp.sel, "fpSel", (k) => fedbSaved(fp.exId, x, k))}
+      <div class="lbl-f">Fitko</div>
+      ${phGymChips("fpGym", fp.gym)}
+      <label class="switch">
+        <input type="checkbox" data-act="fpFirst" ${fp.first ? "checked" : ""}>
+        <span>Nastavit jako první</span>
+      </label>
+      <div class="xs muted">Stažení potřebuje internet, uložené fotky pak fungují i offline.</div>
+      ${
+        sub
+          ? ""
+          : `<button class="linkbtn small" data-act="fpSearch" style="color:var(--accent-2);font-weight:600">
+              Vybrat fotky jiného cviku z databáze
+            </button>`
+      }`;
+    openSheet(
+      title,
+      b,
+      `<button class="btn grow" data-act="${sub ? "fpBack" : "closeSheet"}">${sub ? "Zpět" : "Zrušit"}</button>
+      <button class="btn primary grow" data-act="fpSave"${n ? "" : " disabled"}>
+        ${n ? "Uložit " + photosWord(n) : "Vyber fotky"}
+      </button>`,
+      noanim,
+      nav,
+    );
+  }
+  function fpBack() {
+    fp.x = null;
+    fp.sel = [];
+    renderFp(true);
+  }
+  // výsledky hledání (jen cviky s fotkami)
+  function refreshFp() {
+    const el = document.getElementById("fpList");
+    if (!el || !fp) return;
+    const q = fp.q.trim();
+    const rows = q ? fedbRows(q).filter((x) => !x.ni) : [];
+    if (!q) {
+      el.innerHTML = '<div class="empty">Napiš název cviku anglicky nebo česky.</div>';
+      return;
+    }
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty">Nic nenalezeno. Zkus jiné slovo, třeba anglicky.</div>';
+      return;
+    }
+    el.innerHTML = rows
+      .slice(0, 30)
+      .map(
+        (x) =>
+          `<div class="pickrow">
+            <button class="pick" data-act="fpPick" data-v="${esc(x.id)}">
+              <img class="fsimg" crossorigin="anonymous" src="${esc(fedbSrc(x, 0))}" alt="" loading="lazy">
+              <div class="grow">
+                <div class="row-n">${esc(x.n)}</div>
+                <div class="cz">${esc(x.cz)}</div>
+              </div>
+            </button>
+          </div>`,
+      )
+      .join("");
+  }
+  // načte obrázek z free-exercise-db tak, aby šel zmenšit (CORS, jinak by canvas nešel uložit)
+  function fedbImg(url) {
+    return new Promise((ok, ko) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.addEventListener("load", () => ok(img));
+      img.addEventListener("error", () => ko(new Error("img")));
+      img.src = url;
+    });
+  }
+  // stáhne vybrané fotky z online databáze a uloží je k cviku; vrací id první uložené
+  async function photosFromFedb(exId, x, sel, gym, first) {
+    const at = Date.now();
+    let firstId = null;
+    for (let k = 0; k < sel.length; k++) {
+      const it = await photoShrink(await fedbImg(fedbSrc(x, sel[k])));
+      const rec = photoRec(exId, it, gym, at + k, "fedb:" + x.id + "/" + sel[k]);
+      await photoSave(rec);
+      if (!firstId) {
+        firstId = rec.id;
+      }
+    }
+    if (first && firstId) {
+      await photoUpdate(firstId, { first: true });
+    }
+    return firstId;
+  }
+  const fedbPhotoErr = (e) =>
+    e && e.message === "img" ? "Fotky se nepodařilo stáhnout. Jsi připojený k internetu?" : photoErr(e);
+  async function fpSave() {
+    const f = fp;
+    if (!f || !f.x || !f.sel.length) return;
+    toast("Stahuji fotky…");
+    try {
+      const id = await photosFromFedb(
+        f.exId,
+        f.x,
+        f.sel.slice().sort((a, b) => a - b),
+        f.gym,
+        f.first,
+      );
+      fp = null;
+      closeSheet();
+      toast(f.sel.length > 1 ? "Fotky uloženy" : "Fotka uložena");
+      galShow(f.exId, id);
+    } catch (e) {
+      toast(fedbPhotoErr(e));
+      scheduleRender();
+    }
+  }
+
+  /* záloha fotek (F0-01 formát v2, pole photos): {id: {exId, gymId, at, first, w, h, mime, size, src,
+     data (base64)}}; jen do souboru, když je zapnuté „Zálohovat i fotky“ (Local bkPhotos) */
+  function photoStats() {
+    const list = Object.values(S.photos);
+    return { n: list.length, size: list.reduce((a, p) => a + (p.size || 0), 0) };
+  }
+  const blobB64 = (b) =>
+    new Promise((ok, ko) => {
+      const r = new FileReader();
+      r.addEventListener("load", () => ok(String(r.result).split(",")[1] || ""));
+      r.addEventListener("error", () => ko(r.error));
+      r.readAsDataURL(b);
+    });
+  function b64Blob(data, mime) {
+    const bin = atob(data),
+      u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      u[i] = bin.charCodeAt(i);
+    }
+    return new Blob([u], { type: mime });
+  }
+  async function photosExport() {
+    const out = {};
+    for (const id in S.photos) {
+      const b = phBlob.get(id);
+      if (!b) continue;
+      const meta = Object.assign({}, S.photos[id]);
+      delete meta.id;
+      out[id] = Object.assign(meta, { data: await blobB64(b) });
+    }
+    return out;
+  }
+  // fotky ze souboru zálohy: jen platné záznamy (normBackup)
+  function photosClean(src) {
+    const out = {};
+    for (const id in src) {
+      const p = src[id];
+      const ok =
+        /^[\w-]{1,60}$/.test(id) &&
+        p &&
+        typeof p.data === "string" &&
+        typeof p.exId === "string" &&
+        /^image\/(jpeg|png|webp)$/.test(p.mime || "");
+      if (!ok) continue;
+      out[id] = {
+        exId: p.exId,
+        gymId: typeof p.gymId === "string" && p.gymId ? p.gymId : null,
+        at: +p.at || 0,
+        first: !!p.first,
+        w: +p.w || 0,
+        h: +p.h || 0,
+        mime: p.mime,
+        data: p.data,
+      };
+      if (typeof p.src === "string") {
+        out[id].src = p.src;
+      }
+    }
+    return out;
+  }
+  /* uloží fotky ze zálohy: overwrite = přepsat i fotky se stejným id (Nahradit vše), jinak jen chybějící;
+     žádná fotka se nesmaže. Vrací počet uložených. */
+  async function photosImport(photos, overwrite) {
+    let n = 0;
+    for (const id in photos || {}) {
+      if (!overwrite && S.photos[id]) continue;
+      const p = Object.assign({}, photos[id]);
+      let blob;
+      try {
+        blob = b64Blob(p.data, p.mime);
+      } catch (e) {
+        continue;
+      }
+      delete p.data;
+      await photoSave(Object.assign(p, { id, size: blob.size, blob }));
+      n++;
+    }
+    // u každého cviku nejvýš jedna „první“ (nechá se ta naposledy přidaná)
+    const firsts = {};
+    for (const p of Object.values(S.photos)) {
+      if (p.first) {
+        (firsts[p.exId] = firsts[p.exId] || []).push(p);
+      }
+    }
+    for (const exId in firsts) {
+      const list = firsts[exId].sort((a, b) => b.at - a.at);
+      for (const p of list.slice(1)) {
+        await photoSave(Object.assign({}, p, { first: false, blob: phBlob.get(p.id) }));
+      }
+    }
+    return n;
+  }
+
+  /* ---------- TĚLO (měření) ---------- */
+  const BODY_F = [
+    ["weight", "Hmotnost", "kg"],
+    ["fat", "Tělesný tuk", "%"],
+    ["fatMass", "Hmotnost tuku", "kg"],
+    ["muscleMass", "Kosterní sval", "kg"],
+    ["muscle", "Kosterní sval", "%"],
+    ["water", "Tělesná voda", "kg"],
+    ["bmr", "Bazální metabolismus", "kcal"],
+    ["bmi", "BMI", ""],
+    ["visceral", "Viscerální tuk", "úroveň"],
+    ["waist", "Pas", "cm"],
+    ["chest", "Hrudník", "cm"],
+    ["arm", "Paže", "cm"],
+    ["thigh", "Stehno", "cm"],
+  ];
+  function vBody() {
+    const items = Object.entries(S.body)
+      .map(([id, v]) => Object.assign({ id }, v))
+      .sort((a, b) => b.date - a.date);
+    let h = topbar(
+      "Tělo",
+      items.length ? "Poslední měření " + fmtDate(items[0].date) : "Hmotnost, složení, obvody",
+    );
+    h += `<button class="btn primary block" data-act="addBody">${icon("plus")}Nové měření</button>`;
+    const m = S.bodyMetric;
+    const f = BODY_F.find((x) => x[0] === m) || BODY_F[0];
+    const since = rangeSince(S.bodyRange);
+    const all = items.filter((i) => isFinite(+i[m]) && i[m] !== null && i[m] !== "");
+    // víc měření v jednom dni sloučím do denního průměru
+    const byDay = {};
+    for (const i of all) {
+      if (i.date < since) continue;
+      const d = new Date(i.date);
+      d.setHours(12, 0, 0, 0);
+      const k = d.getTime();
+      (byDay[k] = byDay[k] || []).push(+i[m]);
+    }
+    const pts = Object.keys(byDay)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((k) => ({ x: k, y: byDay[k].reduce((s, v) => s + v, 0) / byDay[k].length }));
+    // klouzavý průměr: středové okno 7 dní
+    const WIN = 7 * DAY;
+    const avg = pts.map((p) => {
+      let sum = 0,
+        n = 0;
+      for (const q of pts) {
+        if (Math.abs(q.x - p.x) <= WIN / 2) {
+          sum += q.y;
+          n++;
+        }
+      }
+      return { x: p.x, y: sum / n, n };
+    });
+    const avgNow = avg.length ? avg[avg.length - 1].y : null;
+    h += `<section class="sec"><div class="chips" data-ck="bodyMetric">${BODY_F.map(
+      ([k, l, u]) =>
+        `<button class="chip" data-act="bodyMetric" data-v="${k}" aria-pressed="${m === k}">${l}${
+          u && u !== "kg" && u !== "cm"
+            ? " (" + u + ")"
+            : u === "kg" && (k === "fatMass" || k === "muscleMass" || k === "water")
+              ? " (kg)"
+              : ""
+        }</button>`,
+    ).join("")}</div>`;
+    h += `<div class="mt-in">${rangeSeg("bodyRange", S.bodyRange)}</div>`;
+    if (pts.length) {
+      const lastV = pts[pts.length - 1].y,
+        firstV = pts[0].y,
+        diff = lastV - firstV;
+      const unit = f[2] ? " " + f[2] : "";
+      const dAvg = avg.length > 1 ? avg[avg.length - 1].y - avg[0].y : 0;
+      h += `<div class="card mt-in">
+        <div class="row mb-list" style="align-items:flex-end">
+          <div class="grow">
+            <div class="xs muted" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">
+              ${esc(f[1])}
+            </div>
+            <div style="font-family:var(--display);font-size:var(--fs-4xl);font-weight:600;line-height:1"
+                class="num">
+              ${fmtKg(lastV)} <span style="font-size:var(--fs-lg)">${esc(f[2])}</span>
+            </div>
+            ${
+              avgNow != null
+                ? `<div class="xs muted num">
+                  průměr 7 dní ${fmtKg(Math.round(avgNow * 10) / 10)}${unit}
+                </div>`
+                : ""
+            }
+          </div>
+          <div class="small muted num" style="text-align:right">
+            ${
+              pts.length > 1
+                ? `${(diff > 0 ? "+" : "") + fmtKg(Math.round(diff * 10) / 10) + unit} ` +
+                  `od ${fmtDateS(pts[0].x)}
+                <div class="xs">
+                  průměr ${dAvg > 0 ? "+" : ""}${fmtKg(Math.round(dAvg * 10) / 10)}${unit}
+                </div>`
+                : ""
+            }
+          </div>
+        </div>
+        ${chartPh(
+          {
+            type: "line",
+            label: f[1],
+            unit: unit,
+            yUnit: f[2],
+            series: [
+              { name: "Měření", color: "var(--ink-3)", pts, noLine: true, dots: true },
+              { name: "Klouzavý průměr 7 dní", color: "var(--chart)", pts: avg, noDots: true, w: 2.4 },
+            ],
+          },
+          190,
+        )}
+        <div class="legend">
+          <span><i style="background:var(--chart)"></i>Klouzavý průměr 7 dní</span>
+          <span><i style="background:var(--ink-3);height:7px;width:7px;border-radius:50%"></i>Jednotlivá
+            měření</span>
+        </div>
+        <div class="xs muted mt-list">
+          ${pts.length} ${plural(pts.length, "den s měřením", "dny s měřením", "dnů s měřením")} v
+          období${all.length > pts.length ? " z " + all.length + " měření celkem" : ""}
+        </div>
+      </div>`;
+    } else {
+      h += `<div class="empty mt-in">
+        Pro „${esc(f[1])}“ v tomto období žádné měření.
+      </div>`;
+    }
+    h += `</section>
+    <section class="sec">
+      <div class="sec-h"><h2>Měření</h2><span class="xs muted">${items.length}</span></div>
+      <div class="stack list">`;
+    for (const i of items.slice(0, S.bodyLimit || 30)) {
+      h += `<button class="hw" data-act="editBody" data-v="${i.id}">
+        <div class="row">
+          <b class="grow">${fmtDate(i.date)} · ${fmtTime(i.date)}</b>
+          ${i.note ? `<span class="pill">${esc(i.note)}</span>` : ""}
+        </div>
+        <div class="line num">
+          ${BODY_F.filter(([k]) => i[k] !== undefined && i[k] !== null && i[k] !== "")
+            .map(([k, l, u]) => `<span>${esc(l)} <b>${fmtKg(+i[k])}</b> ${esc(u)}</span>`)
+            .join("")}
+        </div>
+      </button>`;
+    }
+    if (!items.length) {
+      h += '<div class="empty">Zatím žádná měření.</div>';
+    }
+    if (items.length > (S.bodyLimit || 30)) {
+      h += '<button class="btn block" data-act="bodyMore">Starší měření</button>';
+    }
+    h += "</div></section>";
+    return h;
+  }
+  // pravidlo kontroly čísla (F1-10) podle jednotky měření
+  const bodyRule = (unit) => (unit === "%" ? "pct" : unit === "kcal" ? "kcal" : "body");
+  function sheetBody(id, nav) {
+    const v = id ? S.body[id] : { date: Date.now() };
+    // údaje po řádcích jako Tělo v Nastavení: název vlevo, políčko vpravo (F3-23)
+    let b = `<label class="frow">
+      <span class="grow">Datum</span>
+      <input class="inp" type="date" id="b-date" value="${toDateInput(v.date)}">
+    </label>
+    <label class="frow">
+      <span class="grow">Čas</span>
+      <input class="inp" type="time" id="b-time" value="${toTimeInput(v.date)}">
+    </label>`;
+    // zdroj měření (F4-19), jen ke čtení; měření bez zdroje řádek nemá
+    const src = WDLOG.srcTxt(v);
+    if (src) {
+      b += `<div class="frow"><span class="grow">Zdroj</span><span>${esc(src)}</span></div>`;
+    }
+    // nadpisy sekcí formuláře před prvním údajem skupiny (F3-23)
+    const groups = { weight: "Hmotnost a složení", waist: "Obvody" };
+    BODY_F.forEach(([k, l, u], n) => {
+      const rule = bodyRule(u);
+      const enter = n < BODY_F.length - 1 ? "next" : "done"; // F1-25: Enter do dalšího čísla
+      const val = v[k] != null ? numStr(v[k]).replace(".", ",") : "";
+      if (groups[k]) {
+        b += `<div class="subh">${groups[k]}</div>`;
+      }
+      b += `<label class="frow">
+        <span class="grow">${esc(l)}${u ? " (" + esc(u) + ")" : ""}</span>
+        <input class="inp${numCls(rule, val)}" id="b-${k}" inputmode="decimal" data-num="${rule}"
+            enterkeyhint="${enter}" data-lab="${esc(l)}" value="${esc(val)}">
+      </label>`;
+    });
+    b += `<label class="f">Poznámka<input class="inp" id="b-note" value="${esc(v.note || "")}"></label>`;
+    openSheet(
+      id ? "Upravit měření" : "Nové měření",
+      b,
+      // patička panelu (F3-23): Smazat vlevo, Uložit vpravo, stejně široká
+      `${id ? `<button class="btn danger grow" data-act="delBody" data-v="${id}">Smazat</button>` : ""}
+      <button class="btn primary grow" data-act="saveBody" data-v="${id || ""}">Uložit</button>`,
+      false,
+      nav,
+    );
+    // předvyplnění BMI jen u nového měření, u uloženého až po změně hmotnosti (F3-33)
+    if (!id) {
+      bmiHintRefresh();
+    }
+  }
+
+  /* ---------- VÝŠKA A BMI (F3-33) ----------
+     Nastavení → Trénink → Tělo má vedle hmotnosti řádek Výška (cm) (bodySettings, S.cfg.height, pravidlo
+     čísla height: celé 100–250 cm, prázdná = nezadaná, doplňuje cfgNorm). Výška slouží jen k BMI: ve
+     formuláři měření (sheetBody) s vyplněnou hmotností a výškou ukáže políčko BMI šedé předvyplnění
+     (placeholder, hmotnost / výška², jedno desetinné místo, 82 kg a 180 cm = 25,3; bmiHintRefresh). Prázdné
+     políčko BMI se uloží s touto hodnotou (saveBody, b-bmi.dataset.auto), napsané číslo z váhy má přednost.
+     Pravidla: u nového měření se BMI předvyplní hned, u uloženého až po změně hmotnosti ve formuláři (oprava
+     poznámky BMI nedoplní). Stará měření se nepřepočítávají. Hmotnost s červeným rámečkem ani bez výšky
+     předvyplnění nemá. Výška nemá historii, bere se vždy ta z Nastavení. */
+  // BMI z hmotnosti (kg) a výšky (cm), jedno desetinné místo
+  const bmiOf = (kg, cm) => Math.round((kg / Math.pow(cm / 100, 2)) * 10) / 10;
+  // šedé předvyplnění BMI podle hmotnosti ve formuláři měření
+  function bmiHintRefresh() {
+    const weightInp = document.getElementById("b-weight");
+    const bmiInp = document.getElementById("b-bmi");
+    if (!weightInp || !bmiInp) return;
+    const res = numCheck("body", weightInp.value);
+    const ok = S.cfg.height && res.ok && res.v > 0;
+    const bmi = ok ? bmiOf(res.v, S.cfg.height) : null;
+    bmiInp.placeholder = bmi ? numStr(bmi) : "";
+    bmiInp.dataset.auto = bmi ? String(bmi) : "";
+  }
+
+  /* ---------- NÁPOVĚDY V NADPISU SEKCE (F3-21) ----------
+     Vysvětlení voleb není pod nimi, ale v panelu, který otevře tlačítko s otazníkem v nadpisu sekce
+     (helpBtn, akce "help", sheetHelp). Pod volbou zůstává jen stav nebo varování (co se děje teď).
+     HELP: klíč → nadpis panelu a položky [název, text v HTML]; položky se skládají až při otevření,
+     takže můžou záviset na nastavení. Parametr za dvojtečkou v klíči (např. "exRec:<id cviku>") dostane
+     funkce items. Nová volba = nová položka v panelu své sekce, ne text pod přepínačem. */
+  const HELP = {
+    tplHints: {
+      title: "Předvyplnění hodnot šablony",
+      items: () => [
+        [
+          "Z minula",
+          "Šedé hodnoty sérií jsou z minulého tréninku cviku (u cviku vázaného na fitko z tohoto fitka). " +
+            "Hodnoty ze šablony se použijí jen u cviku, který jsi ještě nikdy necvičil.",
+        ],
+        [
+          "Ze šablony",
+          "Šedé hodnoty sérií jsou vždy ty, které máš v šabloně, i když cvik znáš z dřívějška. Hodnota, " +
+            "kterou šablona nemá, zůstane prázdná. Minulý trénink ukazuje jen řádek Minule nad sériemi.",
+        ],
+      ],
+    },
+    input: {
+      title: "Zadávání hodnot v tréninku",
+      items: () => [
+        [
+          "Tlačítka +/−",
+          "Klepnutí na kg, opakování, čas nebo km v rozdělaném tréninku otevře dole panel s tlačítky + a −, " +
+            "ovladatelný jednou rukou. Klávesnice je v panelu pod tlačítkem Napsat. Vypnuto = klepnutí rovnou " +
+            "otevře klávesnici.",
+        ],
+        [
+          "Zahřívací série",
+          "V panelu s tlačítky +/− má zahřívací série tlačítko, které nastaví váhu na tolik procent nejtěžší " +
+            "série z minula (zaokrouhleno na krok, např. 60 % z 82,5 kg = 50 kg). Funguje jen se zapnutými " +
+            "tlačítky +/−.",
+        ],
+      ],
+    },
+    prog: {
+      title: "Návrh progrese",
+      items: () => [
+        [
+          "Jak to funguje",
+          "Když minule všechny pracovní série cviku dosáhly horní hranice rozsahu opakování, navrhne trénink " +
+            "přidat váhu o krok z tlačítek +/− (výchozí 2,5 kg) a opakování od dolní hranice. U cviku " +
+            "s dopomocí navrhne dopomoc ubrat. Když série neměly stejnou váhu (např. 40 a 45 kg), nejdřív " +
+            "dorovná lehčí série: každá, která dala horní hranici, dostane o krok víc, nejvýš váhu nejtěžší " +
+            "série. Nad nejtěžší váhu přidá, až mají všechny série stejnou váhu. " +
+            "Návrh je v zeleném řádku pod názvem cviku, klepnutím ho použiješ: " +
+            `navržené hodnoty se objeví v šedém předvyplnění sérií a ${icon("check")} je převezme. Když místo ` +
+            `toho začneš pracovní série upravovat (hodnoty, ${icon("check")}, přidání, smazání, změna druhu ` +
+            "série), návrh zmizí. Zahřívací série na návrh nemají vliv.",
+        ],
+        [
+          "U všech cviků",
+          "Zapnuto = u cviků s váhou (i vlastní váha se zátěží a s dopomocí) s rozsahem níže. Vypnuto = jen " +
+            "u cviků, kde návrh zapneš v Upravit cvik. Tam jde u cviku nastavit i vlastní rozsah nebo návrh " +
+            "vypnout.",
+        ],
+        [
+          "Navrhovat progresi",
+          "Hlavní vypínač. Vypnuto = návrh se neukáže u žádného cviku, ani u cviků, kde je zapnutý " +
+            "v Upravit cvik. Nastavení cviků zůstane uložené a po zapnutí platí zase.",
+        ],
+        [
+          "Výchozí rozsah opakování",
+          "Horní hranice = kdy navrhnout víc váhy. Dolní hranice = od kolika opakování začít s novou váhou.",
+        ],
+        [
+          "Přidat váhu",
+          "Všem sériím: váha se přidá ve všech pracovních sériích najednou a lehčí série se dorovnávají " +
+            "všechny najednou. Postupně od 1. série: váha se " +
+            "přidá jen v 1. sérii, v dalších trénincích se k ní postupně přidávají další série, jakmile dají " +
+            "horní hranici (vždy jedna série o krok, nejvýš na váhu nejtěžší série). Až mají všechny série " +
+            "stejnou váhu a horní hranici, přidá se znovu v 1. sérii.",
+        ],
+      ],
+    },
+    rest: {
+      title: "Odpočinek mezi sériemi",
+      items: () => [
+        [
+          "Časovač pauzy",
+          "Po odškrtnutí série se spustí odpočinek. Vypnuto = po sérii žádná pauza, pípnutí ani oznámení.",
+        ],
+        [
+          "Časovač po zahřívací sérii",
+          "Délka pauzy po každé zahřívací sérii u všech cviků, i po poslední zahřívací před první " +
+            "pracovní. V supersérii po dokončení kola zahřívacích sérií.",
+        ],
+        [
+          "Výchozí časovač",
+          "Délka pauzy po pracovní sérii cviku, který nemá vlastní pauzu. Vlastní pauzu cviku nastavíš ve " +
+            "formuláři Upravit cvik (Cviky → cvik → Upravit).",
+        ],
+        [
+          "Časovač po pracovní supersérii",
+          "Délka pauzy po dokončení celého kola pracovních sérií supersérie. Má přednost před vlastní " +
+            "pauzou cviku.",
+        ],
+        ["Na konci pauzy", "Jak tě appka upozorní, že pauza skončila, když ji máš na očích."],
+        [
+          "Počítat přečas",
+          "Po konci pauzy lišta zůstane a ukazuje, jak dlouho už odpočíváš (+0:25), dokud neodškrtneš další " +
+            "sérii, nejvýš 5 minut.",
+        ],
+        [
+          "Oznámení na pozadí",
+          NATIVE
+            ? "Když je appka na pozadí nebo máš zamčený displej, konec pauzy ohlásí oznámení Androidu, " +
+              "i bez internetu, a hodinky ho zopakují. Zvuk a vibrace podle volby Na konci pauzy; tichý " +
+              "režim a Nerušit ho ztlumí. Aby přišlo na vteřinu přesně, povol appce přesný čas (tlačítko " +
+              "Povolit, v Androidu Budíky a připomenutí)."
+            : "Když je appka na pozadí nebo máš zhasnutý displej, konec pauzy ohlásí oznámení v telefonu. " +
+              "Zvuk a vibraci oznámení určuje nastavení oznámení v Androidu.",
+        ],
+        [
+          "Displej nezhasne během pauzy",
+          "Během odpočinku a přečasu v rozdělaném tréninku zůstane displej zapnutý, pokud máš appku otevřenou. " +
+            "Když se ho 10 minut nedotkneš, zhasne jako obvykle. Displej navíc spotřebuje trochu baterie.",
+        ],
+        [
+          "Po 30 s ztmavit obrazovku",
+          "Objeví se po zapnutí předchozí volby. Když se displeje 30 s nedotkneš, zčerná a ukáže jen " +
+            "odpočet. Na displeji OLED to šetří baterii. Klepnutí vrátí appku.",
+        ],
+      ],
+    },
+    stw: {
+      title: "Stopky u série na čas",
+      items: () => [
+        [
+          "Stopky",
+          "U série na čas (plank, vis, běh) klepni na tlačítko vedle políčka Čas. Po odpočtu před startem " +
+            "se počítá čas od nuly. V cíli zazní pípnutí a čas se zapíše do políčka. Dřívější Stop zapíše " +
+            "naměřený čas. Sérii pak odškrtneš sám jako vždy.",
+        ],
+        [
+          "Cíl",
+          "Cíl je čas, který si v políčku přepíšeš, jinak šedá hodnota Čas z minula (nebo ze šablony). " +
+            "Bez cíle stopky počítají jen nahoru, dokud neklepneš na Stop. Deset sekund před cílem " +
+            "pípnou ještě dvakrát.",
+        ],
+        [
+          "Zobrazení stopek",
+          "Pruh: stopky běží v pruhu dole jako pauza. Celá obrazovka: černá obrazovka s velkým časem a " +
+            "tlačítkem Stop, čitelná z dálky. Displej v tomhle režimu nezhasne po celou dobu stopek, " +
+            "tlačítko Zpět v telefonu stopky zastaví.",
+        ],
+        [
+          "Odpočet před startem",
+          "Čas na zaujetí polohy, 0 až 15 s. Poslední tři sekundy pípají, start je delší tón. Zvuk " +
+            "a vibrace se řídí volbou Na konci pauzy. 0 = stopky se spustí hned.",
+        ],
+      ],
+    },
+    bw: {
+      title: "Tělo",
+      items: () => [
+        [
+          "Hmotnost",
+          "Používá se u cviků s vlastní vahou pro objem a odhad 1RM. Když máš měření v záložce Tělo, bere se " +
+            "k datu tréninku nejbližší dřívější měření a tahle hodnota slouží jen pro tréninky před prvním " +
+            "měřením.",
+        ],
+        [
+          "Teď",
+          Object.values(S.body || {}).some((b) => isFinite(+b.weight))
+            ? "Máš uložená měření v záložce Tělo, takže se bere nejbližší dřívější měření."
+            : "Zatím nemáš žádné měření v záložce Tělo, takže se bere tahle hodnota.",
+        ],
+        [
+          "Výška",
+          "Používá se jen pro BMI v záložce Tělo. Ve formuláři měření se po zadání hmotnosti BMI " +
+            "předvyplní šedě (hmotnost / výška², např. 82 kg a 180 cm = 25,3) a uloží se, když políčko " +
+            "necháš prázdné. " +
+            "Číslo z váhy má přednost. Uložená měření se nepřepočítávají. Prázdná výška = BMI se nepočítá.",
+        ],
+      ],
+    },
+    rec: {
+      title: "Oslava rekordu",
+      items: () => [
+        [
+          "Medaile",
+          "Při novém rekordu vyskočí medaile. Rekord je překonaná max. zátěž, odhad 1RM, opakování, výdrž, " +
+            "vzdálenost nebo tempo, nejvýš jeden za cvik a trénink, další překonané údaje jsou drobně pod ním. " +
+            "Počítá se od 3. tréninku s cvikem (u cviku vázaného na fitko v každém fitku zvlášť).",
+        ],
+        [
+          "Oslava po dokončení cviku",
+          "Po odškrtnutí poslední pracovní série cviku. Když ji vypneš, ukáže se po sérii s rekordem jen " +
+            "krátká hláška nahoře.",
+        ],
+        ["Oslava po uložení tréninku", "Nad souhrnem tréninku, se všemi rekordy po cvicích."],
+        ["Zvuk oslavy", "Hraje přes hlasitost médií."],
+      ],
+    },
+    prog: {
+      title: "Zlepšení za období",
+      items: () => [
+        [
+          "Změna u cviku",
+          "Porovná nejlepší hodnotu z prvních 2 tréninků v období s nejlepší z posledních 2. Ukáže se, když jsou " +
+            "v období aspoň 3 tréninky s cvikem rozložené aspoň na 14 dní, jinak –. Změna pod 1 % se bere jako 0.",
+        ],
+        [
+          "Co se porovnává",
+          "Opakování a váha: odhad 1RM, když obvykle děláš víc než 10 opakování, tak max. zátěž (odhad je tam " +
+            "nepřesný). Vlastní váha: nejvíc opakování v sérii. Se zátěží a s dopomocí: odhad 1RM včetně " +
+            "tělesné hmotnosti. Na čas: nejdelší výdrž, se zátěží max. zátěž. Vzdálenost: tempo v km/h. " +
+            "Vzdálenost se zátěží: max. zátěž.",
+        ],
+        [
+          "Největší zlepšení a řazení Zlepšení",
+          "Podle změny v procentech, aby lehké cviky nebyly vždy pod těžkými. Platí zvolené období a fitko.",
+        ],
+        [
+          "Bez zlepšení",
+          "Sleduje jen poslední tréninky s cvikem, ne období. Cvik proto může být v obou: za 3 měsíce se " +
+            "zlepšil, poslední týdny stojí.",
+        ],
+        [
+          "Cvik vázaný na fitko",
+          "Počítá se v každém fitku zvlášť, u Všech fitek má každé fitko vlastní řádek.",
+        ],
+      ],
+    },
+    stag: {
+      title: "Upozornění na stagnaci",
+      items: () => [
+        [
+          "Upozornit na cvik bez zlepšení",
+          "Když se cvik několik tréninků po sobě nezlepší (váha, opakování, objem, čas ani vzdálenost), ukáže " +
+            "se to v kartě cviku při tréninku, na stránce cviku a ve Statistikách → Cviky.",
+        ],
+        [
+          "Po kolika trénincích bez zlepšení",
+          "Porovnává se vždy s tréninkem těsně předtím, ne s rekordem z celé historie.",
+        ],
+      ],
+    },
+    backup: {
+      title: "Záloha",
+      items: () => {
+        const list = [
+          [
+            "Co je záloha",
+            "Jeden soubor se vším (tréninky, šablony, cviky, fitka, měření). Ulož si ho mimo telefon, aby " +
+              "přežil i smazání dat Chromu nebo ztrátu telefonu.",
+          ],
+          [
+            "Sdílet",
+            "Nahraje zálohu do cloudu (Google Disk, OneDrive…) nebo ji pošle e-mailem: v nabídce vyber " +
+              "aplikaci, třeba Disk, a dej Uložit.",
+          ],
+          [
+            "Stáhnout",
+            "Stáhne zálohu do telefonu do složky Stažené. Mimo telefon ji pak pošleš sám: Chrome → tři " +
+              "tečky → Stažené soubory, podrž soubor a zvol Sdílet.",
+          ],
+          [
+            "Obnovit ze souboru",
+            "Vyber soubor zálohy, z Disku jde vybrat přímo. Záloha má příponu .json.txt (soubor .json Chrome " +
+              "sdílet nedovolí), obnova přijme i starší zálohy .json.",
+          ],
+          [
+            "Kdy appka připomene zálohu",
+            `Na úvodní obrazovce, když je poslední záloha do souboru starší než ${BK_REMIND_DAYS} dní. ` +
+              `V souhrnu po uložení tréninku navíc i dřív, když od zálohy přibylo ${BK_SUM_NEW} tréninků.`,
+          ],
+        ];
+        if (photoStats().n) {
+          list.push([
+            "Zálohovat i fotky",
+            "Fotky u cviků ochrání jen záloha s fotkami. Soubor je pak o tolik větší, kolik ukazuje popis " +
+              "pod volbou.",
+          ]);
+        }
+        return list;
+      },
+    },
+    native: {
+      title: "Nativní appka",
+      items: () => [
+        [
+          "Co je nativní appka",
+          "Stejná appka nainstalovaná jako aplikace pro Android (APK), ne přes Chrome. Umí víc (třeba " +
+            "spolehlivý konec pauzy), data má ale vlastní: co je tady, nevidí.",
+        ],
+        [
+          "Přesunout data",
+          "Stáhne zálohu i s fotkami. V nativní appce ji obnov (Obnovit ze souboru → Nahradit vše) a od té " +
+            "doby zapisuj jen tam. Tady se pak na každé obrazovce ukáže pruh, aby se trénink nezapsal do " +
+            "špatné appky. Data se nesynchronizují.",
+        ],
+        [
+          "Zrušit přesun",
+          "Vypne pruh. Data tady se při přesunu nemažou, appku jde používat dál (třeba když se nativní " +
+            "appka neosvědčí). Co mezitím přibylo v nativní appce, přeneseš zálohou opačně.",
+        ],
+      ],
+    },
+    // F6-03: Nastavení → Data a záloha → Záloha telefonu (jen nativní appka)
+    phonebk: {
+      title: "Záloha telefonu",
+      items: () => [
+        [
+          "Co to je",
+          "Appka po každé změně dat (do 15 s a při odchodu z appky) zapíše zálohu do souboru uvnitř appky. " +
+            "Android ho sám zhruba jednou denně (při nabíjení a na Wi-Fi) nahraje do zálohy telefonu " +
+            "v Google One. Drží se jen nejnovější verze.",
+        ],
+        [
+          "Co v ní není",
+          "Fotky u cviků a rozdělaný trénink. Fotky ochrání jen záloha do souboru s fotkami.",
+        ],
+        [
+          "Nový telefon",
+          "Přihlas se do Googlu, obnov zálohu telefonu a nainstaluj appku. Android při instalaci vrátí " +
+            "soubor zálohy a prázdná appka sama nabídne obnovu. Jde to i tlačítkem Obnovit ze zálohy " +
+            "telefonu.",
+        ],
+        [
+          "Zapnutí",
+          "Záloha musí být zapnutá v telefonu: Nastavení → Google → Zálohování. Tam jde zálohovat i hned " +
+            "(Zálohovat nyní). Kdy záloha do Googlu opravdu proběhla, appka nevidí.",
+        ],
+        [
+          "Před chybou nechrání",
+          "Smazaný trénink zmizí do 15 s i ze souboru zálohy a do druhého dne i z Google One. Na vrácení " +
+            "chyby jsou body obnovy.",
+        ],
+      ],
+    },
+    points: {
+      title: "Body obnovy",
+      items: () => [
+        [
+          "Co jsou body obnovy",
+          "Kopie dat uložené v appce: automaticky jednou týdně a vždy před obnovou ze zálohy a smazáním " +
+            `fitka. Chrání před chybou v nové verzi nebo špatnou obnovou, ne před ztrátou telefonu. ` +
+            `Drží se posledních ` +
+            `${BK_MAX_POINTS}. Fotky u cviků v nich nejsou (zabraly by moc místa).`,
+        ],
+      ],
+    },
+    storage: {
+      title: "Místo v zařízení",
+      items: () => [
+        [
+          "Rychlá schránka",
+          "Kopie dat pro rychlý start a rozdělaný trénink. Má limit asi 5 MB, který sdílí appka se všemi " +
+            "testovacími verzemi. Data jsou vždy i v databázi appky, plná schránka je neztratí, jen zpomalí start.",
+        ],
+        [
+          "Testovací verze",
+          "Každá testovací verze, kterou jsi otevřel, má v telefonu vlastní data a ta zůstanou i po skončení " +
+            "testu. Smazání uvolní místo, data téhle appky se ho netýkají.",
+        ],
+      ],
+    },
+    samsung: {
+      title: "Samsung Health",
+      items: () => [
+        [
+          "K čemu to je",
+          "Import měření těla (hmotnost, tuk, svaly…) ze souboru staženého ze Samsung Health.",
+        ],
+        [
+          "Jak získat soubor",
+          "V Samsung Health: Nastavení → Stáhnout osobní data. Telefon uloží do Stažených souborů složku " +
+            "samsunghealth_… (název podle účtu a data stažení).",
+        ],
+        [
+          "Vybrat soubor",
+          "Ve složce samsunghealth_… klepni na soubor, který začíná com.samsung.health.weight a končí .csv. " +
+            "Aby appka poznala, odkud měření je (hodinky, ručně, jiná aplikace), podrž prstem a označ i soubor " +
+            "com.samsung.health.device_profile. Stačí jednou, zařízení si appka pamatuje (do zálohy nejdou).",
+        ],
+        [
+          "Zdroje",
+          "Do Samsung Health zapisují i jiné aplikace a zařízení (Hevy, chytrá váha). Odškrtni ty, jejichž " +
+            "měření už v appce máš. Volba se pamatuje pro příští import.",
+        ],
+        [
+          "Co se importuje",
+          "Hmotnost, tělesný tuk, kosterní sval, voda, bazální metabolismus, viscerální tuk a BMI (chybí-li, " +
+            "dopočítá se z výšky). Opakovaný import přidá jen nová měření. Ruční měření ze stejného dne se " +
+            "stejnou hmotností (±0,1 kg) se přepíše údaji ze Samsungu, obvody a poznámka zůstanou.",
+        ],
+      ],
+    },
+    gyms: {
+      title: "Fitka",
+      items: () => [
+        [
+          "Archivovat",
+          "Fitko zmizí z výběru fitka (Kde dnes cvičíš, trénink, šablony, plánování). Jeho tréninky zůstávají " +
+            "v Historii, Statistikách i rekordech. Obnovit ho jde kdykoli v panelu fitka.",
+        ],
+        [
+          "Sloučit",
+          "Tréninky, šablony a plánované tréninky se přesunou do vybraného fitka a fitko se smaže. Nastavení " +
+            "strojů se přenese, jen když ho cílové fitko u cviku ještě nemá; jinak platí to z cílového fitka. " +
+            "Fotky se přesunou taky.",
+        ],
+        ["Smazat", "Smaže fitko i všechny jeho tréninky. Šablony zůstanou, jen se z nich fitko odebere."],
+        [
+          "Bod obnovy",
+          "Před sloučením nebo smazáním appka sama uloží bod obnovy. Krok jde vrátit v Nastavení → Data " +
+            "a záloha → Body obnovy. Bod obnovy je jen v telefonu; pro jistotu ulož i zálohu do souboru.",
+        ],
+        [
+          "Co nejde",
+          "Archivovat ani smazat nejde fitko, ve kterém máš rozdělaný trénink. V seznamu musí vždy zůstat " +
+            "aspoň jedno aktivní fitko, proto poslední aktivní fitko nejde archivovat ani smazat.",
+        ],
+      ],
+    },
+    effort: {
+      title: "Náročnost série",
+      items: () => [
+        [
+          "RIR a RPE",
+          "RIR (opakování v rezervě) = kolik opakování by v sérii ještě šlo, 0 = už ani jedno. RPE = náročnost " +
+            "série na stupnici do 10, platí RPE = 10 − RIR (RPE 8 = RIR 2). Obojí se ukládá stejně, přepnout jde " +
+            "kdykoli. Vypnuto = sloupec v tréninku není, zapsané hodnoty zůstanou.",
+        ],
+        [
+          "Zadání",
+          `Karta cviku v tréninku má sloupec RIR nebo RPE před ${icon("check")}. Klepnutím vybereš hodnotu, ` +
+            "stejná tlačítka jsou i v panelu s tlačítky +/−. Hodnota je nepovinná, klepnutí na vybranou ji zruší.",
+        ],
+        [
+          "Druh série",
+          "Zahřívací série RIR nemá. Série do selhání (F) má vždy RIR 0 (RPE 10). Pracovní série, ve které jsi " +
+            "došel na doraz, zůstane pracovní a dostane RIR 0: má dál číslo a počítá se do návrhu progrese.",
+        ],
+        [
+          "Kde ho uvidíš",
+          "Za zápisem série na stránce tréninku a v historii cviku (např. 8×80kg RIR 2, v RPE 8×80kg RPE 8). " +
+            "Nepřebírá se z minula ani do šablon a nemá vliv na rekordy ani objem.",
+        ],
+      ],
+    },
+    coach: {
+      title: "Kopírovat pro coache",
+      items: () => [
+        [
+          "Co to dělá",
+          "Zapíšeš k tréninku údaje pro AI coache a v Nastavení → Data a záloha je pak vyexportuješ za zvolené " +
+            "období (Export pro coache, formát WD-LOG v2).",
+        ],
+        [
+          "Konec tréninku",
+          "V okně Dokončit trénink a v Upravit trénink je část Pro coache: pocit, energie, spánek, bolest " +
+            "a poznámka k tréninku. Vše je nepovinné, nevyplněné se do textu nevypíše. Bolest 0 = bez bolesti. " +
+            "Posuvník je šedý, dokud na něj nesáhneš, křížek hodnotu smaže.",
+        ],
+        [
+          "Odhad u selhání",
+          "Zadej RIR, když dosáhneš cílového počtu opakování, pak dojeď do selhání a přepni sérii na F. " +
+            "Zadané RIR zůstane jako odhad (v tabulce pod 0, v textu „F (odhad RIR 2)“).",
+        ],
+        [
+          "Vypnutí",
+          "Vypnutím se funkce schová, zapsané údaje zůstanou. Znovu ji zapneš 7 rychlými klepnutími na kartu " +
+            "Verze aplikace v Nastavení → O aplikaci.",
+        ],
+      ],
+    },
+    coachExp: {
+      title: "Export pro coache",
+      items: () => [
+        [
+          "Co to dělá",
+          "Složí text WD-LOG v2 pro AI coache: tréninky v období (čas, fitko, šablona, pocit, bolest, cviky " +
+            "v pořadí, jak jsi je cvičil, série s RIR), pak všechna měření z období a cviky, které jsi v období " +
+            "dělal poprvé. Před odesláním si text přečti v náhledu.",
+        ],
+        [
+          "Období",
+          "Dnes, 7 dní (dnešek a 6 dní před ním), Tento týden a Minulý týden (pondělí až neděle). Když datum " +
+            "Od nebo Do změníš ručně, platí tvoje období. Obě data se počítají celá.",
+        ],
+        [
+          "Kopírovat a Sdílet",
+          "Kopírovat dá text do schránky. Sdílet pošle soubor wd-log-OD_DO.md (u jednoho dne jen jedno datum), " +
+            "např. do chatu s coachem nebo do Souborů. Kde sdílení souborů nejde, soubor se stáhne.",
+        ],
+      ],
+    },
+    tplHidden: {
+      title: "Skryté šablony",
+      items: () => [
+        [
+          "Co znamená skrytá šablona",
+          "Skrytá šablona se nezobrazuje mezi šablonami a nejde z ní začít trénink. Tréninky podle ní i záloha " +
+            "zůstávají. Zobrazíš ji tlačítkem Zobrazit. Stejný název jako skrytá šablona jiná šablona ve stejném " +
+            "fitku mít nemůže.",
+        ],
+      ],
+    },
+    hidden: {
+      title: "Skryté cviky",
+      items: () => [
+        [
+          "Co znamená skrytý cvik",
+          "Skryté cviky se nenabízejí při přidávání do tréninku. Historie i statistiky zůstávají. Vrátíš je " +
+            "přes Upravit → Zobrazit.",
+        ],
+      ],
+    },
+    exRec: {
+      title: "Osobní rekordy",
+      items: (id) => {
+        const ex = exOf(id),
+          kind = kindOf(id);
+        let text =
+          "Zlatá medaile = rekord: překonaná max. zátěž, odhad 1RM, opakování, výdrž, vzdálenost nebo " +
+          "tempo, v jednom tréninku nejvýš jeden. Stříbrná = zlepšení objemu, nejlepší série nebo celkového " +
+          "času či vzdálenosti, ukazuje se jen tady. Počítá se od 3. tréninku s cvikem" +
+          `${ex.gymDep ? " v každém fitku zvlášť" : ""}, první dva určí výchozí hodnoty. Odhad 1RM podle ` +
+          "Epleyho: váha × (1 + opakování / 30). Zahřívací série se nepočítají.";
+        if (hasReps(kind) && kind !== "wr") {
+          text +=
+            " U tohoto typu se zátěž počítá z tvé tělesné hmotnosti (" +
+            fmtKg(bodyWeightAt(Date.now())) +
+            " kg).";
+        }
+        // vzdálenost se zátěží (F4-16): nejlepší série je zlatá, práce = kg × metry
+        if (kind === "distw") {
+          text +=
+            " U saní a podobných cviků je zlatá i nejlepší série (nejvíc kg × metry v jedné sérii). Práce cviku " +
+            "= součet kg × metry pracovních sérií v tréninku, do objemu tréninku se nepočítá.";
+        }
+        return [["Jak se počítají", text]];
+      },
+    },
+    // formulář Nový / Upravit cvik (F3-40)
+    exFxPh: {
+      title: "Fotky z databáze",
+      items: () => [
+        [
+          "Výběr fotek",
+          "Klepnutím na fotku ji zvětšíš přes celou obrazovku, kroužkem v rohu (nebo tlačítkem pod " +
+            "zvětšenou fotkou) ji vybereš k uložení.",
+        ],
+        [
+          "Uložení",
+          "Vybrané fotky se po uložení cviku stáhnou do telefonu a uloží k němu jako fotky bez fitka. " +
+            "Nevybrané se nestáhnou. Stažení potřebuje internet, uložené fotky pak fungují i offline.",
+        ],
+      ],
+    },
+    exParts: {
+      title: "Partie",
+      items: () => [
+        [
+          "Výběr partií",
+          "Klepnutím na partii ji označíš jako hlavní, dalším klepnutím jako pomocnou, třetím výběr zrušíš. " +
+            "Postava nad partiemi ukazuje, co je vybrané.",
+        ],
+        [
+          "Hlavní a pomocná",
+          "Hlavní partie cvik procvičuje nejvíc, filtr partií v seznamech cviků hledá ve všech hlavních. " +
+            "Ve Statistikách se počítají jen hlavní partie, v souhrnu tréninku pomocná partie jako půl série.",
+        ],
+      ],
+    },
+    exLog: {
+      title: "Zápis",
+      items: () => [
+        [
+          "Typ zápisu",
+          "Určuje, co se u série zapisuje. " +
+            KIND_ORDER.map((k) => `<b style="display:inline">${esc(KIND[k].l)}</b>: ${esc(KIND[k].ex)}`).join(
+              ". ",
+            ) +
+            ".",
+        ],
+        [
+          "Vázáno na fitko",
+          "Zapni u strojů a kladek, v každém fitku mají jiný odpor. Předvyplnění, rekordy a progres se pak " +
+            "počítají zvlášť pro každé fitko.",
+        ],
+      ],
+    },
+    exTrain: {
+      title: "Během tréninku",
+      items: () => [
+        [
+          "Vlastní pauza",
+          "Zapnuto = po odškrtnutí pracovní série tohoto cviku běží pauza nastavená posuvníkem. Vypnuto = " +
+            "platí Výchozí časovač z Nastavení → Trénink → Odpočinek mezi sériemi. Po zahřívací sérii běží " +
+            "vždy Časovač po zahřívací sérii.",
+        ],
+        [
+          "Návrh progrese",
+          "Podle nastavení = jak je v Nastavení → Trénink → Návrh progrese. Zapnuto, vlastní rozsah = návrh " +
+            "u tohoto cviku vždy, s vlastním rozsahem opakování. Vypnuto = u tohoto cviku nikdy. Když je " +
+            "v Nastavení vypnuté Navrhovat progresi, návrh není u žádného cviku a volba je šedá.",
+        ],
+      ],
+    },
+  };
+  // tlačítko s otazníkem do nadpisu sekce; key = klíč v HELP (u "exRec:<id>" i s parametrem)
+  function helpBtn(key) {
+    const h = HELP[key.split(":")[0]];
+    return icoBtn("help", "help", "Jak to funguje: " + h.title, key);
+  }
+  // panel s vysvětlením voleb sekce (zavírá křížek, Zpět nebo klepnutí mimo)
+  function sheetHelp(key) {
+    const at = key.indexOf(":");
+    const h = HELP[at < 0 ? key : key.slice(0, at)];
+    if (!h) return;
+    const items = h.items(at < 0 ? "" : key.slice(at + 1));
+    openSheet(
+      h.title,
+      items
+        .map(
+          ([name, text]) =>
+            `<div class="hlp">
+              <b>${esc(name)}</b>
+              <p>${text}</p>
+            </div>`,
+        )
+        .join(""),
+    );
+  }
+
+  /* ---------- NASTAVENÍ (F3-09) ----------
+     Rozcestník se skupinami, každá skupina na vlastní podstránce (S.setPage, "" = rozcestník).
+     Otevřená podstránka se pamatuje v Local "setPage" (vrátí se po aktualizaci nebo zavření appky),
+     klepnutí na záložku Nastavení vrátí rozcestník (goTab). Zpět z podstránky = rozcestník
+     (navBack, navDepth). Nová volba patří do některé skupiny, ne na rozcestník.
+     Rozcestník vSettingsHub, skupiny SET_PAGES (Fitka, Trénink, Rekordy a pokrok, Vzhled, Data a záloha, O
+     aplikaci), otevření podstránky jen přes setPageOpen. Na rozcestníku jen názvy skupin, výjimka: oranžový
+     řádek Data a záloha s textem, když backupDue() (stejné pravidlo jako připomínka na úvodní obrazovce).
+     Nová volba = funkce …Settings() v body existující skupiny, novou skupinu jen výjimečně. */
+  const SET_PAGES = [
+    { id: "gyms", name: "Fitka", icon: "gym", body: () => gymSettings() },
+    {
+      id: "train",
+      name: "Trénink",
+      icon: "train",
+      body: () =>
+        stepperSettings() +
+        progSettings() +
+        effortSettings() +
+        restSettings() +
+        stwSettings() +
+        bodySettings() +
+        coachSettings(),
+    },
+    { id: "rec", name: "Rekordy a pokrok", icon: "medal", body: () => recSettings() + stagSettings() },
+    { id: "look", name: "Vzhled", icon: "theme", body: () => themeSettings() },
+    {
+      id: "data",
+      name: "Data a záloha",
+      icon: "backup",
+      body: () =>
+        backupSettings() + pbSettings() + storageSettings() + nativeSettings() + shSettings() + cxSettings(),
+    },
+    {
+      id: "about",
+      name: "O aplikaci",
+      icon: "info",
+      body: () => versionSettings() + fakeSettings() + aboutSettings(),
+    },
+  ];
+  // otevře podstránku Nastavení ("" = rozcestník)
+  function setPageOpen(id) {
+    S.setPage = id;
+    lsSet("setPage", id);
+    go("set");
+  }
+  function vSettings() {
+    const page = SET_PAGES.find((p) => p.id === S.setPage);
+    if (!page) {
+      S.setPage = ""; // neznámá podstránka (např. z jiné verze appky) = rozcestník
+      return vSettingsHub();
+    }
+    const back = `<button class="iconbtn" data-act="setBack" aria-label="Zpět">${IC.back}</button>`;
+    return topbar(page.name, "Nastavení", back) + page.body();
+  }
+  // rozcestník: jen názvy skupin, u zálohy upozornění, když je čas zálohovat (jako na úvodní obrazovce)
+  function vSettingsHub() {
+    let h = topbar("Nastavení");
+    h += '<section class="sec"><div class="card setlist">';
+    for (const page of SET_PAGES) {
+      const warn = page.id === "data" && backupDue();
+      let note = "";
+      if (warn) {
+        const last = lastBackupAt();
+        note = last ? "Poslední záloha " + agoLabel(last) : "Zatím žádná záloha";
+      }
+      h += `<button class="setrow${warn ? " warn" : ""}" data-act="setOpen" data-v="${page.id}">
+        <span class="setrow-ic">${IC[page.icon]}</span>
+        <span class="grow">
+          <b>${esc(page.name)}</b>${note ? `<span class="xs">${esc(note)}</span>` : ""}
+        </span>
+        <span class="setrow-go">${IC.next}</span>
+      </button>`;
+    }
+    h += "</div></section>";
+    return h;
+  }
+  /* Nastavení → Fitka: aktivní fitka (pořadí přetažením), pod nimi archivovaná podle abecedy (F2-06);
+     klepnutí na kartu otevře panel fitka */
+  function gymSettings() {
+    const counts = gymCounts();
+    const on = gymsOn();
+    let h = `<section class="sec">
+        <div class="sec-h">
+          <h2>Moje fitka</h2>
+          <div class="sec-btns">
+            ${helpBtn("gyms")}
+            ${icoBtn("addGym", "plus", "Přidat fitko")}
+          </div>
+        </div>
+        <div class="stack list dnd-list" data-dnd="gyms">
+          ${on.map((g) => gymCard(g, counts, on.length > 1)).join("")}
+        </div>
+      </section>`;
+    const arch = gymsArch();
+    if (arch.length) {
+      h += `<section class="sec">
+        <div class="sec-h"><h2>Archivovaná fitka</h2></div>
+        <div class="stack list">${arch.map((g) => gymCard(g, counts, false)).join("")}</div>
+      </section>`;
+    }
+    return h;
+  }
+  // karta fitka v Nastavení → Fitka; grip = úchyt pro přetažení (jen aktivní fitka)
+  function gymCard(g, counts, grip) {
+    const n = counts[g.id] || 0;
+    const def = S.cfg.defaultGymId === g.id ? " · výchozí" : "";
+    return `<div class="card row gym-c${grip ? " dnd-it" : ""}" role="button" tabindex="0" data-act="editGym"
+        data-v="${g.id}">
+        <span class="sw" style="width:12px;height:12px;border-radius:50%;background:${gymColor(g.id)}"></span>
+        <div class="grow">
+          <div class="row-n">${esc(g.name)}</div>
+          <div class="xs muted">
+            ${n} ${plural(n, "trénink", "tréninky", "tréninků")}${def}
+          </div>
+        </div>
+        ${grip ? dndGrip(g.name) : ""}
+      </div>`;
+  }
+  /* Nastavení → Vzhled */
+  function themeSettings() {
+    return `<section class="sec">
+      <div class="sec-h"><h2>Motiv</h2></div>
+      <div class="card">
+        <div class="seg seg-wide">
+          ${[
+            ["dark", "Tmavý"],
+            ["light", "Světlý"],
+            ["auto", "Podle systému"],
+          ]
+            .map(
+              ([k, l]) =>
+                `<button data-act="theme" data-v="${k}" aria-pressed="${themePref() === k}">${l}` +
+                `</button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    </section>
+    <section class="sec">
+      <div class="sec-h"><h2>Velikost písma</h2></div>
+      <div class="card">
+        <div class="seg seg-wide">
+          ${FONT_SCALES.map(
+            ([k, l]) =>
+              `<button data-act="fontScale" data-v="${k}" aria-pressed="${fontScalePref() === k}">${l}` +
+              `</button>`,
+          ).join("")}
+        </div>
+      </div>
+    </section>`;
+  }
+  /* Nastavení → Trénink → Tělo: hmotnost a výška (F3-33, výška jen pro BMI ve formuláři měření) */
+  function bodySettings() {
+    const height = S.cfg.height || "";
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Tělo</h2>
+        ${helpBtn("bw")}
+      </div>
+      <div class="card stack">
+        <label class="frow">
+          <span class="grow">Hmotnost (kg)</span>
+          <input class="inp${numCls("bw", S.cfg.bodyWeight || 80)}" id="bwInp" data-f="bodyWeight"
+              data-num="bw" inputmode="decimal" enterkeyhint="next" value="${esc(S.cfg.bodyWeight || 80)}">
+        </label>
+        <label class="frow">
+          <span class="grow">Výška (cm)</span>
+          <input class="inp${numCls("height", height)}" id="heightInp" data-f="height" data-num="height"
+              inputmode="numeric" enterkeyhint="done" value="${esc(height)}">
+        </label>
+      </div>
+    </section>`;
+  }
+  /* Nastavení → O aplikaci → Zdroje */
+  function aboutSettings() {
+    return (
+      `<section class="sec">
+        <div class="sec-h"><h2>Zdroje</h2></div>
+        <div class="card small muted">
+          Schéma svalů vychází z anatomických kreseb <b>Ryana Gravese</b>, použitých pod licencí ` +
+      `<a class="link" href="https://creativecommons.org/licenses/by/4.0/" target="_blank"
+              rel="noopener">CC BY 4.0</a> (balíček flutter-body-atlas). Odkazy na cviky vedou na
+          hevyapp.com.
+        </div>
+      </section>`
+    );
+  }
+  // panel fitka: název, výchozí, barva; u uloženého Archivovat / Obnovit a Smazat (F2-06)
+  function sheetGym(id) {
+    const g = id ? S.cfg.gyms.find((x) => x.id === id) : { name: "" };
+    if (!g) return;
+    const arch = !!g.archived;
+    // archivované fitko nemůže být výchozí (závislá volba zešedne, F3-23)
+    let b = `<label class="f">
+      Název
+      <input class="inp" id="g-name" value="${esc(g.name)}" placeholder="např. Fitness Brno-střed">
+    </label>
+    <label class="switch${arch ? " dep off" : ""}"${arch ? " inert" : ""}>
+      <input type="checkbox" id="g-def" ${id && S.cfg.defaultGymId === id ? "checked" : ""}> Výchozí
+      fitko
+    </label>`;
+    // barva (F3-01): předvybraná vlastní, u nového fitka první volná; pod obsazenou barvou název fitka
+    const cur = id && g.col ? g.col : freeGymCol(S.cfg.gyms);
+    b += `<div>
+      <div class="f lbl-f mb-lbl">Barva</div>
+      <div class="cpick" role="radiogroup" aria-label="Barva fitka">
+        ${Array.from({ length: GYM_COLORS }, (_, i) => i + 1)
+          .map((c) => {
+            const o = S.cfg.gyms
+              .filter((x) => x.col === c && x.id !== id)
+              .map((x) => x.name)
+              .join(", ");
+            return `<button type="button" role="radio" data-act="gymCol" data-v="${c}"
+                aria-checked="${c === cur}"
+                aria-label="Barva ${c}${o ? ", má ji " + esc(o) : ""}"><i style="background:var(--s${c})">
+                ${c === cur ? IC.check : ""}
+              </i><small>${o ? esc(o) : "&nbsp;"}</small></button>`;
+          })
+          .join("")}
+      </div>
+    </div>`;
+    // akce, která teď nejde, je šedá (.off) a klepnutí řekne proč (gymBlock)
+    const off = id && gymBlock(id) ? " off" : "";
+    if (id) {
+      b += arch
+        ? `<button class="btn block" data-act="gymUnarch" data-v="${id}">Obnovit fitko</button>`
+        : `<button class="btn block${off}" data-act="gymArch" data-v="${id}">Archivovat fitko</button>`;
+    }
+    openSheet(
+      id ? "Upravit fitko" : "Nové fitko",
+      b,
+      `${
+        id && S.cfg.gyms.length > 1
+          ? `<button class="btn danger grow${off}" data-act="delGym" data-v="${id}">Smazat</button>`
+          : ""
+      }<button class="btn primary grow" data-act="saveGym" data-v="${id || ""}">Uložit</button>`,
+    );
+  }
+
+  /* ---------- ARCHIVACE A SMAZÁNÍ FITKA (F2-06) ----------
+     Archivovat (do fitka už nechodím): fitko má archived: true (výchozí false doplní cfgNorm, zálohuje se
+     s nastavením). Zmizí z každého výběru fitka: Kde dnes cvičíš, fitko tréninku, Cvičit znovu, šablona,
+     plánování, fotky (gymsOn, gymOn; u upravovaného tréninku a šablony zůstane jen jejich vlastní fitko, aby
+     šlo odebrat). Jeho tréninky zůstávají všude (Historie, Statistiky, rekordy, minule, nastavení strojů)
+     s barevným štítkem; ve filtrech Historie a Statistik je fitko, jen když má tréninky, a až na konci
+     (gymsFilter). Plán v archivovaném fitku se bere jako plán bez fitka (planOf). Šablona jen pro archivovaná
+     fitka je na úvodní obrazovce mezi ostatními. Archivovaná fitka v Nastavení → Fitka zvlášť dole podle
+     abecedy (gymsArch), v panelu fitka Obnovit fitko. Archivací přestane být výchozí (výchozí je první
+     aktivní).
+     Smazat: fitko bez tréninků se smaže hned (gymRemove, odebere se i ze šablon). U fitka s tréninky okno
+     sheetGymDel (stav gymDel) s volbou Sloučit (výchozí, s jiným aktivním fitkem: tréninky, šablony,
+     plán, nastavení strojů s předností cílového fitka, fotky) nebo Smazat (tréninky se smažou). Před
+     provedením bod obnovy (makePoint "gym"), tlačítko Zálohovat do souboru. Řádek pod výběrem má v obou
+     stavech stejnou délku, aby se okno při přepínání neměnilo. Potvrzovací tlačítko podle volby: Sloučit /
+     Smazat (že se fitko smaže v obou případech, říká nadpis Smazat fitko?).
+     Nejde (gymBlock, tlačítko je šedé .off a klepnutí ukáže důvod): archivovat ani smazat poslední aktivní
+     fitko a fitko rozdělaného tréninku. Smazání úplně posledního fitka tlačítko nemá.
+     Nápověda: otazník v nadpisu Moje fitka (HELP.gyms); okno Smazat fitko nápovědu ani větu o bodu obnovy
+     nemá (krátký panel, rozhodnuto 13. 10.). */
+  let gymDel = null; // okno Smazat fitko s tréninky: {id, mode: "move" | "del", to}
+  // počet tréninků podle fitka
+  function gymCounts() {
+    const counts = {};
+    for (const w of derive().all) {
+      counts[w.gymId] = (counts[w.gymId] || 0) + 1;
+    }
+    return counts;
+  }
+  // archivovaná fitka podle abecedy
+  const gymsArch = () =>
+    S.cfg.gyms.filter((g) => g.archived).sort((a, b) => a.name.localeCompare(b.name, "cs"));
+  // fitka do filtru Historie a Statistik: aktivní, za nimi archivovaná s tréninky
+  function gymsFilter() {
+    const counts = gymCounts();
+    return gymsOn().concat(gymsArch().filter((g) => counts[g.id]));
+  }
+  // proč fitko teď nejde archivovat ani smazat ("" = jde)
+  function gymBlock(id) {
+    if (S.active && S.active.gymId === id) return "V tomhle fitku máš rozdělaný trénink. Nejdřív ho dokonči.";
+    if (gymOn(id) && gymsOn().length < 2) return "Poslední aktivní fitko nejde archivovat ani smazat.";
+    return "";
+  }
+  // archivace a obnovení fitka
+  function gymArchive(id, on) {
+    const cfg = JSON.parse(JSON.stringify(S.cfg));
+    const g = cfg.gyms.find((x) => x.id === id);
+    if (!g) return;
+    g.archived = on;
+    if (on && cfg.defaultGymId === id) {
+      const first = cfg.gyms.find((x) => !x.archived);
+      cfg.defaultGymId = first ? first.id : null;
+    }
+    if (on && S.selGym === id) {
+      S.selGym = null;
+    }
+    put("config/main", cfg);
+  }
+  // odebere fitko z nastavení a ze šablon; to = fitko, které ho v šablonách nahradí (přesun), jinak null
+  function gymRemove(id, to) {
+    const cfg = JSON.parse(JSON.stringify(S.cfg));
+    cfg.gyms = cfg.gyms.filter((g) => g.id !== id);
+    if (cfg.defaultGymId === id) {
+      const first = to ? { id: to } : cfg.gyms.find((g) => !g.archived) || cfg.gyms[0];
+      cfg.defaultGymId = first ? first.id : null;
+    }
+    put("config/main", cfg);
+    // smazané fitko zmizí i ze šablon (F2-02), při přesunu ho nahradí cílové
+    if (Object.values(S.templates).some((x) => (x.gyms || []).includes(id))) {
+      const items = {};
+      for (const [tid, x] of Object.entries(S.templates)) {
+        const gyms = (x.gyms || []).map((g) => (g === id ? to : g)).filter(Boolean);
+        items[tid] = Object.assign({}, x, { gyms: [...new Set(gyms)] });
+      }
+      put("config/templates", { items });
+    }
+    if (S.selGym === id) {
+      S.selGym = null;
+    }
+    if (S.histGym === id) {
+      S.histGym = "all";
+    }
+    if (S.statsGym === id) {
+      S.statsGym = "all";
+    }
+  }
+  // tvar slovesa podle počtu („se přesune“ / „se přesunou“)
+  const verbN = (n, one, few) => (n >= 2 && n <= 4 ? few : one);
+  // okno Smazat fitko s tréninky: Sloučit / Smazat, s kterým fitkem sloučit
+  function sheetGymDel(noanim) {
+    const del = gymDel;
+    if (!del) return;
+    const n = gymCounts()[del.id] || 0;
+    const move = del.mode === "move";
+    const nTxt = n + " " + plural(n, "trénink", "tréninky", "tréninků");
+    const msg = move
+      ? nTxt + " " + verbN(n, "se přesune", "se přesunou") + " do vybraného fitka."
+      : nTxt + " " + verbN(n, "se smaže", "se smažou") + ", nejde to vrátit.";
+    const b = `<p>${esc(gymName(del.id))} má ${nTxt}.</p>
+      <div class="seg seg-wide">
+        <button data-act="gymDelMode" data-v="move" aria-pressed="${move}">Sloučit</button>
+        <button data-act="gymDelMode" data-v="del" aria-pressed="${!move}">Smazat</button>
+      </div>
+      <div class="dep${move ? "" : " off"}"${move ? "" : " inert"}>
+        <div class="f lbl-f mb-lbl">S fitkem</div>
+        <div class="chips" data-ck="gymDelTo">
+          ${gymsOn()
+            .filter((g) => g.id !== del.id)
+            .map(
+              (g) =>
+                `<button class="chip" data-act="gymDelTo" data-v="${g.id}" aria-pressed="${del.to === g.id}">
+                  <span class="sw" style="background:${gymColor(g.id)}"></span>
+                  ${esc(g.name)}
+                </button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="fmsg gd-msg${move ? "" : " warn"}">${msg}</div>
+      <button class="btn block" data-act="${navigator.canShare ? "bkShare" : "export"}">
+        Zálohovat do souboru
+      </button>`;
+    openSheet(
+      "Smazat fitko?",
+      b,
+      `<button class="btn grow" data-act="closeSheet">Zrušit</button>
+      <button class="btn primary grow" data-act="gymDelGo">${move ? "Sloučit" : "Smazat"}</button>`,
+      noanim,
+      { lv: 2, back: () => sheetGym(del.id) },
+    );
+  }
+  // smazání fitka s tréninky podle okna sheetGymDel; force = bez bodu obnovy (nepodařilo se ho vytvořit)
+  async function gymDelDo(force) {
+    const del = gymDel;
+    if (!del) return;
+    const move = del.mode === "move" && gymOn(del.to);
+    if (pointsApi && !force) {
+      toast("Vytvářím bod obnovy…");
+      const ok = await makePoint("gym");
+      if (!ok) {
+        confirmSheet(
+          "Bod obnovy se nepodařilo vytvořit",
+          "Pokračovat bez pojistky? Krok pak nepůjde vrátit.",
+          "Pokračovat",
+          "gymDelGo",
+          "!",
+        );
+        return;
+      }
+    }
+    const id = del.id,
+      to = move ? del.to : null,
+      toName = move ? gymName(to) : "";
+    let n = 0;
+    for (const mk of Object.keys(S.months)) {
+      const items = {};
+      let hit = false;
+      for (const [wid, w] of Object.entries(S.months[mk])) {
+        if (w.gymId !== id) {
+          items[wid] = w;
+          continue;
+        }
+        hit = true;
+        n++;
+        if (move) {
+          items[wid] = Object.assign({}, w, { gymId: to });
+        }
+      }
+      if (hit) {
+        put("workouts/" + mk, { items });
+      }
+    }
+    if (move) {
+      gymMoveRest(id, to);
+    }
+    gymRemove(id, to);
+    gymDel = null;
+    closeSheet();
+    toast(
+      move
+        ? "Fitko sloučené, tréninky (" + n + ") jsou teď v: " + toName + "."
+        : "Fitko smazané i s tréninky (" + n + ").",
+    );
+  }
+  // přesun plánu, nastavení strojů (přednost má cílové fitko) a fotek z fitka id do fitka to
+  function gymMoveRest(id, to) {
+    if (Object.values(S.plan).some((p) => p && p.gymId === id)) {
+      const items = {};
+      for (const [k, p] of Object.entries(S.plan)) {
+        items[k] = p && p.gymId === id ? Object.assign({}, p, { gymId: to }) : p;
+      }
+      put("config/plan", { items });
+    }
+    const exItems = Object.assign({}, S.exLib);
+    let changed = false;
+    for (const [exId, ex] of Object.entries(S.exLib)) {
+      if (!ex.machine || typeof ex.machine[id] !== "string") continue;
+      const machine = Object.assign({}, ex.machine);
+      if (!machine[to]) {
+        machine[to] = machine[id];
+      }
+      delete machine[id];
+      exItems[exId] = Object.assign({}, ex, { machine });
+      changed = true;
+    }
+    if (changed) {
+      putEx(exItems);
+    }
+    if (S.photosOn) {
+      for (const ph of Object.values(S.photos)) {
+        if (ph.gymId === id) {
+          photoUpdate(ph.id, { gymId: to }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  /* ---------- výběr cviků ----------
+     Panel Přidat cviky / Nahradit cvik (openPicker, stav pick). Má pevnou výšku (třída picker na .scrim), aby
+     vyhledávací pole při psaní neposkakovalo (F1-06). Seznam je ve třech sekcích (F1-06, pickerRows):
+     cviky cvičené ve fitku tréninku nebo šablony (pickGyms; šablona pro všechna fitka = vybrané fitko
+     na úvodu), cviky cvičené jinde, ostatní. Cvičené od posledního tréninku (ve fitku podle posledního tréninku v něm),
+     ostatní podle shody s hledáním (exRel) a abecedy. Nadpis sekce jen tam, kde je víc než jedna sekce. */
+  let pick = { sel: [], q: "", m: "all", eq: "all", hist: false, mode: "add", replaceI: null };
+  function openPicker(mode, replaceI) {
+    pick = { sel: [], q: "", m: "all", eq: "all", hist: pick.hist, mode, replaceI };
+    renderPicker();
+  }
+  // fitka, pro která se vybírá: fitko tréninku, fitka šablony (bez fitka = vybrané fitko na úvodu)
+  function pickGyms() {
+    const d = curDraft();
+    if (d && d.mode === "template") {
+      const gyms = S.cfg.gyms.filter((g) => (d.gyms || []).includes(g.id)).map((g) => g.id);
+      return gyms.length ? gyms : [curGym()].filter(Boolean);
+    }
+    return [d && d.gymId ? d.gymId : curGym()].filter(Boolean);
+  }
+  // seznam výběru: [{id, e, sec}], sec = 0 cvičené v tomto fitku, 1 cvičené jinde, 2 ostatní
+  function pickerRows() {
+    const { byEx } = derive();
+    const gyms = pickGyms();
+    const rows = [];
+    for (const [id, e] of Object.entries(S.exLib)) {
+      if (
+        e.archived ||
+        !mfMatch(e, pick.m) ||
+        (pick.eq !== "all" && e.equip !== pick.eq) ||
+        (pick.hist && !byEx[id]) ||
+        !exMatch(e, pick.q)
+      ) {
+        continue;
+      }
+      const list = byEx[id] || [];
+      const here = list.find((x) => gyms.includes(x.w.gymId));
+      const sec = here ? 0 : list.length ? 1 : 2;
+      const last = here ? here.w.start : list.length ? list[0].w.start : 0;
+      rows.push({ id, e, sec, last, rel: sec === 2 ? exRel(e, pick.q) : 0 });
+    }
+    rows.sort(
+      (a, b) => a.sec - b.sec || b.last - a.last || b.rel - a.rel || a.e.name.localeCompare(b.e.name, "cs"),
+    );
+    return rows;
+  }
+  // nadpis sekce výběru (jedno fitko jménem, víc fitek šablony společně)
+  function pickSecTitle(sec) {
+    if (sec === 2) return "Ostatní";
+    if (sec === 1) return "Cvičené jinde";
+    const gyms = pickGyms();
+    return gyms.length > 1 ? "Cvičené ve fitkách šablony" : "Cvičené ve fitku " + gymName(gyms[0]);
+  }
+  function pickerList() {
+    const { byEx } = derive();
+    const arr = pickerRows();
+    if (!arr.length) {
+      return (
+        `<div class="empty">
+        Nic neodpovídá filtru.` +
+        `${
+          pick.q.trim()
+            ? `<br>
+            <button class="btn sm mt-in" data-act="fedbOpen" data-v="picker">
+              Hledat „${esc(pick.q.trim())}“ online
+            </button>`
+            : ""
+        }` +
+        `</div>`
+      );
+    }
+    // nadpisy sekcí jen když je v seznamu víc než jedna sekce
+    const heads = new Set(arr.map((r) => r.sec)).size > 1;
+    let h = "";
+    let sec = -1;
+    for (const { id, e, sec: rs } of arr.slice(0, pick.limit || 120)) {
+      if (heads && rs !== sec) {
+        h += `<h3 class="pick-sec">${esc(pickSecTitle(rs))}</h3>`;
+      }
+      sec = rs;
+      const on = pick.sel.includes(id);
+      const n = byEx[id] ? byEx[id].length : 0;
+      h +=
+        `<div class="pickrow">
+        <button class="pick" data-act="pickToggle" data-v="${esc(id)}" aria-pressed="${on}">
+          <span class="chk">${on ? IC.check : ""}</span>
+          <div class="grow">
+            <div class="row-n">${nameWithIcons(e.name, e.gymDep ? gdIcon() : "")}</div>
+            ${e.cz ? `<div class="cz">${esc(e.cz)}</div>` : ""}
+            <div class="xs muted">
+              ${esc(
+                exPri(e)
+                  .map((k) => MUSCLE_MAP.NAMES[k])
+                  .join(", ") ||
+                  MUSCLES[e.muscle] ||
+                  "",
+              )} ` +
+        `· ${esc(EQUIP[e.equip] || "")}${n ? " · " + n + "× v historii" : ""}` +
+        `
+            </div>
+          </div>
+        </button>
+        <button class="infob" data-act="exInfo" data-v="${esc(id)}"
+            aria-label="Informace o cviku ${esc(e.name)}">${IC.next}</button>
+      </div>`;
+    }
+    if (arr.length > (pick.limit || 120)) {
+      h += `<button class="btn block" data-act="pickMore">
+        Další cviky (${arr.length - (pick.limit || 120)})
+      </button>`;
+    }
+    return h;
+  }
+  const pickCount = (n) => n + " " + plural(n, "cvik", "cviky", "cviků");
+  function pickerBody() {
+    const n = pickerRows().length;
+    return `<input class="inp" id="pickQ" data-f="pickQ" placeholder="Hledat cvik (anglicky i česky)…"
+        value="${esc(pick.q)}" autocomplete="off">
+    <div class="row wrap-r">
+      ${mfChip("picker")}${eqChip("picker")}
+      <button class="chip" data-act="pickHist" aria-pressed="${pick.hist}">Jen cviky z historie</button>
+    </div>
+    ${cntHead(
+      n,
+      `${icoBtn("fedbOpen", "globe", "Hledat v online databázi", "picker")}
+      ${icoBtn("newEx", "plus", "Nový cvik")}`,
+      "pickN",
+    )}
+    <div class="stack list" id="pickList">${pickerList()}</div>`;
+  }
+  function renderPicker(keep) {
+    const sb = document.querySelector(".sheet-b");
+    const st = keep && sb ? sb.scrollTop : 0;
+    saveChipScroll(sb || undefined);
+    const f = `<button class="btn primary grow" data-act="pickDone" ${pick.sel.length ? "" : "disabled"}>
+      ${
+        pick.mode === "replace"
+          ? "Nahradit"
+          : "Přidat" + (pick.sel.length ? " (" + pick.sel.length + ")" : "")
+      }
+    </button>`;
+    openSheet(pick.mode === "replace" ? "Nahradit cvik" : "Přidat cviky", pickerBody(), f, keep, {
+      re: () => renderPicker(true),
+      cls: "picker",
+    });
+    const nb = document.querySelector(".sheet-b");
+    if (nb && st) {
+      nb.scrollTop = st;
+    }
+    restoreChipScroll(nb || undefined);
+  }
+  function refreshPickList() {
+    const el = document.getElementById("pickList");
+    if (!el) {
+      renderPicker(true);
+      return;
+    }
+    el.innerHTML = pickerList();
+    // počet nad seznamem se při psaní mění s výsledky (F1-06)
+    const cnt = document.getElementById("pickN");
+    if (cnt) {
+      cnt.textContent = pickCount(pickerRows().length);
+    }
+  }
+  /* ---------- INFORMACE O CVIKU (F3-46) ----------
+     Panel nad výběrem cviků (sheetExInfo, akce exInfo = šipka › v kartě cviku; F3-50 i šipka › u cviku, který
+     už mám, v hledání v online databázi, pak pick.infoFs a Zpět vrací do hledání). Výběr i hledání zůstanou
+     zachované: šipka ← v hlavičce (openSheet nav.backBtn, akce sheetBack) i Zpět vrací do výběru, × panel nemá.
+     Patička: Upravit | Stránka cviku (hlavní).
+     Dlaždice: Tréninků, Naposledy a dvě podle druhu cviku (EXI_TILES, nejlepší hodnoty za celou dobu přes
+     exMetrics, Celkový čas = součet). Cvik vázaný na fitko se počítá jen z fitka, pro které se vybírá
+     (pickGyms): jedno fitko = štítek gymPill nad dlaždicemi, šablona s víc fitky = čipy (pick.infoGym, akce
+     exInfoGym). Ostatní cviky ze všech fitek, bez štítku (jako stránka cviku, F3-31). Dlaždice 2 × 2 (.kpis.exi),
+     hodnoty s jednotkou (exiVal), čtyři v řadě se s jednotkami na úzký telefon nevejdou. Řádek Minule podle
+     stejného fitka, rekordy panel neukazuje (jsou na stránce cviku).
+     Přepnutí čipu panel překreslí na stejném místě (sheetExInfo(id, keep) drží posun). Ve fitku bez záznamu dlaždice „–“ a věta pod nimi. Štítek nebo čipy patří
+     ke skupině čísel (.exi-gym: velká mezera nad nimi, k dlaždicím --gap-in). */
+  // třetí a čtvrtá dlaždice podle druhu cviku: [typ metriky z exMetrics, popisek]
+  const EXI_TILES = {
+    wr: [
+      ["e1rm", "Odh. 1RM"],
+      ["maxKg", "Max. zátěž"],
+    ],
+    bwplus: [
+      ["e1rm", "Odh. 1RM"],
+      ["maxKg", "Max. zátěž"],
+    ],
+    bw: [
+      ["reps", "Max. opakování"],
+      ["bestSet", "Nejlepší série"],
+    ],
+    assist: [
+      ["reps", "Max. opakování"],
+      ["bestSet", "Nejlepší série"],
+    ],
+    time: [
+      ["maxSec", "Nejdelší výdrž"],
+      ["totSec", "Celkový čas"],
+    ],
+    timew: [
+      ["maxKg", "Max. zátěž"],
+      ["maxSec", "Nejdelší výdrž"],
+    ],
+    dist: [
+      ["maxKm", "Nejdelší vzdálenost"],
+      ["speed", "Nejvyšší tempo"],
+    ],
+    distw: [
+      ["maxKg", "Max. zátěž"],
+      ["bestW", "Nejlepší série"],
+    ],
+  };
+  // hodnota dlaždice s jednotkou jako u rekordů (recFmt: „45 kg“, „12×20kg“, „1:30“…), odh. 1RM na celá kg
+  function exiVal(type, m) {
+    if (!m) return "–";
+    if (type === "e1rm") return fmtKg(Math.round(m.v)) + " kg";
+    return recFmt(type, m.v, m.set);
+  }
+  // nejlepší hodnoty ze seznamu tréninků cviku (derive().byEx), Celkový čas = součet všech tréninků
+  function exiBest(id, list) {
+    const best = {};
+    let totSec = 0;
+    for (const x of list) {
+      const m = exMetrics(id, x.e.sets, x.w.start);
+      if (!m) continue;
+      for (const [type, val] of Object.entries(m)) {
+        if (!best[type] || val.v > best[type].v) {
+          best[type] = val;
+        }
+      }
+      totSec += m.totSec ? m.totSec.v : 0;
+    }
+    if (totSec > 0) {
+      best.totSec = { v: totSec };
+    }
+    return best;
+  }
+  // fitko, ze kterého se počítají čísla (null = všechna) a štítek nebo čipy nad dlaždicemi
+  function exiGym(e) {
+    const gyms = e.gymDep ? pickGyms() : [];
+    if (!gyms.length) return { gym: null, top: "" };
+    if (gyms.length === 1) {
+      return { gym: gyms[0], top: `<div class="exi-gym">${gymPill(gyms[0])}</div>` };
+    }
+    const gym = gyms.includes(pick.infoGym) ? pick.infoGym : gyms[0];
+    const chips = gyms
+      .map(
+        (g) =>
+          `<button class="chip" data-act="exInfoGym" data-v="${esc(g)}" aria-pressed="${g === gym}">
+            <span class="sw" style="background:${gymColor(g)}"></span>
+            ${esc(gymName(g))}
+          </button>`,
+      )
+      .join("");
+    return { gym, top: `<div class="chips exi-gym">${chips}</div>` };
+  }
+  // hloubka panelu: nad výběrem cviků 2, nad hledáním v online databázi z výběru 3 (pick.infoFs, F3-50)
+  const exiLv = () => (pick.infoFs ? 3 : 2);
+  // keep = překreslení po přepnutí fitka: obsah panelu zůstane posunutý na stejném místě
+  function sheetExInfo(id, keep) {
+    const sb = keep ? document.querySelector(".sheet-b") : null;
+    const st = sb ? sb.scrollTop : 0;
+    exEd = null;
+    pick.infoId = id;
+    const e = exOf(id);
+    const all = derive().byEx[id] || [];
+    const { gym, top } = exiGym(e);
+    const list = gym ? all.filter((x) => x.w.gymId === gym) : all;
+    let b =
+      `${
+        photoGallery(e, id) +
+        exTags(e) +
+        (e.desc
+          ? `<p class="desc">${esc(e.desc)}</p>`
+          : '<p class="desc muted">Popis provedení zatím chybí.</p>')
+      }
+      <div class="row wrap-r" style="justify-content:space-between">
+        <a class="link" href="${esc(exLink(e))}" target="_blank" rel="noopener">` +
+      `${esc(exLinkLabel(e))}${icon("ext")}</a>
+      <span class="xs muted">` +
+      `${esc(EQUIP[e.equip] || "")}${e.gymDep ? " · vázáno na fitko" + gdIcon() : ""}</span>
+    </div>`;
+    if (all.length) {
+      const best = exiBest(id, list);
+      const tile = (v, label) => `<div class="kpi"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
+      b += `${top}
+      <div class="kpis exi">
+        ${tile(list.length ? list.length : "–", "Tréninků")}
+        ${tile(list.length ? fmtDateS(list[0].w.start) : "–", "Naposledy")}
+        ${EXI_TILES[kindOf(id)].map(([type, label]) => tile(exiVal(type, best[type]), label)).join("")}
+      </div>`;
+      if (!list.length) {
+        b += '<div class="small muted">V tomto fitku zatím bez záznamu.</div>';
+      } else {
+        b +=
+          `<div class="small">
+          Minule: <span class="num">${esc(setsStr(list[0].e.sets, true, kindOf(id)))}</span> ` +
+          `<span class="muted">(` +
+          `${esc(gymName(list[0].w.gymId))})</span>
+        </div>`;
+      }
+    } else {
+      b += '<div class="small muted">S tímto cvikem zatím nemáš žádný záznam.</div>';
+    }
+    openSheet(
+      e.name,
+      b,
+      `<button class="btn grow" data-act="editExInfo" data-v="${esc(id)}">Upravit</button>
+      <button class="btn primary grow" data-act="openEx" data-v="${esc(id)}" data-p="info">
+        Stránka cviku
+      </button>`,
+      true,
+      {
+        lv: exiLv(),
+        back: pick.infoFs ? () => renderFs() : () => renderPicker(true),
+        re: () => sheetExInfo(id),
+        backBtn: true,
+      },
+    );
+    galRestore(document.getElementById("sheetRoot"));
+    const nb = document.querySelector(".sheet-b");
+    if (nb && st) {
+      nb.scrollTop = st;
+    }
+  }
+  /* ---------- NOVÝ A UPRAVIT CVIK (F3-14, F3-30, F3-40) ----------
+     Formulář je samostatná stránka (route "exed") se šipkou ←, ne panel. Otevírá se jen přes exEdOpen,
+     který si uloží místo návratu (navFrame, i s otevřeným panelem: výběr cviků, info o cviku, výsledky
+     online hledání). Zpět i Uložit vrací přes exEdLeave. Hodnoty políček se průběžně ukládají do exEd.f
+     (posluchač input/change), takže formulář přežije překreslení; neuložené změny = exEdChanged.
+     exEdOpen(id, from, fx): from = list / detail / info / picker, fx = záznam z online hledání (předvyplnění
+     se počítá jako změna). S neuloženými změnami se Zpět i záložka zeptají (akce exDiscard). exEdLeave(re):
+     re = jiný panel než uložený (např. výběr cviků po uložení z výsledků hledání). Route exed se neukládá do
+     Local route; rozepsaný formulář po zavření appky vrací sekce „ROZEPSANÁ STRÁNKA PO RESTARTU“ (F3-16).
+     Duplikovat cvik (F3-30): tlačítko na stránce cviku vedle Upravit (akce dupEx) otevře exEdOpen(null, "detail", null, id)
+     = formulář Nový cvik s vlastnostmi originálu (názvy, partie, vybavení, druh, vázáno na fitko, popis,
+     odkaz, návrh progrese). Názvy dostanou „ (kopie)“, při shodě „ (kopie 2)“… (exCopyNames). Kopíruje se
+     jen to, co je ve formuláři; historie, rekordy, fotky a poznámky zůstávají u originálu, skrytí se
+     nepřenáší (kopie je vždy viditelná). Uloží se až po Uložit jako nový vlastní cvik, pak se otevře stránka
+     kopie a Zpět z ní vede tam, odkud se přišlo k originálu. Rozepsaná kopie se počítá jako změna
+     (exEdChanged).
+     Sekce formuláře (F3-40): Název, Partie, Zápis, Během tréninku, Popis, každá s nadpisem a kartou (exEdSec).
+     Předvyplnit z online databáze je zeměkoule v nadpisu Název (jen nový cvik bez kopie a bez vybraného
+     záznamu). Partie (exEdMuscles): postava, legenda Hlavní / Pomocná a čipy po skupinách MPICK s barvou
+     skupiny; klepnutí na čip (xMus) cyklí hlavní → pomocná → nic. Vysvětlení nejsou pod políčky, ale
+     v nápovědách exParts, exLog, exTrain (F3-21). Nové pole formuláře patří do své sekce. */
+  // exEd = {id, from, fx, fxPh, f: hodnoty formuláře, orig: f a fxPh při otevření}
+  let exEd = null;
+  // from: odkud se přišlo – list (záložka Cviky), detail (stránka cviku), info (info o cviku ve výběru),
+  // picker (výběr cviků); fx = záznam z free-exercise-db (F0-03), předvyplní nový cvik
+  // copyOf = id cviku, ze kterého se dělá kopie (F3-30)
+  function exEdOpen(id, from, fx, copyOf) {
+    const prev = exEd; // formulář pod stránkou cviku otevřenou z formuláře (F3-17), vrátí se po odchodu
+    const e = id
+      ? S.exLib[id]
+      : copyOf
+        ? Object.assign({}, S.exLib[copyOf], exCopyNames(S.exLib[copyOf]))
+        : fx
+          ? {
+              name: fx.n,
+              cz: fx.cz,
+              equip: fx.e,
+              kind: fx.k,
+              gymDep: !!GYMDEP_EQUIP[fx.e],
+              pri: fx.p,
+              sec: fx.s,
+              desc: fx.d.join("\n"),
+            }
+          : {
+              name: (from === "list" ? S.exlQ : pick.q) || "",
+              equip: "machine",
+              gymDep: true,
+              pri: [],
+              sec: [],
+            };
+    exEd = {
+      id,
+      from: from || "picker",
+      fx: fx || null,
+      copyOf: copyOf || null,
+      fxPh: [], // vybrané fotky z online databáze (F2-05), stáhnou se po uložení cviku
+      f: {
+        name: e.name || "",
+        cz: e.cz || "",
+        pri: exPri(e).slice(),
+        sec: (e.sec || []).slice(),
+        kind: KIND[e.kind] ? e.kind : "wr",
+        equip: e.equip,
+        gd: !!e.gymDep,
+        desc: e.desc || "",
+        url: e.url || "",
+        // návrh progrese (F4-01): def / on / off a vlastní rozsah (texty políček)
+        prog: progModeOf(e.prog),
+        pmin: String(progValid(e.prog) ? e.prog[0] : S.cfg.progMin),
+        pmax: String(progValid(e.prog) ? e.prog[1] : S.cfg.progMax),
+        // vlastní pauza (F1-09): vypínač a délka posuvníku
+        restOn: !!restNorm(e.rest),
+        rest: restNorm(e.rest) || S.cfg.restSec,
+      },
+    };
+    exEd.orig = exEdSnap();
+    // výběr z online hledání otevřeného ve formuláři: stejná stránka, jen nový obsah
+    if (S.route === "exed") {
+      closeSheet();
+      render.keepScroll = false;
+      scheduleRender();
+      window.scrollTo(0, 0);
+      return;
+    }
+    const f = navFrame();
+    f.exEd = prev;
+    closeSheet();
+    S.nav.push(f);
+    go("exed");
+  }
+  const exEdSnap = () => JSON.stringify([exEd.f, exEd.fxPh]);
+  // názvy kopie cviku (F3-30): „Název (kopie)“, při shodě „Název (kopie 2)“…; český název stejný dovětek
+  function exCopyNames(orig) {
+    const tag = (n) => " (kopie" + (n > 1 ? " " + n : "") + ")";
+    let n = 1;
+    while (exClash("name", orig.name + tag(n), null)) {
+      n++;
+    }
+    return { name: orig.name + tag(n), cz: orig.cz ? orig.cz + tag(n) : "" };
+  }
+  // formulář má neuložené změny; nový cvik z online databáze nebo kopie je rozepsaný vždy
+  // (vybraný záznam, fotky a předvyplněné hodnoty by se ztratily)
+  const exEdChanged = () =>
+    !!exEd &&
+    S.route === "exed" &&
+    (exEdSnap() !== exEd.orig || ((!!exEd.fx || !!exEd.copyOf) && !exEd.id));
+  // opustí formulář tam, odkud se přišlo; re = jiné znovu otevření panelu než uložené (např. výběr cviků
+  // místo výsledků hledání), null = žádný panel
+  function exEdLeave(re) {
+    const f = S.nav.pop();
+    exEd = (f && f.exEd) || null;
+    if (!f) {
+      go("ex");
+      return;
+    }
+    go(f.route);
+    render.restoreY = f.y;
+    const again = re !== undefined ? re : f.re;
+    if (again) {
+      again();
+    }
+  }
+  // hodnoty políček formuláře do exEd.f (volá se při psaní a změně výběru)
+  function exEdCollect() {
+    if (!exEd) return;
+    const val = (k) => {
+      const el = document.getElementById(k);
+      return el ? el.value : null;
+    };
+    const f = exEd.f;
+    for (const [k, id] of [
+      ["name", "x-name"],
+      ["cz", "x-cz"],
+      ["kind", "x-kind"],
+      ["equip", "x-equip"],
+      ["desc", "x-desc"],
+      ["url", "x-url"],
+      ["prog", "x-prog"],
+      ["pmin", "x-pmin"],
+      ["pmax", "x-pmax"],
+    ]) {
+      const x = val(id);
+      if (x !== null) {
+        f[k] = x;
+      }
+    }
+    const gd = document.getElementById("x-gd");
+    if (gd) {
+      f.gd = gd.checked;
+    }
+    const restOn = document.getElementById("x-rest-on");
+    if (restOn) {
+      f.restOn = restOn.checked;
+    }
+    const rest = document.getElementById("x-rest");
+    if (rest && f.restOn) {
+      f.rest = restNorm(rest.value) || S.cfg.restSec;
+    }
+    unsavedSync(); // F3-16
+  }
+  // návrh progrese u cviku (F4-01): podle nastavení / vlastní rozsah / vypnuto
+  const progModeOf = (prog) => (prog === "off" ? "off" : progValid(prog) ? "on" : "def");
+  function exEdProg(f) {
+    const cfgRange = [S.cfg.progMin, S.cfg.progMax];
+    const cfgOn = S.cfg.progOn && S.cfg.progAll;
+    const modes = {
+      def: "Podle nastavení (" + (cfgOn ? "zapnuto, " + progStr(cfgRange) : "vypnuto") + ")",
+      on: "Zapnuto, vlastní rozsah",
+      off: "Vypnuto",
+    };
+    // s vypnutým návrhem v Nastavení volba zešedne (F4-15), uložená hodnota zůstává
+    return (
+      `<div ${depAttr(S.cfg.progOn, "stack tight")}>
+      <label class="f">
+        Návrh progrese
+        <select class="inp" id="x-prog">
+          ${Object.entries(modes)
+            .map(([k, l]) => `<option value="${k}"${f.prog === k ? " selected" : ""}>${esc(l)}</option>`)
+            .join("")}
+        </select>
+      </label>` +
+      `${
+        f.prog === "on"
+          ? `<div class="row">
+              <span class="grow small">Rozsah opakování</span>
+              ${progRangeInputs("x-pmin", "x-pmax", [f.pmin, f.pmax], "")}
+            </div>
+            <span class="fmsg" id="x-prog-msg"></span>`
+          : ""
+      }
+    </div>`
+    );
+  }
+  // sekce formuláře cviku (F3-40): nadpis s tlačítkem vpravo a karta s políčky
+  function exEdSec(title, btn, body) {
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>${esc(title)}</h2>
+        ${btn ? `<div class="sec-btns">${btn}</div>` : ""}
+      </div>
+      <div class="card stack ex-form">${body}</div>
+    </section>`;
+  }
+  // partie (F3-40): postava, legenda Hlavní / Pomocná a čipy po skupinách (MPICK, barva skupiny --g-*);
+  // klepnutí na čip jako dřív: hlavní → pomocná → nic (akce xMus)
+  function exEdMuscles(f) {
+    const chip = (k) =>
+      `<button type="button" class="${f.pri.includes(k) ? "p" : f.sec.includes(k) ? "s" : ""}"
+          data-act="xMus" data-v="${k}"
+          aria-pressed="${f.pri.includes(k) || f.sec.includes(k)}">${esc(MUSCLE_MAP.NAMES[k])}</button>`;
+    return `${exFigures({ pri: f.pri, sec: f.sec }, true)}
+      <div class="mlegend">
+        <span><i style="background:var(--m-pri)"></i>Hlavní</span>
+        <span><i style="background:var(--m-sec)"></i>Pomocná</span>
+      </div>
+      <div class="mgroups">
+        ${MPICK.map(
+          ([g, keys]) =>
+            `<div class="mg-l"><i style="background:var(--g-${g})"></i>${MGRP[g]}</div>
+            <div class="mpick">${keys.map(chip).join("")}</div>`,
+        ).join("")}
+      </div>`;
+  }
+  // výběr fotek z online databáze ve formuláři Nový cvik (F2-05); nic není předvybrané
+  function exEdPhotos(fx) {
+    return `<div class="stack tight">
+      <div class="lbl-f">Klepnutím zvětšíš, kroužkem vybereš k uložení</div>
+      ${fxThumbs(fx, exEd.fxPh, "xPh")}
+    </div>`;
+  }
+
+  /* ---------- JEDINEČNÉ NÁZVY CVIKŮ (F3-17) ----------
+     Anglický (hlavní) název nesmí mít dva cviky, český název jen upozorní (výchozí databáze má dva různé cviky
+     se stejným českým názvem). Porovnává se bez velkých písmen, diakritiky a mezer (exKey), i se skrytými cviky.
+     Cvik, který už duplikát má (starší data), projde, dokud se jeho anglický název nezmění.
+     Shoda exClash(pole, hodnota, vlastníId), zákaz uložení exNameBlock. Hlášky exNameMsgs / exNameMark hned
+     při psaní (#x-name-msg, #x-cz-msg; #ex-save dostane .btn.off), český název jen .fmsg.warn. Odkaz
+     exClashOpen otevře stránku cviku a Zpět vrátí formulář (navFrame formuláře je v f.exEd, vrací ho
+     exEdLeave). Každé nové místo, které vytváří nebo přejmenovává cvik, má názvy hlídat stejně.
+     F3-50: jeden cvik = jedna hláška. Cvik z online databáze s podobným cvikem (fedbHave) bez shody názvu má
+     pod anglickým názvem „Podobný cvik už máš“; hláška u českého názvu se schová, když ukazuje na stejný cvik. */
+  const exKey = (s) => fold(s).replace(/\s+/g, "");
+  // jiný cvik se stejným názvem v poli field ("name" / "cz"), jinak null
+  function exClash(field, value, selfId) {
+    const key = exKey(value);
+    if (!key) return null;
+    for (const id in S.exLib) {
+      if (id !== selfId && exKey(S.exLib[id][field]) === key) return id;
+    }
+    return null;
+  }
+  // cvik, kvůli kterému formulář nejde uložit (stejný anglický název), jinak null
+  function exNameBlock() {
+    const f = exEd.f;
+    const clash = exClash("name", f.name, exEd.id);
+    if (!clash) return null;
+    const old = exEd.id && S.exLib[exEd.id];
+    if (old && exKey(old.name) === exKey(f.name)) return null; // starý duplikát beze změny názvu
+    return clash;
+  }
+  // text pod políčkem: cvik se stejným názvem, klepnutím se otevře jeho stránka
+  function exClashMsg(id, lead) {
+    const e = S.exLib[id];
+    return (
+      `${esc(lead)} <button type="button" class="link" data-act="exClashOpen" data-v="${esc(id)}">` +
+      `${esc(e.cz ? e.name + " · " + e.cz : e.name)}</button>` +
+      `${e.archived ? esc(". Je skrytý, zobrazíš ho na jeho stránce přes Upravit cvik → Zobrazit ve výběru.") : ""}`
+    );
+  }
+  // hlášky pod názvy: block = cvik, kvůli kterému nejde uložit
+  function exNameMsgs() {
+    const f = exEd.f;
+    const block = exNameBlock();
+    const sameName = block || exClash("name", f.name, exEd.id);
+    const sameCz = exClash("cz", f.cz, exEd.id);
+    // F3-50: jeden cvik = jedna hláška; podobný cvik z online databáze (fedbHave) jen bez shody názvu
+    const like = !sameName && exEd.fx && !exEd.id ? fedbHave(exEd.fx) : null;
+    let name = "";
+    if (sameName) {
+      name = exClashMsg(sameName, block ? "Cvik s tímto názvem už máš:" : "Stejný název má i cvik:");
+    } else if (like) {
+      name = exClashMsg(like, "Podobný cvik už máš:");
+    }
+    return {
+      block,
+      name,
+      cz: sameCz && sameCz !== (sameName || like) ? exClashMsg(sameCz, "Stejný český název má i cvik:") : "",
+    };
+  }
+  // hned při psaní: červený anglický název a šedé Uložit cvik, u českého názvu jen upozornění
+  function exNameMark() {
+    if (!exEd) return null;
+    const m = exNameMsgs();
+    const input = document.getElementById("x-name");
+    if (input) {
+      input.classList.toggle("bad", !!m.block);
+    }
+    const nameMsg = document.getElementById("x-name-msg");
+    if (nameMsg) {
+      nameMsg.innerHTML = m.name;
+      nameMsg.classList.toggle("warn", !m.block);
+    }
+    const czMsg = document.getElementById("x-cz-msg");
+    if (czMsg) {
+      czMsg.innerHTML = m.cz;
+    }
+    const save = document.getElementById("ex-save");
+    if (save) {
+      save.classList.toggle("off", !!m.block);
+      save.setAttribute("aria-disabled", String(!!m.block));
+    }
+    return m.block;
+  }
+  // stránka formuláře Nový / Upravit cvik
+  function vExEdit() {
+    if (!exEd) {
+      S.route = "ex";
+      return vExList();
+    }
+    const id = exEd.id,
+      f = exEd.f,
+      e = id ? S.exLib[id] || {} : {};
+    const fx = id ? null : exEd.fx;
+    const names = exNameMsgs(); // F3-17: shoda názvu s jiným cvikem
+    let sub = "";
+    if (id) {
+      sub = e.name || "";
+    } else if (exEd.copyOf) {
+      sub = "podle: " + exOf(exEd.copyOf).name;
+    } else if (fx) {
+      sub = "z online databáze"; // F3-50: místo informačního rámečku
+    }
+    let h = topbar(
+      id ? "Upravit cvik" : exEd.copyOf ? "Kopie cviku" : "Nový cvik",
+      sub,
+      `<button class="iconbtn" data-act="exEdBack" aria-label="Zpět">${IC.back}</button>`,
+    );
+    // F3-40: sekce s nadpisem a kartou; Předvyplnit z online databáze = zeměkoule v nadpisu Název
+    const fedbBtn =
+      id || exEd.copyOf || fx ? "" : icoBtn("fedbOpen", "globe", "Předvyplnit z online databáze", "form");
+    h += exEdSec(
+      "Název",
+      fedbBtn,
+      `<label class="f">
+        Anglický název
+        <input class="inp${names.block ? " bad" : ""}" id="x-name" value="${esc(f.name)}">
+        <span class="fmsg${names.block ? "" : " warn"}" id="x-name-msg">${names.name}</span>
+      </label>
+      <label class="f">
+        Český název
+        <input class="inp" id="x-cz" value="${esc(f.cz)}">
+        <span class="fmsg warn" id="x-cz-msg">${names.cz}</span>
+      </label>`,
+    );
+    if (fx && !fx.ni) {
+      h += exEdSec("Fotky z databáze", helpBtn("exFxPh"), exEdPhotos(fx));
+    }
+    h += exEdSec("Partie", helpBtn("exParts"), exEdMuscles(f));
+    h += exEdSec(
+      "Zápis",
+      helpBtn("exLog"),
+      `<label class="f">
+        Typ zápisu
+        <select class="inp" id="x-kind">
+          ${KIND_ORDER.map(
+            (k) => `<option value="${k}"${f.kind === k ? " selected" : ""}>${esc(KIND[k].l)}</option>`,
+          ).join("")}
+        </select>
+      </label>
+      <label class="f">
+        Vybavení
+        <select class="inp" id="x-equip" data-f="xEquip">
+          ${Object.entries(EQUIP)
+            .map(([k, l]) => `<option value="${k}"${f.equip === k ? " selected" : ""}>${l}</option>`)
+            .join("")}
+        </select>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="x-gd" ${f.gd ? "checked" : ""}>
+        <span>Vázáno na fitko${gdIcon()}</span>
+      </label>`,
+    );
+    h += exEdSec("Během tréninku", helpBtn("exTrain"), exEdRest(f) + (PROG_KINDS[f.kind] ? exEdProg(f) : ""));
+    h += exEdSec(
+      "Popis",
+      "",
+      `<label class="f">
+        Popis provedení
+        <textarea class="inp" id="x-desc" rows="4">${esc(f.desc)}</textarea>
+      </label>
+      <label class="f">
+        Odkaz (Hevy nebo video)
+        <input class="inp${urlProblem(f.url) ? " bad" : ""}" id="x-url" inputmode="url" value="${esc(f.url)}"
+            placeholder="prázdné = vyhledat video podle názvu">
+        <span class="fmsg" id="x-url-msg">${esc(urlProblem(f.url))}</span>
+      </label>`,
+    );
+    h += `<div class="stack mt-out">
+      <button class="btn primary block${names.block ? " off" : ""}" id="ex-save" data-act="saveEx"
+          data-v="${esc(id || "")}" aria-disabled="${!!names.block}">Uložit cvik</button>`;
+    if (id && exChanged(id)) {
+      h += `<button class="btn block" data-act="resetEx" data-v="${esc(id)}">Vrátit na výchozí</button>`;
+    }
+    if (id) {
+      h += `<button class="btn block" data-act="archEx" data-v="${esc(id)}">
+        ${e.archived ? "Zobrazit ve výběru" : "Skrýt z výběru"}
+      </button>`;
+    }
+    if (exDelOk(id)) {
+      h += `<div class="bzone"></div>
+        <button class="btn danger block" data-act="delEx" data-v="${esc(id)}">Smazat cvik</button>`;
+    }
+    h += "</div>";
+    return h;
+  }
+
+  /* ---------- SMAZAT CVIK (F3-32) ----------
+     Ve formuláři Upravit cvik dole za čárou tlačítko „Smazat cvik“ (akce delEx), jako Smazat trénink
+     a Smazat šablonu v jejich úpravě. Jen u vlastního cviku (exDelOk: není v EX_DB, výchozí by exMerge
+     vrátil, ten jde jen skrýt). Nepoužitý cvik: potvrzení (delExOk), pak exDelete smaže cvik (putEx), jeho
+     fotky (photoDel), uložený krok krokovače (kkStep) a výběr ve výběru cviků. Použitý cvik (exUses: uložené
+     tréninky, šablony, rozdělaný trénink, rozpracovaná úprava tréninku nebo šablony) smazat nejde, historie by
+     přišla o název a partie; panel řekne kde je a nabídne Skrýt z výběru (archEx). Po smazání zpět tam, odkud
+     se přišlo ke stránce cviku (stránka smazaného cviku se přeskočí), z info o cviku do výběru cviků.
+     Záloha beze změny: bod obnovy nebo starší záloha cvik i s fotkami vrátí. */
+  const exDelOk = (id) => !!id && !!S.exLib[id] && !EX_DB[id];
+  // kde je cvik použitý: počet uložených tréninků, názvy šablon, rozdělaný trénink / rozpracovaná úprava
+  function exUses(id) {
+    const has = (list) => (list || []).some((e) => e.exId === id);
+    const tpls = Object.values(S.templates)
+      .filter((t) => has(t.items))
+      .map((t) => t.name);
+    const draft = [S.active, S.editDraft].some((d) => d && has(d.ex));
+    return { w: derive().all.filter((w) => has(w.ex)).length, tpls, draft };
+  }
+  // „v 5 trénincích, v šabloně Push A a v rozdělaném tréninku“
+  function exUsesText(u) {
+    const parts = [];
+    if (u.w) {
+      parts.push("v " + u.w + " " + plural(u.w, "tréninku", "trénincích", "trénincích"));
+    }
+    if (u.tpls.length) {
+      parts.push(
+        (u.tpls.length === 1 ? "v šabloně " : "v šablonách ") + u.tpls.map((n) => "„" + n + "“").join(", "),
+      );
+    }
+    if (u.draft) {
+      parts.push("v rozdělaném tréninku");
+    }
+    return parts.length > 1 ? parts.slice(0, -1).join(", ") + " a " + parts[parts.length - 1] : parts[0];
+  }
+  // klepnutí na Smazat cvik: potvrzení, nebo vysvětlení, proč smazat nejde
+  function exDelAsk(id) {
+    const e = S.exLib[id];
+    const u = exUses(id);
+    if (u.w || u.tpls.length || u.draft) {
+      openSheet(
+        "Cvik nejde smazat",
+        `<p>Cvik je ${esc(exUsesText(u))}. Tréninky by přišly o jeho název a partie.
+          ${e.archived ? "Z výběru už je skrytý." : "Můžeš ho skrýt z výběru."}</p>`,
+        e.archived
+          ? '<button class="btn primary grow" data-act="closeSheet">Zavřít</button>'
+          : `<button class="btn grow" data-act="closeSheet">Zrušit</button>
+            <button class="btn primary grow" data-act="archExDel" data-v="${esc(id)}">Skrýt z výběru</button>`,
+      );
+      return;
+    }
+    const n = Object.values(S.photos).filter((p) => p.exId === id).length;
+    confirmSheet(
+      "Smazat cvik?",
+      `Cvik „${esc(e.name)}“${n ? " i " + n + " " + plural(n, "fotka", "fotky", "fotek") : ""} se smaže. ` +
+        "Nejde to vrátit.",
+      "Smazat",
+      "delExOk",
+      id,
+    );
+  }
+  async function exDelete(id) {
+    const items = Object.assign({}, S.exLib);
+    delete items[id];
+    putEx(items);
+    const steps = Local.get("kkStep", {});
+    for (const k of Object.keys(steps)) {
+      if (k.startsWith(id + "|")) {
+        delete steps[k];
+      }
+    }
+    Local.set("kkStep", steps);
+    pick.sel = pick.sel.filter((x) => x !== id);
+    delete galPos[id];
+    // zpět jako po uložení; z info o cviku do výběru cviků, stránka smazaného cviku se přeskočí
+    const fromInfo = exEd && exEd.from === "info";
+    exEdLeave(fromInfo ? () => renderPicker() : undefined);
+    if (S.route === "exd" && S.exDetail === id) {
+      navBack(true);
+    }
+    toast("Cvik smazán");
+    try {
+      for (const p of Object.values(S.photos).filter((x) => x.exId === id)) {
+        await photoDel(p.id);
+      }
+    } catch (e) {
+      console.warn("fotky", e);
+    }
+    scheduleRender();
+  }
+
+  /* ---------- hledání v databázi free-exercise-db (F0-03) ----------
+     Data jsou v js/fedb.js (FEDB, vytváří tools/fedb/build.py). Načtou se až při prvním
+     hledání: poprvé je potřeba internet, pak soubor drží service worker v cache.
+     Vybraný cvik předvyplní formulář Nový cvik a uloží se jako vlastní cvik se značkou
+     src:"fedb:<id>". Fotky se ve výsledcích jen ukazují (online); uložit k cviku jdou jen ty, které
+     uživatel vybere (formulář Nový cvik, stránka cviku → Z online databáze, sekce „FOTKY U CVIKU“).
+     Načtení fedbLoad (js/fedb.js není ve FILES v sw.js), stav hledání fs, vykreslení renderFs / refreshFs.
+     F3-50: cvik, který už mám (fedbHave), má vpravo šipku › (akce fsHave), řádek dál předvyplní nový cvik.
+     Předvyplnění přes exEdOpen(null, from, fx). Náhledy fotek z FEDB_IMG, nic se neukládá. Změna českých
+     názvů nebo shod: upravit TSV v tools/fedb/ a spustit python3 tools/fedb/build.py. */
+  let fs = null,
+    fedbP = null;
+  function fedbLoad() {
+    if (typeof FEDB !== "undefined") return Promise.resolve();
+    if (!fedbP) {
+      fedbP = new Promise((ok, ko) => {
+        const s = document.createElement("script");
+        s.src = "js/fedb.js";
+        s.onload = () => (typeof FEDB !== "undefined" ? ok() : ko());
+        s.onerror = () => {
+          s.remove();
+          ko();
+        };
+        document.head.appendChild(s);
+      }).catch(() => {
+        fedbP = null;
+        throw new Error("fedb");
+      });
+    }
+    return fedbP;
+  }
+  const FEDB_CAT = {
+    S: "",
+    W: "silový trojboj",
+    O: "vzpírání",
+    M: "strongman",
+    P: "plyometrie",
+    T: "protahování",
+    C: "kardio",
+  };
+  const fedbStrength = (x) => "SWOM".includes(x.c);
+  // cvik, který už mám: stejný cvik ve výchozí databázi (h) nebo vlastní cvik převzatý z tohoto záznamu
+  function fedbHave(x) {
+    if (x.h && S.exLib[x.h]) return x.h;
+    for (const id in S.exLib) {
+      if (S.exLib[id].src === "fedb:" + x.id) return id;
+    }
+    return null;
+  }
+  // hledá se v anglickém i českém názvu, bez diakritiky, slova v libovolném pořadí;
+  // konce slov se useknou, aby „lavice“ našla „lavici“ a „rows“ i „row“
+  function fedbRows(q) {
+    const words = fold(q === undefined ? fs.q : q)
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+      .map((w) =>
+        w.length >= 7
+          ? w.slice(0, -3)
+          : w.length >= 5 || (/s$/.test(w) && w.length === 4)
+            ? w.slice(0, -1)
+            : w,
+      );
+    if (!words.length) return [];
+    const hay = (x) => {
+      if (!x._f) {
+        const h = fold(x.n + " " + x.cz)
+          .replace(/[^a-z0-9]+/g, " ")
+          .replace(/\bdb\b/g, "dumbbell");
+        x._f = h + "|" + h.replace(/ /g, "");
+      }
+      return x._f;
+    };
+    const r = FEDB.filter((x) => words.every((w) => hay(x).includes(w)));
+    const st = (x) => (fold(x.n).startsWith(words[0]) || fold(x.cz).startsWith(words[0]) ? 0 : 1);
+    return r.sort((a, b) => fedbStrength(b) - fedbStrength(a) || st(a) - st(b) || a.n.length - b.n.length);
+  }
+  function fedbOpen(from, q, form) {
+    fs = { from, q: q || "", all: false, limit: 0, form: !!form };
+    renderFs();
+  }
+  function renderFs() {
+    const b = `<input class="inp" id="fsQ" data-f="fsQ"
+        placeholder="Název anglicky i česky, např. bench press, dřep…" value="${esc(fs.q)}"
+        autocomplete="off">
+    <div class="row wrap-r" id="fsBar"></div>
+    <div class="stack list" id="fsList"></div>
+    <p class="xs muted">
+      Zdroj: databáze free-exercise-db (volné dílo). Český název, partie a typ zápisu jsou návrh, před
+      uložením je zkontroluj.
+    </p>`;
+    // pevná výška (cls fedb, F3-41): s klávesnicí panel při načtení výsledků neroste nad horní okraj
+    openSheet("Online databáze cviků", b, '<button class="btn grow" data-act="fsBack">Zpět</button>', false, {
+      cls: "fedb",
+      lv: fsLv(),
+      back: fsBack,
+      re: renderFs,
+    });
+    refreshFs();
+    if (typeof FEDB === "undefined") {
+      fedbLoad()
+        .then(() => {
+          if (fs) {
+            refreshFs();
+          }
+        })
+        .catch(() => {
+          const el = document.getElementById("fsList");
+          if (el) {
+            el.innerHTML = `<div class="empty">
+              Databázi cviků se nepodařilo načíst. Poprvé je potřeba internet, potom funguje i
+              offline.<br>
+              <button class="btn sm mt-in" data-act="fsRetry">Zkusit znovu</button>
+            </div>`;
+          }
+        });
+    }
+    const inp = document.getElementById("fsQ");
+    if (inp && !fs.q) {
+      inp.focus();
+    }
+  }
+  // tlačítko Zpět (F0-06): hledání je o úroveň pod výběrem cviků; nad stránkou Nový cvik (F3-14) je
+  // jediný panel a Zpět vrátí stránku i s napsaným textem
+  const fsLv = () => (fs.form ? 1 : fs.from === "picker" ? 2 : 1);
+  function fsBack() {
+    if (fs.form) {
+      closeSheet();
+      return;
+    }
+    if (fs.from === "picker") {
+      renderPicker(true);
+    } else {
+      closeSheet();
+    }
+  }
+  function refreshFs() {
+    const el = document.getElementById("fsList"),
+      bar = document.getElementById("fsBar");
+    if (!el || !bar) return;
+    if (typeof FEDB === "undefined") {
+      bar.innerHTML = "";
+      el.innerHTML = '<div class="empty">Načítám databázi cviků…</div>';
+      return;
+    }
+    const q = fs.q.trim(),
+      all = q ? fedbRows() : [],
+      str = all.filter(fedbStrength),
+      rows = fs.all ? all : str,
+      hid = all.length - str.length;
+    bar.innerHTML =
+      `<button class="chip" data-act="fsAll" aria-pressed="${fs.all}">
+      I protahování, kardio a plyometrie${hid ? " (" + hid + ")" : ""}
+    </button>
+    <span class="grow"></span>
+    <span class="xs muted">${
+      q
+        ? rows.length + " " + plural(rows.length, "cvik", "cviky", "cviků")
+        : FEDB.length + " cviků v databázi"
+    }` + `</span>`;
+    if (!q) {
+      el.innerHTML = '<div class="empty">Napiš název cviku anglicky nebo česky.</div>';
+      return;
+    }
+    if (!rows.length) {
+      el.innerHTML =
+        `<div class="empty">
+        Nic nenalezeno.` +
+        `${hid ? " Zapni „I protahování, kardio a plyometrie“." : " Zkus jiné slovo, třeba anglicky."}
+      </div>`;
+      return;
+    }
+    const lim = fs.limit || 40;
+    let h = "";
+    for (const x of rows.slice(0, lim)) {
+      const have = fedbHave(x),
+        he = have && S.exLib[have];
+      h +=
+        `<div class="pickrow">
+          <button class="pick" data-act="fsPick" data-v="${esc(x.id)}">
+            ${
+              x.ni
+                ? '<span class="fsimg"></span>'
+                : `<img class="fsimg" src="${esc(FEDB_IMG + x.id + "/0.jpg")}" alt="" loading="lazy">`
+            }
+            <div class="grow">
+              <div class="row-n">${esc(x.n)}</div>
+              <div class="cz">${esc(x.cz)}</div>
+              <div class="xs muted">
+                ${esc(x.p.map((k) => MUSCLE_MAP.NAMES[k]).join(", "))} · ${esc(EQUIP[x.e] || "")}` +
+        `${FEDB_CAT[x.c] ? " · " + FEDB_CAT[x.c] : ""}</div>` +
+        `${
+          he
+            ? `<div class="xs have">
+              Už máš: ${esc(he.cz || he.name)}${he.archived ? " (skrytý)" : ""}
+            </div>`
+            : ""
+        }` +
+        `</div></button>` +
+        `${
+          he
+            ? `<button class="infob" data-act="fsHave" data-v="${esc(have)}"
+                aria-label="Můj cvik ${esc(he.name)}">${IC.next}</button>`
+            : ""
+        }` +
+        `</div>`;
+    }
+    if (rows.length > lim) {
+      h += `<button class="btn block" data-act="fsMore">Další cviky (${rows.length - lim})</button>`;
+    }
+    el.innerHTML = h;
+  }
+
+  /* ---------- PŘETAŽENÍ (F2-07) ----------
+     Pořadí se mění tažením prstu za úchyt (⋮⋮): seznam má data-dnd="<druh>", položky třídu dnd-it
+     a úchyt dnd-h (dndGrip). Zvednutá položka jede s prstem, ostatní jí uhýbají, u okraje panelu
+     (stránky) se seznam sám posouvá. Po puštění se položka přesune i v HTML (bez probliknutí)
+     a dndDrop(druh, odkud, kam) uloží nové pořadí. Tahá se jen za úchyt, posouvání stránky
+     a klepání fungují dál.
+     Žádné šipky. dndDrop ukládá: gyms, ex = curDraft().ex, tpl = pole order u šablon (tplSorted, nová šablona
+     tplNextOrder). Vysoké položky (karty cviků) se netahají na stránce, ale v panelu s krátkým seznamem
+     (sheetExOrder, sheetTplOrder). V panelu se posouvá .sheet-b, jinak stránka (dndView bez lišt). */
+  const DND_EDGE = 56; // px od okraje rámečku, kde se seznam začne sám posouvat
+  const DND_SPEED = 14; // nejvyšší posun za snímek (px)
+  let dnd = null; // probíhající tah
+  // úchyt položky (label = co se přesouvá, pro čtečku obrazovky)
+  function dndGrip(label) {
+    return `<span class="dnd-h" aria-label="Přetáhnout: ${esc(label)}">${IC.grip}</span>`;
+  }
+  // posouvaný rámeček: obsah panelu, jinak stránka (null)
+  const dndBox = (list) => list.closest(".sheet-b");
+  const dndScroll = (box) => (box ? box.scrollTop : window.scrollY);
+  // viditelná část rámečku (u stránky bez horní lišty a spodních záložek)
+  function dndView(box) {
+    if (box) {
+      const r = box.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }
+    const bar = document.querySelector("header.top");
+    const tabs = document.querySelector(".tabs");
+    return {
+      top: bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0,
+      bottom: tabs && tabs.offsetHeight ? tabs.getBoundingClientRect().top : window.innerHeight,
+    };
+  }
+  function dndStart(ev, grip) {
+    const it = grip.closest(".dnd-it"),
+      list = grip.closest("[data-dnd]");
+    if (!it || !list) return;
+    const items = [...list.children].filter((x) => x.classList.contains("dnd-it"));
+    if (items.length < 2) return;
+    ev.preventDefault();
+    const box = dndBox(list);
+    const scroll = dndScroll(box);
+    // polohy položek v obsahu (nezávislé na posouvání)
+    const rects = items.map((x) => {
+      const r = x.getBoundingClientRect();
+      return { top: r.top + scroll, bottom: r.bottom + scroll };
+    });
+    const from = items.indexOf(it);
+    const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+    dnd = {
+      kind: list.dataset.dnd,
+      list,
+      it,
+      items,
+      rects,
+      from,
+      to: from,
+      step: rects[from].bottom - rects[from].top + gap,
+      y0: ev.clientY + scroll,
+      y: ev.clientY,
+      box,
+      pid: ev.pointerId,
+      raf: 0,
+    };
+    try {
+      grip.setPointerCapture(ev.pointerId);
+    } catch (e) {}
+    list.classList.add("dnd-act");
+    it.classList.add("dnd-on");
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(15);
+      } catch (e) {}
+    }
+    dnd.raf = requestAnimationFrame(dndAuto);
+  }
+  // posun zvednuté položky podle prstu, ostatní uhnou
+  function dndMove() {
+    const g = dnd;
+    const { rects, from } = g;
+    const last = rects.length - 1;
+    let dy = g.y + dndScroll(g.box) - g.y0;
+    dy = Math.max(rects[0].top - rects[from].top, Math.min(rects[last].bottom - rects[from].bottom, dy));
+    g.it.style.transform = `translateY(${dy}px)`;
+    // nové místo = kolik ostatních položek má střed nad středem zvednuté
+    const mid = (rects[from].top + rects[from].bottom) / 2 + dy;
+    let to = 0;
+    rects.forEach((r, k) => {
+      if (k !== from && (r.top + r.bottom) / 2 < mid) {
+        to++;
+      }
+    });
+    if (to === g.to) return;
+    g.to = to;
+    g.items.forEach((x, k) => {
+      if (k === from) return;
+      let shift = 0;
+      if (from < to && k > from && k <= to) {
+        shift = -g.step;
+      } else if (to < from && k >= to && k < from) {
+        shift = g.step;
+      }
+      x.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+  }
+  // prst u horního / spodního okraje: seznam se sám posouvá (rychleji, čím blíž okraji)
+  function dndAuto() {
+    const g = dnd;
+    if (!g) return;
+    if (!g.list.isConnected) {
+      dndEnd(true);
+      return;
+    }
+    const v = dndView(g.box);
+    let by = 0;
+    if (g.y < v.top + DND_EDGE) {
+      by = -Math.min(1, (v.top + DND_EDGE - g.y) / DND_EDGE) * DND_SPEED;
+    } else if (g.y > v.bottom - DND_EDGE) {
+      by = Math.min(1, (g.y - v.bottom + DND_EDGE) / DND_EDGE) * DND_SPEED;
+    }
+    if (by) {
+      if (g.box) {
+        g.box.scrollTop += by;
+      } else {
+        window.scrollBy(0, by);
+      }
+      dndMove();
+    }
+    g.raf = requestAnimationFrame(dndAuto);
+  }
+  // konec tahu: položka se přesune i v HTML a pořadí se uloží (cancel = vrátit, nic neukládat)
+  function dndEnd(cancel) {
+    const g = dnd;
+    if (!g) return;
+    dnd = null;
+    cancelAnimationFrame(g.raf);
+    g.list.classList.remove("dnd-act");
+    g.it.classList.remove("dnd-on");
+    g.items.forEach((x) => (x.style.transform = ""));
+    if (cancel || g.to === g.from || !g.list.isConnected) return;
+    const rest = g.items.filter((x) => x !== g.it);
+    if (g.to < rest.length) {
+      rest[g.to].before(g.it);
+    } else {
+      rest[rest.length - 1].after(g.it);
+    }
+    // klepnutí, které po puštění prstu případně přijde, nemá nic spustit
+    const eat = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    document.addEventListener("click", eat, true);
+    setTimeout(() => document.removeEventListener("click", eat, true), 0);
+    dndDrop(g.kind, g.from, g.to);
+  }
+  document.addEventListener("pointerdown", (ev) => {
+    if (dnd || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    const grip = ev.target.closest && ev.target.closest(".dnd-h");
+    if (grip) {
+      dndStart(ev, grip);
+    }
+  });
+  document.addEventListener("pointermove", (ev) => {
+    if (!dnd || ev.pointerId !== dnd.pid) return;
+    dnd.y = ev.clientY;
+    dndMove();
+  });
+  document.addEventListener("pointerup", (ev) => {
+    if (dnd && ev.pointerId === dnd.pid) {
+      dndEnd(false);
+    }
+  });
+  document.addEventListener("pointercancel", (ev) => {
+    if (dnd && ev.pointerId === dnd.pid) {
+      dndEnd(true);
+    }
+  });
+  // podržení úchytu nemá otevřít kontextovou nabídku
+  document.addEventListener("contextmenu", (ev) => {
+    if (ev.target.closest && ev.target.closest(".dnd-h")) {
+      ev.preventDefault();
+    }
+  });
+  // uložení nového pořadí podle druhu seznamu
+  function dndDrop(kind, from, to) {
+    const move = (a) => a.splice(to, 0, a.splice(from, 1)[0]);
+    if (kind === "gyms") {
+      // přetahují se jen aktivní fitka, archivovaná zůstanou za nimi (F2-06)
+      const cfg = JSON.parse(JSON.stringify(S.cfg));
+      const on = cfg.gyms.filter((g) => !g.archived);
+      move(on);
+      cfg.gyms = on.concat(cfg.gyms.filter((g) => g.archived));
+      put("config/main", cfg);
+    } else if (kind === "ex") {
+      const d = curDraft();
+      if (!d) return;
+      const tags = d.ex.map((e) => e.ss || "");
+      move(d.ex);
+      ssMoved(d.ex, to);
+      touchDraft();
+      scheduleRender();
+      // změnila se supersérie (F4-05)? překreslit panel, aby ukazoval nové pruhy
+      if (tags.some(Boolean)) {
+        const box = document.querySelector(".sheet-b");
+        const top = box ? box.scrollTop : 0;
+        sheetExOrder(true);
+        const fresh = document.querySelector(".sheet-b");
+        if (fresh) {
+          fresh.scrollTop = top;
+        }
+      }
+    } else if (kind === "tpl") {
+      // skryté šablony (F2-12) zůstanou na svých místech, přetažené viditelné se řadí do volných míst
+      const visible = tplVisible().map(([id]) => id);
+      move(visible);
+      const ids = tplSorted().map(([id, t]) => (t.hidden ? id : visible.shift()));
+      const items = {};
+      ids.forEach((id, k) => (items[id] = Object.assign({}, S.templates[id], { order: k })));
+      put("config/templates", { items });
+    }
+  }
+  // panel Změnit pořadí cviků (z menu cviku v tréninku, úpravě tréninku i šabloně)
+  function sheetExOrder(noanim) {
+    const d = curDraft();
+    if (!d) return;
+    const rows = d.ex
+      .map((e, i) => {
+        const n = e.sets.length;
+        const name = exName(e.exId);
+        const ss = ssRun(d.ex, i); // cvik v supersérii (F4-05): proužek vlevo
+        return `<div class="card dnd-it dnd-row${ss ? " ss-on" : ""}">
+            <div class="grow">
+              <div class="row-n">${esc(name)}</div>
+              <div class="xs muted">
+                ${n} ${plural(n, "série", "série", "sérií")}
+              </div>
+            </div>
+            ${dndGrip(name)}
+          </div>`;
+      })
+      .join("");
+    openSheet(
+      "Pořadí cviků",
+      `<p class="xs muted">
+        Cvik přesuneš tažením za úchyt vpravo.` +
+        `${
+          d.ex.some((e, i) => ssRun(d.ex, i))
+            ? " Cvik přetažený mezi cviky supersérie se k ní přidá, přetažený pryč z ní vypadne."
+            : ""
+        }
+      </p>
+      <div class="stack dnd-list" data-dnd="ex">${rows}</div>`,
+      '<button class="btn primary grow" data-act="closeSheet">Hotovo</button>',
+      noanim,
+      { re: () => sheetExOrder(true) },
+    );
+  }
+  // panel Změnit pořadí šablon (úvodní obrazovka); pořadí je společné pro všechna fitka
+  function sheetTplOrder(noanim) {
+    const rows = tplVisible()
+      .map(([, t]) => {
+        const gyms = tplGyms(t);
+        return `<div class="card dnd-it dnd-row">
+            <div class="grow">
+              <div class="row-n">${esc(t.name)}</div>
+              <div class="xs muted">
+                ${gyms.length ? esc(gyms.map(gymName).join(", ")) : "Všechna fitka"}
+              </div>
+            </div>
+            ${dndGrip(t.name)}
+          </div>`;
+      })
+      .join("");
+    openSheet(
+      "Pořadí šablon",
+      `<p class="xs muted">
+        Šablonu přesuneš tažením za úchyt vpravo. Pořadí platí ve všech fitkách, nahoře jsou vždy
+        šablony vybraného fitka.
+      </p>
+      <div class="stack dnd-list" data-dnd="tpl">${rows}</div>`,
+      '<button class="btn primary grow" data-act="closeSheet">Hotovo</button>',
+      noanim,
+      { re: () => sheetTplOrder(true) },
+    );
+  }
+
+  /* ---------- panel vysouvaný zespodu (sheet) a potvrzovací okna ---------- */
+  // sheetNav: otevřený panel pro tlačítko Zpět – lv = kolik stisků Zpět ho zavře (panel v panelu má víc),
+  // back = jeden krok zpět, re = znovu otevřít (návrat ze stránky cviku nebo z úpravy tréninku)
+  let sheetNav = null;
+  // nav.cls = třída navíc pro panel (např. krokovač "kk"); nav.backBtn = panel nad jiným panelem má místo ×
+  // šipku ← vlevo, která vrací o úroveň (navBack), ne zavře všechno (F3-46, Informace o cviku nad výběrem)
+  function openSheet(title, body, foot, noanim, nav) {
+    kkEnd();
+    const cls = nav && nav.cls ? " " + nav.cls : "";
+    const back = nav && nav.backBtn;
+    document.getElementById("sheetRoot").innerHTML = `<div class="scrim${cls}" data-act="scrim">
+      <div class="sheet${noanim ? " noanim" : ""}" role="dialog" aria-modal="true"
+          aria-label="${esc(title)}">
+        <div class="sheet-h${back ? " bk" : ""}">
+          ${back ? `<button class="iconbtn" data-act="sheetBack" aria-label="Zpět">${IC.back}</button>` : ""}
+          <h2>${esc(title)}</h2>
+          ${back ? "" : `<button class="iconbtn" data-act="closeSheet" aria-label="Zavřít">${IC.close}</button>`}
+        </div>
+        <div class="sheet-b">${body}</div>
+        ${foot ? `<div class="sheet-f">${foot}</div>` : ""}
+      </div>
+    </div>`;
+    document.body.style.overflow = "hidden";
+    sheetNav = Object.assign(
+      { lv: 1, back: closeSheet, re: () => openSheet(title, body, foot, true, nav) },
+      nav,
+    );
+  }
+  function closeSheet() {
+    kkEnd();
+    shrClose(); // zavřený panel sdílení: fotka se uvolní z paměti (F4-08)
+    document.getElementById("sheetRoot").innerHTML = "";
+    document.body.style.overflow = "";
+    sheetNav = null;
+  }
+  function confirmSheet(title, text, btn, act, v) {
+    openSheet(
+      title,
+      `<p>${text}</p>`,
+      `<button class="btn grow" data-act="closeSheet">Zrušit</button>
+      <button class="btn primary grow" data-act="${act}" data-v="${esc(v || "")}">${esc(btn)}</button>`,
+    );
+  }
+
+  /* ---------- PAUZA PO ZAHŘÍVACÍ SÉRII (F1-22) ----------
+     Po ✓ zahřívací série (s.t = "w") běží jedna společná délka pro všechny cviky: Časovač po zahřívací
+     sérii (S.cfg.restWarm v config/main, 0:30–5:00 po 30 s, výchozí 1:00; starší data doplní cfgNorm).
+     Platí i po poslední zahřívací sérii před první pracovní (rozhodnutí uživatele 13. 10. 2026). Vlastní
+     pauza cviku (F1-09, exRest) platí jen po ostatních druzích série (pracovní, do selhání, drop).
+     V supersérii (F4-05) po kole pracovních sérií Časovač po pracovní supersérii, po kole zahřívacích
+     restWarm, mezi cviky kola bez pauzy (o tom rozhoduje ssRest). Posuvník je v Nastavení → Odpočinek mezi
+     sériemi jako první. Délku vybírá restAfter, volá ho toggleSetDone. Zamítnuto dřív jako F1-17
+     (10. 10. 2026), obnoveno 13. 10. 2026. */
+  // délka pauzy po odškrtnuté sérii s cviku i v d; rest = výsledek ssRest ("ss" = po kole pracovní supersérie);
+  // po pracovní sérii pauza cviku v šabloně tréninku (F1-21), jinak pauza cviku (F1-09) nebo Výchozí časovač
+  function restAfter(d, i, s, rest) {
+    if (rest === "ss") return S.cfg.restSs;
+    if (s.t === "w") return S.cfg.restWarm;
+    return tplRest(d, i) || exRest(d.ex[i].exId);
+  }
+
+  /* ---------- PAUZA PODLE CVIKU (F1-09) ----------
+     Cvik může mít vlastní délku pauzy (jako v Hevy, např. dřep 3 min, biceps 1 min). Uložená je u cviku
+     v config/exercises jako rest (sekundy, REST_RANGE: 0:30–5:00 po 30 s); bez vlastní pauzy pole chybí
+     a platí Výchozí časovač z Nastavení (starší data i zálohy fungují beze změny, exRestClean při obnově
+     zálohy zahodí neplatnou hodnotu). Nastavuje se jen ve formuláři Upravit cvik (exEdRest): vypínač
+     Vlastní pauza (x-rest-on) a pod ním posuvník (x-rest); s vypnutým vypínačem posuvník zešedne, je inert
+     a ukazuje Výchozí časovač (závislá volba F3-23). Vrátit na výchozí pauzu nechá (jako nastavení stroje,
+     osobní údaj, ne údaj z databáze cviků), Duplikovat ji zkopíruje (je ve formuláři).
+     Délku po ✓ série vybírá restAfter (sekce F1-22): po kole pracovních sérií supersérie (ssRest = "ss")
+     platí Časovač po pracovní supersérii, po zahřívací sérii Časovač po zahřívací sérii (od F1-22, vlastní
+     pauza cviku ne), jinak exRest(cvik právě odškrtnuté série), i po poslední sérii cviku (pauza podle
+     hotového cviku, ne podle dalšího). Úprava +15 / −15 v pruhu pauzy délku cviku nemění.
+     Posuvníky (restSlider) jsou i v Nastavení → Odpočinek (restWarm, restSec, restSs; dřív přepínače):
+     hodnota se při tažení ukazuje hned (restSliderShow), uloží se po puštění.
+     Rozhodnuto 12. 10. 2026: pauza cviku jen v šabloně (panel z nabídky cviku v úpravě šablony, přednost
+     šablona → cvik → výchozí) je odložená úloha F1-21. */
+  // délka pauzy zaokrouhlená na krok posuvníku, mimo rozsah null
+  function restNorm(sec) {
+    const val = Math.round(+sec / REST_RANGE.step) * REST_RANGE.step;
+    return val >= REST_RANGE.min && val <= REST_RANGE.max ? val : null;
+  }
+  // délka pauzy po pracovní sérii cviku: vlastní pauza cviku, jinak Výchozí časovač
+  const exRest = (exId) => restNorm(exOf(exId).rest) || S.cfg.restSec;
+  // posuvník délky pauzy: id = id posuvníku (hodnota se ukazuje v id + "V"), label = popisek, sec = délka,
+  // attrs = atributy navíc pro posuvník (např. data-i)
+  function restSlider(id, label, sec, off, attrs) {
+    return `<div class="rest-sl${off ? " dep off" : ""}"${off ? " inert" : ""}>
+      <div class="row">
+        <span class="grow">${esc(label)}</span>
+        <span class="num" id="${id}V">${fmtClock(sec)}</span>
+      </div>
+      <input type="range" class="range" id="${id}" min="${REST_RANGE.min}" max="${REST_RANGE.max}"
+          step="${REST_RANGE.step}" value="${sec}" aria-label="${esc(label)}"${attrs || ""}>
+    </div>`;
+  }
+  // při tažení posuvníku hned ukázat délku (true = byl to posuvník pauzy)
+  function restSliderShow(t) {
+    if (!["restWarm", "restSec", "restSs", "x-rest", "t-rest"].includes(t.id)) return false;
+    document.getElementById(t.id + "V").textContent = fmtClock(+t.value);
+    return true;
+  }
+  // formulář Upravit cvik: vypínač Vlastní pauza a posuvník
+  function exEdRest(f) {
+    return `<div class="stack">
+      <label class="switch">
+        <input type="checkbox" id="x-rest-on" ${f.restOn ? "checked" : ""}>
+        <span>Vlastní pauza</span>
+      </label>
+      ${restSlider("x-rest", "Pauza po pracovní sérii", f.restOn ? f.rest : S.cfg.restSec, !f.restOn)}
+    </div>`;
+  }
+  // obnova zálohy: vlastní pauza cviku jen jako platná délka
+  function exRestClean(items) {
+    for (const id in items) {
+      const item = items[id];
+      if (!item || typeof item !== "object" || !("rest" in item)) continue;
+      const rest = restNorm(item.rest);
+      if (rest) {
+        item.rest = rest;
+      } else {
+        delete item.rest;
+      }
+    }
+    return items;
+  }
+
+  /* ---------- PAUZA CVIKU V ÚPRAVĚ ŠABLONY (F2-14) ----------
+     V úpravě šablony a uloženého tréninku má karta cviku pod názvem (pod řádkem Stroj) řádek s ikonou hodin
+     (IC.rest, slovo „Pauza“ nahrazuje) a délkou pauzy po pracovní sérii a jejím zdrojem: „2:00 · výchozí“
+     (Výchozí časovač z Nastavení), „3:00 · vlastní“ (F1-09) nebo „3:00 · po supersérii“ (cvik v supersérii,
+     F4-05: pauza cviku se tam nepoužije, po kole platí Časovač po pracovní supersérii). S vypnutým Časovačem
+     pauzy „vypnutá“. Délku a zdroj počítá restSrc stejně jako restAfter (F1-22). V rozdělaném tréninku
+     se řádek neukazuje (rozhodnutí uživatele 15. 10. 2026: tam až s úpravou pauzy, F1-21).
+     Klepnutí (akce restInfo) otevře krátký panel restInfoSheet: nahoře „Pauza po pracovní sérii: 3:00“, pod tím
+     šedě zdroj („vlastní pauza cviku“, „výchozí pauza“, u supersérie a vypnutého časovače vlastní texty), a tlačítko
+     Upravit cvik (restInfoEx → formulář cviku přes exEdOpen, otevřený posunutý na sekci Během tréninku přes
+     render.toSel; vypínač Vlastní pauza se sám nezapíná; Zpět i Uložit vrací do úpravy s panelem znovu
+     otevřeným přes nav.re, takže ukazuje novou délku). Tlačítko do Nastavení v panelu není: odchod na záložku
+     by zavřel rozepsanou úpravu, proto jen cesta v textu.
+     Klikací řádek pod názvem cviku, který něco otevírá (pauza, Stroj F1-07, stagnace F4-06), má vpravo šipku
+     › (excGo, třída .exc-go). Řádky, které rozbalují (Minule) nebo rovnou mění série (návrh progrese), šipku
+     nemají. Pauza v šabloně (přednost šablona → cvik → výchozí) je ve stejném panelu, sekce F1-21. */
+  // šipka › na konci klikacího řádku pod názvem cviku, který otevírá panel nebo stránku
+  const excGo = `<span class="exc-go">${icon("next")}</span>`;
+  // délka pauzy po pracovní sérii cviku i v d a její zdroj: def / own / tpl (F1-21) / ss / off
+  function restSrc(d, i) {
+    if (S.cfg.restOn === false) return { src: "off", sec: 0 };
+    if (ssRun(d.ex, i)) return { src: "ss", sec: S.cfg.restSs };
+    const tpl = tplRest(d, i);
+    if (tpl) return { src: "tpl", sec: tpl };
+    const own = restNorm(exOf(d.ex[i].exId).rest);
+    return own ? { src: "own", sec: own } : { src: "def", sec: S.cfg.restSec };
+  }
+  const REST_SRC = { def: "výchozí", own: "vlastní", tpl: "v šabloně", ss: "po supersérii" };
+  // řádek s pauzou v kartě cviku (jen úprava šablony a uloženého tréninku): ikona hodin, délka a zdroj
+  function restLine(d, e, i) {
+    if (d.mode === "active") return "";
+    const r = restSrc(d, i);
+    const txt = r.src === "off" ? "vypnutá" : `${fmtClock(r.sec)} · ${REST_SRC[r.src]}`;
+    return `<button class="exc-rest" data-act="restInfo" data-i="${i}">
+      ${icon("rest")}
+      <span class="t">${esc(txt)}</span>
+      ${excGo}
+    </button>`;
+  }
+  // panel s vysvětlením, odkud pauza cviku je; po návratu z formuláře cviku se otevře znovu s novou délkou
+  function restInfoSheet(d, i, noanim) {
+    if (!d || !d.ex[i]) return;
+    const e = d.ex[i];
+    const r = restSrc(d, i);
+    const len = `<b class="num">${fmtClock(r.sec)}</b>`;
+    // první řádek délka, druhý odkud je (texty podle přání uživatele 15. 10. 2026)
+    const [head, src] = {
+      def: [`Pauza po pracovní sérii: ${len}`, "výchozí pauza"],
+      own: [`Pauza po pracovní sérii: ${len}`, "vlastní pauza cviku"],
+      tpl: [`Pauza po pracovní sérii: ${len}`, "vlastní pauza v této šabloně"],
+      ss: [`Pauza po kole supersérie: ${len}`, "časovač po pracovní supersérii"],
+      off: ["Pauza vypnutá", "časovač pauzy je vypnutý v Nastavení"],
+    }[r.src];
+    // F1-21: v úpravě šablony vypínač a posuvník pauzy v šabloně (ne u cviku v supersérii); Upravit cvik pak
+    // jen obrysové, hlavní ovládání je v panelu
+    const ctl = tplRestCtl(d, i);
+    openSheet(
+      "Pauza – " + exName(e.exId),
+      `<div class="stack tight">
+        <p>${head}</p>
+        <p class="muted">${esc(src)}</p>
+      </div>
+      ${ctl}`,
+      `<button class="btn${ctl ? "" : " primary"} grow" data-act="restInfoEx" data-v="${esc(e.exId)}">` +
+        "Upravit cvik</button>",
+      noanim,
+      { re: () => restInfoSheet(curDraft(), i, true) },
+    );
+  }
+
+  /* ---------- PAUZA CVIKU V ŠABLONĚ (F1-21) ----------
+     Cvik v šabloně může mít vlastní délku pauzy po pracovní sérii, jen pro tu šablonu (např. dřep 3:00 v silovém
+     dni, 1:30 v objemovém). Uložená je u cviku v šabloně (config/templates, items[].rest, sekundy, REST_RANGE);
+     bez ní pole chybí (starší šablony a zálohy beze změny, tplNorm neplatnou hodnotu zahodí přes tplRestClean).
+     Přednost: pauza v šabloně → vlastní pauza cviku (F1-09) → Výchozí časovač. Po zahřívací sérii vždy Časovač
+     po zahřívací sérii (F1-22), po kole supersérie Časovač po pracovní supersérii (F4-05), o tom rozhoduje
+     restAfter. Nastavuje se jen v úpravě šablony: panel řádku pauzy (restInfoSheet, F2-14) má vypínač Vlastní
+     pauza v této šabloně (t-rest-on) a posuvník (t-rest); vypnutý posuvník zešedne a ukazuje pauzu, která platí
+     bez šablony. Změna jde do konceptu (d.ex[i].rest), uloží se s Uložit šablonu. U cviku v supersérii panel
+     vypínač nemá (hodnota by se nepoužila).
+     Rozdělaný trénink si pauzu nekopíruje: tplRest ji čte vždy z aktuální šablony tréninku (d.tplId), takže
+     úprava šablony platí hned, i pro Cvičit znovu (vazba na šablonu zůstává, F2-01), plánovaný trénink (F4-07)
+     i uprostřed tréninku. Trénink bez šablony (nebo se smazanou šablonou) pauzu ze šablony nemá. Stejný cvik
+     víckrát v šabloně: n-tý výskyt v tréninku = n-tý výskyt v šabloně (tplItemRest). Do uloženého tréninku se
+     nic neukládá; v jeho úpravě řádek pauzy ukáže „v šabloně“ jen pro informaci. Šablona z tréninku (Uložit
+     jako šablonu, Aktualizovat šablonu, přepsání při shodě názvu) převezme pauzy přes tplItemsOf(w, src).
+     V rozdělaném tréninku se pauza neukazuje ani neupravuje (rozhodnutí uživatele 16. 10. 2026). */
+  // pauza cviku pro Object.assign (prázdný objekt = bez pauzy v šabloně), jako noteOf; function, ne const:
+  // volá ji i načtení cache při startu (tplNorm → tplRestClean) dřív, než by se const téhle sekce vytvořila
+  function restOf(e) {
+    const rest = e ? restNorm(e.rest) : null;
+    return rest ? { rest } : {};
+  }
+  // cvik šablony: pauza jen jako platná délka (načtení dat a obnova zálohy)
+  function tplRestClean(it) {
+    if (!it || typeof it !== "object" || !("rest" in it)) return it;
+    const out = Object.assign({}, it);
+    delete out.rest;
+    return Object.assign(out, restOf(it));
+  }
+  // cvik šablony t odpovídající cviku i ze seznamu list (n-tý výskyt stejného cviku) a jeho pauza jako {rest}
+  function tplItemRest(t, list, i) {
+    if (!t || !Array.isArray(t.items) || !list[i]) return null;
+    const exId = list[i].exId;
+    const nth = list.slice(0, i).filter((e) => e.exId === exId).length;
+    return t.items.filter((it) => it && it.exId === exId)[nth] || null;
+  }
+  // pauza cviku i v šabloně: v úpravě šablony z konceptu, jinak z aktuální šablony tréninku; bez ní null
+  function tplRest(d, i) {
+    if (!d || !d.ex[i]) return null;
+    if (d.mode === "template") return restNorm(d.ex[i].rest);
+    const t = d.tplId && S.templates[d.tplId];
+    return restOf(tplItemRest(t, d.ex, i)).rest || null;
+  }
+  // vypínač a posuvník v panelu pauzy (jen úprava šablony, ne cvik v supersérii)
+  function tplRestCtl(d, i) {
+    if (d.mode !== "template" || ssRun(d.ex, i)) return "";
+    const on = !!tplRest(d, i);
+    const sec = on ? tplRest(d, i) : exRest(d.ex[i].exId);
+    return `<div class="stack mt-out">
+      <label class="switch">
+        <input type="checkbox" id="t-rest-on" data-i="${i}" ${on ? "checked" : ""}>
+        <span>Vlastní pauza v této šabloně</span>
+      </label>
+      ${restSlider("t-rest", "Pauza po pracovní sérii", sec, !on, ` data-i="${i}"`)}
+    </div>`;
+  }
+  // změna vypínače nebo posuvníku v panelu: zapnutí převezme pauzu, která teď platí; panel se překreslí
+  function tplRestChange(t) {
+    const d = curDraft();
+    const i = +t.dataset.i;
+    if (!d || d.mode !== "template" || !d.ex[i]) return;
+    const e = d.ex[i];
+    if (t.id === "t-rest-on") {
+      if (t.checked) {
+        e.rest = exRest(e.exId);
+      } else {
+        delete e.rest;
+      }
+    } else {
+      e.rest = restNorm(t.value) || exRest(e.exId);
+    }
+    scheduleRender();
+    restInfoSheet(d, i, true);
+  }
+
+  /* Nastavení → Trénink → Odpočinek mezi sériemi */
+  function restSettings() {
+    const c = S.cfg,
+      ns = notifState();
+    let h = `<section class="sec">
+        <div class="sec-h">
+          <h2>Odpočinek mezi sériemi</h2>
+          ${helpBtn("rest")}
+        </div>
+        <div class="card stack">`;
+    // hlavní vypínač: vypnuto = po ✓ žádná pauza, ostatní volby zešednou (zůstanou uložené)
+    const on = c.restOn !== false;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="restOn" ${on ? "checked" : ""}>
+      <span>Časovač pauzy</span>
+    </label>`;
+    h += `<div class="stack rest-set${on ? "" : " off"}"${on ? "" : " inert"}>`;
+    // délky pauzy posuvníkem (F1-09), uloží se po puštění; F1-22: po každé zahřívací sérii
+    h += restSlider("restWarm", "Časovač po zahřívací sérii", c.restWarm);
+    h += restSlider("restSec", "Výchozí časovač", c.restSec);
+    // F4-05: po dokončení kola pracovních sérií supersérie
+    h += restSlider("restSs", "Časovač po pracovní supersérii", c.restSs);
+    h += `<div class="stack tight">
+      <span>Na konci pauzy</span>
+      <div class="seg seg-wide">
+        ${[
+          ["both", "Zvuk i vibrace"],
+          ["sound", "Zvuk"],
+          ["vib", "Vibrace"],
+        ]
+          .map(
+            ([k, l]) =>
+              `<button data-act="restAlert" data-v="${k}" aria-pressed="${c.restAlert === k}">${l}` +
+              `</button>`,
+          )
+          .join("")}
+      </div>
+    </div>`;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="restOver" ${c.restOver ? "checked" : ""}>
+      <span>Počítat přečas</span>
+    </label>`;
+    h += `<label class="switch">
+      <input type="checkbox" data-act="restNotify"
+          ${c.restNotify ? "checked" : ""}${ns === "none" ? " disabled" : ""}>
+      <span>Oznámení na pozadí</span>
+    </label>`;
+    // stav oznámení zůstává na místě, s vypnutými oznámeními jen zešedne (F3-23)
+    const dep = c.restNotify ? "dep" : "dep off";
+    const inert = c.restNotify ? "" : " inert";
+    if (ns === "none") {
+      h += '<div class="xs muted">Tento prohlížeč oznámení nepodporuje.</div>';
+    } else if (ns === "denied") {
+      h += `<div class="xs muted ${dep}"${inert}>
+        Oznámení jsou v telefonu zakázaná. Povol je v Nastavení Androidu → Aplikace → Workout deník
+        → Oznámení${NATIVE ? "" : " (v prohlížeči přes ikonu vedle adresy → Oprávnění)"}.
+      </div>`;
+    } else if (ns === "default") {
+      h += `<button class="btn block ${dep}" data-act="notifAsk"${inert}>Povolit oznámení</button>`;
+    } else {
+      if (NATIVE && window.NATIVNI.notif.exact !== "granted") {
+        // nativní appka bez povolení přesného času (F6-02): oznámení by se mohlo zpozdit
+        h += `<div class="row ${dep}"${inert}>
+          <span class="grow xs muted">Bez povolení přesného času může oznámení přijít o minuty později.</span>
+          <button class="btn sm" data-act="exactAsk">Povolit</button>
+        </div>`;
+      }
+      h += `<div class="row ${dep}"${inert}>
+        <span class="grow xs muted">
+          Oznámení jsou povolená. Vyzkoušej: klepni, zhasni displej a počkej 10 s.
+        </span>
+        <button class="btn sm" data-act="notifTest">Vyzkoušet</button>
+      </div>`;
+    }
+    h += wakeSettings();
+    return `${h}</div></div></section>`;
+  }
+
+  /* ---------- odpočinek mezi sériemi (F1-04) ----------
+     Časovač se počítá z času konce (S.restEnd), ne z odtikaných sekund, takže nevadí,
+     že Chrome appku na pozadí uspí. Stav je uložený v Local "rest" ({end,total,fired}),
+     přežije zavření appky i automatickou aktualizaci; smaže ho restStop().
+     Konec pauzy:
+     - appka je na očích celou dobu → pípnutí / vibrace podle S.cfg.restAlert,
+     - appka byla na pozadí nebo displej zhasnutý → systémové oznámení z service workeru
+       (sw.js, zpráva "rest"; Chrome udrží worker vzhůru nejvýš ~5 min), po návratu už nepípá.
+     S.cfg.restOver = po konci pauzy počítat přečas, dokud se neodškrtne další série.
+     Pruh nezakrývá obsah (F1-16): odpočet i přečas jsou vidět na všech záložkách, a když je pruh vidět,
+     má obsah stránky dole místo navíc (CSS .wrap). Přečas skončí po 5 min (REST_OVER_MAX), s ním i zapnutý
+     displej (F1-02). Barva přečasu zatím tmavá jako odpočet, čas zvýrazněný; konečná barva podle F3-23.
+     Schovat přečas mimo záložku Trénink uživatel zamítl (právě tam se na čas zapomíná), znovu nenavrhovat.
+     Po ✓ poslední neodškrtnuté série tréninku se pauza nespustí a běžící se zastaví (allSetsDone).
+     Start jen přes restStart(). Nastavení v config/main: restOn (hlavní vypínač, vypnuto = po ✓ žádná pauza,
+     F4-05), restSec, restSs (po pracovní supersérii, F4-05), restAlert (both / sound / vib), restOver,
+     restNotify. Zpráva {type:"rest"} posílá restPost(), oznámení jen když appka není na očích.
+     Start, zastavení, konec pauzy a oznámení (píše sw.js i appka) jdou do záznamu událostí (F0-21, evLog,
+     sekce ZÁZNAM UDÁLOSTÍ), Nastavení → O aplikaci → Záznam událostí. Se zamčeným displejem Android uspí
+     procesor a oznámení se může zpozdit; udržování vzhůru neslyšitelným tónem uživatel odmítl, znovu nenavrhovat.
+     Nativní appka (F6-02) service worker nemá, oznámení plánuje Android: sekce KONEC PAUZY V NATIVNÍ APPCE. */
+  const REST_VIB = [700, 300, 700],
+    REST_OVER_MAX = 5 * 60; // 2 dlouhé vibrace; přečas zmizí po 5 min (F1-16)
+  let audioCtx = null,
+    visibleSince = document.hidden ? Infinity : Date.now();
+  {
+    const r = Local.get("rest", null);
+    if (r && r.end > 0) {
+      S.restEnd = r.end;
+      S.restTotal = r.total || 120;
+      S.restFired = !!r.fired;
+    }
+  }
+  function audioUnlock() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+    } catch (e) {}
+  }
+  function beep() {
+    const m = S.cfg.restAlert;
+    if (m !== "vib") {
+      try {
+        audioUnlock();
+        [0, 0.25, 0.5].forEach((t) => {
+          const o = audioCtx.createOscillator(),
+            g = audioCtx.createGain();
+          o.frequency.value = 880;
+          g.gain.value = 0.15;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          o.start(audioCtx.currentTime + t);
+          o.stop(audioCtx.currentTime + t + 0.15);
+        });
+      } catch (e) {}
+    }
+    if (m !== "sound") {
+      try {
+        navigator.vibrate && navigator.vibrate(REST_VIB);
+      } catch (e) {}
+    }
+  }
+  /* oznámení: podporuje prohlížeč / stav povolení ("granted", "denied", "default", "none") */
+  const notifState = () => {
+    if (NATIVE) return window.NATIVNI.notif.perm; // nativní appka: oznámení Androidu (F6-02)
+    return "Notification" in window && "serviceWorker" in navigator ? Notification.permission : "none";
+  };
+  const REST_TAG = "rest-" + (TEST_PR ? "pr" + TEST_PR : "main");
+  /* co je na řadě po pauze: první nehotová série za naposledy odškrtnutou, jinak kdekoli
+     (v supersérii další kolo, F4-05) */
+  function restNext() {
+    const d = S.active;
+    if (!d) return "";
+    let li = -1,
+      lj = -1,
+      la = 0;
+    d.ex.forEach((e, i) =>
+      e.sets.forEach((s, j) => {
+        if (s.done && (s.at || 0) >= la) {
+          la = s.at || 0;
+          li = i;
+          lj = j;
+        }
+      }),
+    );
+    const all = [];
+    d.ex.forEach((e, i) => {
+      let wn = 0;
+      const cnt = { w: 0, n: 0 };
+      e.sets.forEach((s, j) => {
+        const n = s.t === "n" ? ++wn : 0;
+        const grp = setGrp(s.t);
+        const pos = cnt[grp]++; // pořadí série mezi zahřívacími / pracovními (kolo supersérie)
+        if (!s.done) {
+          all.push({ i, j, e, s, n, grp: grp === "w" ? 0 : 1, pos });
+        }
+      });
+    });
+    // v supersérii (F4-05) další nehotová série podle kol: zahřívací, pak pracovní, v kole podle pořadí cviků
+    const run = li >= 0 ? ssRun(d.ex, li) : null;
+    const inRun = run
+      ? all
+          .filter((a) => a.i >= run[0] && a.i <= run[1])
+          .sort((a, b) => a.grp - b.grp || a.pos - b.pos || a.i - b.i)
+      : [];
+    const after = run ? all.find((a) => a.i > run[1]) : all.find((a) => a.i > li || (a.i === li && a.j > lj));
+    const x = inRun[0] || after || all[0];
+    if (!x) return "Všechny série jsou hotové";
+    return (
+      "Další: " +
+      exName(x.e.exId) +
+      " · " +
+      (x.s.t === "n" ? x.n + ". série" : TYPE_NAME[x.s.t].toLowerCase() + " série")
+    );
+  }
+  /* předá service workeru, kdy má ukázat oznámení (nebo ho zruší) */
+  function restPost() {
+    if (notifState() === "none") return;
+    const on = S.restEnd && !S.restFired && S.active && S.cfg.restNotify && notifState() === "granted";
+    if (NATIVE) {
+      restNative(on);
+      return;
+    }
+    const msg = on
+      ? {
+          type: "rest",
+          end: S.restEnd,
+          tag: REST_TAG,
+          title: "Odpočinek skončil",
+          body: restNext(),
+          vib: S.cfg.restAlert !== "sound" ? REST_VIB : null,
+        }
+      : { type: "rest", tag: REST_TAG };
+    navigator.serviceWorker.ready.then((r) => r.active && r.active.postMessage(msg)).catch(() => {});
+  }
+  /* Vývojové nástroje (zkušební data, zkouška rekordu) jen v testovací verzi PR a lokálně, ve vydané ne.
+     Záznam událostí (F0-21, sekce ZÁZNAM UDÁLOSTÍ) běží i ve vydané verzi. */
+  const DEV = !!TEST_PR || !!NATIVE_PR || BUILD.kanal === "lokal";
+  function restClearNotif() {
+    if (NATIVE) {
+      window.NATIVNI.notif.clear();
+      return;
+    }
+    if (notifState() !== "none") {
+      navigator.serviceWorker.ready
+        .then((r) => r.getNotifications({ tag: REST_TAG }))
+        .then((ns) => ns.forEach((n) => n.close()))
+        .catch(() => {});
+    }
+  }
+  /* zkouška z Nastavení: oznámení za 10 s, i když je appka na očích */
+  function restTest() {
+    if (NATIVE) {
+      restNativeTest();
+      return;
+    }
+    navigator.serviceWorker.ready
+      .then(
+        (r) =>
+          r.active &&
+          r.active.postMessage({
+            type: "rest",
+            end: Date.now() + 10000,
+            tag: REST_TAG + "-test",
+            always: true,
+            title: "Zkouška oznámení",
+            body: "Takhle tě appka upozorní na konec pauzy.",
+            vib: S.cfg.restAlert !== "sound" ? REST_VIB : null,
+          }),
+      )
+      .catch(() => {});
+    toast("Oznámení přijde za 10 s");
+  }
+  // once = dotaz při první pauze: navazující panel o přesném čase (F6-02) se pak ukáže jen jednou
+  function notifAsk(once) {
+    if (notifState() !== "default") return;
+    Local.set("notifAsked", true);
+    const asked = NATIVE ? window.NATIVNI.notif.ask() : Notification.requestPermission();
+    asked
+      .then(() => {
+        evPermCheck(); // záznam událostí (F0-21)
+        restPost();
+        scheduleRender();
+        exactOffer(once);
+      })
+      .catch(() => {});
+  }
+  function restSave(post) {
+    Local.set("rest", S.restEnd ? { end: S.restEnd, total: S.restTotal, fired: !!S.restFired } : null);
+    if (post !== false) {
+      restPost();
+    }
+    wakeSync(); // pauza začala / skončila → zámek displeje (F1-02)
+  }
+  // sec = délka pauzy (výchozí časovač, po pracovní supersérii S.cfg.restSs)
+  function restStart(sec) {
+    stwCancel(); // pruh je jen jeden, pauza ruší stopky (F1-24)
+    audioUnlock(); // klepnutí = povolení zvuku na později
+    S.restTotal = sec || S.cfg.restSec || 120;
+    S.restEnd = Date.now() + S.restTotal * 1000;
+    S.restFired = false;
+    if (S.cfg.restNotify && notifState() === "default" && !Local.get("notifAsked", false)) {
+      // jednou, pak jen v Nastavení
+      notifAsk(true);
+    } else if (S.cfg.restNotify) {
+      exactOffer(true); // nativní appka: jednou nabídnout povolení přesného času (F6-02)
+    }
+    evLog("pauza: start " + S.restTotal + " s, konec " + new Date(S.restEnd).toLocaleTimeString("cs-CZ"));
+    restSave();
+    renderRest();
+  }
+  function restStop() {
+    if (S.restEnd && !S.restFired) {
+      evLog("pauza: zastavena před koncem");
+    }
+    S.restEnd = null;
+    S.restFired = false;
+    restSave();
+    renderRest();
+  }
+  function renderRest() {
+    const el = document.getElementById("rest");
+    if (S.stw && S.active) {
+      stwRender(); // stopky mají v pruhu přednost (F1-24)
+      return;
+    }
+    stwFullHide();
+    if (!S.restEnd || !S.active) {
+      el.hidden = true;
+      return;
+    }
+    const left = (S.restEnd - Date.now()) / 1000,
+      over = left <= 0;
+    el.hidden = false;
+    el.innerHTML = `<div class="rest-in${over ? " over" : ""}">
+      ${
+        over
+          ? ""
+          : `<div class="bar" id="restBar" style="width:${Math.max(0, (left / S.restTotal) * 100)}%"></div>`
+      }
+      <b id="restClock">${restClock(left)}</b>
+      <span class="rest-l"><i>${over ? "Přečas" : "Odpočinek"}</i></span>
+      ${
+        over
+          ? '<button data-act="restSkip">Zavřít</button>'
+          : `<button data-act="restAdj" data-v="-15">−15</button>` +
+            `<button data-act="restAdj" data-v="15">+15` +
+            `</button><button data-act="restSkip">Přeskočit</button>`
+      }
+    </div>`;
+  }
+  const restClock = (left) => (left > 0 ? fmtClock(left) : "+" + fmtClock(-left));
+  function restTick() {
+    document.querySelectorAll("[data-elapsed]").forEach((e) => {
+      const d = curDraft();
+      if (d) {
+        e.textContent = fmtClock((Date.now() - d.start) / 1000);
+      }
+    });
+    if (!S.restEnd || !S.active) return;
+    const left = (S.restEnd - Date.now()) / 1000;
+    restNativeSeen(left);
+    if (left <= 0 && !S.restFired) {
+      // pípnout jen tehdy, když je appka na očích už od doby před koncem pauzy; jinak upozornilo oznámení
+      const seen = !document.hidden && visibleSince <= S.restEnd;
+      if (seen) {
+        beep();
+        evLog("pauza: konec, appka na očích, upozornila sama (" + S.cfg.restAlert + ")");
+        setTimeout(restClearNotif, 1500);
+      } else if (!document.hidden && !(S.cfg.restNotify && notifState() === "granted")) {
+        toast("Odpočinek skončil");
+      }
+      S.restFired = true;
+      // service workeru nic neposílat: oznámení na pozadí si hlídá sám (zrušení by ho mohlo předběhnout)
+      if (!S.cfg.restOver) {
+        if (seen) {
+          toast("Odpočinek skončil");
+        }
+        S.restEnd = null;
+        S.restFired = false;
+        restSave(false);
+        renderRest();
+        return;
+      }
+      restSave(false);
+      renderRest();
+      return;
+    }
+    if (left <= 0 && -left > REST_OVER_MAX) {
+      restStop();
+      return;
+    }
+    const c = document.getElementById("restClock"),
+      b = document.getElementById("restBar");
+    if (left <= 0 && !document.querySelector(".rest-in.over")) {
+      renderRest();
+      return;
+    }
+    if (c) {
+      c.textContent = restClock(left);
+    }
+    if (b) {
+      b.style.width = Math.max(0, (left / S.restTotal) * 100) + "%";
+    }
+  }
+  setInterval(() => {
+    restTick();
+    wakeSync(); // pojistka 10 min a ztmavení po 30 s (F1-02)
+  }, 500);
+  document.addEventListener("visibilitychange", () => {
+    // návrat na oči zapisuje sekce ZÁZNAM UDÁLOSTÍ vždy, odchod do pozadí jen během pauzy (šetří řádky)
+    if (document.hidden && S.restEnd && S.active && !S.restFired) {
+      evLog("pauza: appka na pozadí / zhasnutý displej");
+    }
+    if (document.hidden) {
+      visibleSince = Infinity;
+      restNativeHidden();
+      return;
+    }
+    visibleSince = Date.now();
+    restClearNotif();
+    restTick(); // po návratu hned správný čas, staré oznámení pryč
+  });
+
+  /* ---------- KONEC PAUZY V NATIVNÍ APPCE (F6-02) ----------
+     Ve webové appce konec pauzy na pozadí hlásí service worker (F1-04), což se zhasnutým displejem nefunguje
+     spolehlivě. Nativní appka service worker nemá: restPost místo zprávy workeru naplánuje v Androidu
+     oznámení na přesný čas konce pauzy (restNative → NATIVNI.notif.schedule v js/nativni.js). Android ho
+     ukáže sám, i když appka spí, displej je zamčený a telefon bez internetu; hodinky ho zrcadlí.
+     - Každá změna pauzy jde přes restSave → restPost: +15 / −15 oznámení přeplánuje (stejné id nahradí),
+       Přeskočit, konec tréninku a vypnutí časovače ho zruší. Nové místo, které mění S.restEnd, proto musí
+       volat restSave (nebo restPost).
+     - Appka na očích: vteřinu před koncem se oznámení zruší (restNativeSeen) a konec ohlásí appka sama
+       pípnutím a vibrací, aby telefon nevibroval dvakrát. Když se appka v té poslední vteřině schová,
+       restNativeHidden oznámení naplánuje znovu.
+     - Povolení: oznámení (Android 13+, dotaz při první pauze jako na webu, notifAsk) a přesný čas
+       (SCHEDULE_EXACT_ALARM). Přesný čas nemá systémový dotaz, uživatel ho zapíná na obrazovce nastavení
+       Androidu „Budíky a připomenutí“ (akce exactAsk). Appka ho proto nabízí panelem sheetExact (exactOffer):
+       jednou při první pauze s povolenými oznámeními (Local „exactAsked“; když je zrovna otevřený jiný
+       panel, zkusí to při další pauze) a pokaždé při zapnutí Oznámení na pozadí. Dokud chybí, zůstává
+       v Nastavení → Trénink záložní řádek s tlačítkem Povolit. Bez přesného času se plánuje nepřesně
+       a oznámení se může o minuty zpozdit. Stav obou povolení drží NATIVNI.notif (perm, exact).
+     - Zvuk a vibraci oznámení určuje kanál Androidu podle S.cfg.restAlert (tři kanály v js/nativni.js),
+       vlastní rytmus vibrace REST_VIB oznámení nemá.
+     - Záznam událostí (F0-21, evLog): naplánování, zrušení, kdo na konci upozornil a co o appce
+       hlásí Android během pauzy (NATIVNI.onState), pro hledání chyb v telefonu.
+     Ve webové verzi se nic z toho nevolá. */
+  const REST_NAT_ID = 1,
+    REST_NAT_TEST_ID = 2;
+  // oznámení zrušené těsně před koncem pauzy, protože appka je na očích
+  let restNatOff = false;
+  // naplánuje (on) nebo zruší oznámení o konci pauzy
+  function restNative(on) {
+    restNatOff = false;
+    if (on && S.restEnd > Date.now()) {
+      evLog(
+        "oznámení (Android): naplánováno na " +
+          new Date(S.restEnd).toLocaleTimeString("cs-CZ") +
+          (window.NATIVNI.notif.exact === "granted" ? "" : " (nepřesně)") +
+          ", " +
+          S.cfg.restAlert,
+      );
+      window.NATIVNI.notif.schedule({
+        id: REST_NAT_ID,
+        at: S.restEnd,
+        title: "Odpočinek skončil",
+        body: restNext(),
+        mode: S.cfg.restAlert,
+      });
+    } else {
+      evLog("oznámení (Android): zrušeno");
+      window.NATIVNI.notif.cancel(REST_NAT_ID);
+    }
+  }
+  // appka je vteřinu před koncem pauzy na očích: konec ohlásí sama, oznámení se zruší
+  function restNativeSeen(left) {
+    if (!NATIVE || restNatOff || document.hidden || left <= 0 || left > 1) return;
+    evLog("oznámení (Android): zrušeno vteřinu před koncem, appka je na očích");
+    window.NATIVNI.notif.cancel(REST_NAT_ID);
+    restNatOff = true;
+  }
+  // appka se schovala po zrušení oznámení a pauza ještě běží: naplánovat znovu
+  function restNativeHidden() {
+    if (NATIVE && restNatOff && S.restEnd > Date.now() && !S.restFired) {
+      restPost();
+    }
+  }
+  // panel s nabídkou povolit přesný čas; Povolit otevře nastavení Androidu
+  function sheetExact() {
+    openSheet(
+      "Přesný čas oznámení",
+      `<p>
+        Aby konec pauzy přišel na vteřinu přesně, povol appce v Androidu Budíky a připomenutí.
+      </p>`,
+      `<button class="btn grow" data-act="closeSheet">Teď ne</button>
+      <button class="btn primary grow" data-act="exactAsk">Povolit</button>`,
+    );
+  }
+  /* nabídne povolení přesného času, když jsou oznámení povolená a přesný čas chybí;
+     once = při první pauze: jen jednou a ne přes jiný otevřený panel */
+  function exactOffer(once) {
+    if (!NATIVE || notifState() !== "granted" || window.NATIVNI.notif.exact === "granted") return;
+    if (once && (sheetNav || Local.get("exactAsked", false))) return;
+    Local.set("exactAsked", true);
+    sheetExact();
+  }
+  // zkouška z Nastavení: oznámení za 10 s
+  function restNativeTest() {
+    window.NATIVNI.notif.schedule({
+      id: REST_NAT_TEST_ID,
+      at: Date.now() + 10000,
+      title: "Zkouška oznámení",
+      body: "Takhle tě appka upozorní na konec pauzy.",
+      mode: S.cfg.restAlert,
+    });
+    toast("Oznámení přijde za 10 s");
+  }
+  if (NATIVE) {
+    // změna povolení v nastavení Androidu: přeplánovat běžící pauzu a překreslit Nastavení
+    window.NATIVNI.notif.onChange = () => {
+      evPermCheck(); // záznam událostí (F0-21)
+      restPost();
+      scheduleRender();
+    };
+    // záznam událostí (F0-21): co o appce hlásí Android během pauzy (aktivní = na popředí)
+    window.NATIVNI.onState = (active) => {
+      if (S.restEnd && S.active) {
+        evLog(
+          "pauza: Android hlásí appku " +
+            (active ? "aktivní" : "neaktivní") +
+            ", stránka " +
+            (document.hidden ? "skrytá" : "viditelná"),
+        );
+      }
+    };
+  }
+
+  /* ---------- STOPKY U SÉRIE NA ČAS (F1-24) ----------
+     U sérií druhů se sloupcem Čas (KIND time, timew, dist; isTimed) je v rozdělaném tréninku za políčky
+     tlačítko ▶ (stwCell, akce stwGo). Klepnutí: odpočet před startem (S.cfg.stwPre, 0–15 s, výchozí 5,
+     Nastavení → Trénink → Stopky u série na čas), pak se čas počítá od nuly nahoru. Cíl je čas přepsaný
+     v políčku série, jinak šedá hodnota Čas z minula nebo ze šablony (draftHints); bez obojího se jen
+     počítá nahoru (hodnota zapsaná Stopem je v políčku, takže další start na téže sérii ji bere za cíl). V cíli pípne (beep, jako
+     konec pauzy), stopky se samy zastaví a do políčka se zapíše cílový čas; dřívější Stop (stwStop)
+     zapíše naměřené celé sekundy. Sérii neodškrtávají, to zůstává na uživateli (pak se spustí pauza).
+     Podoba i chování jsou jako u pauzy (F1-04): stejný pruh #rest (stwRender), čas se počítá z uloženého
+     okamžiku (S.stw.t0 / runAt, Local "stw"), takže přežije uspání appky i zavření. Pruh je jen jeden:
+     start stopek ukončí pauzu (stwGo), pauza i odškrtnutí série stopky bez zápisu (stwCancel).
+     Zvuky (stwCue, volba Na konci pauzy): při odpočtu startu krátké pípnutí na 3, 2, 1, delší tón na
+     startu, dvojité pípnutí STW_WARN s před cílem, v cíli beep(). Pípnutí, která by přišla pozdě (appka
+     byla na pozadí), se přeskočí. Displej drží Wake Lock jako u pauzy (volba screenOn), ztmavení jen
+     při pauze.
+     Volba S.cfg.stwView (Pruh / Celá obrazovka, výchozí Pruh): v Pruhu stopky běží v pruhu pauzy, na Celé
+     obrazovce v černé vrstvě stwFullShow (velký čas, popisek, cvik a série, tlačítko Stop standardní
+     velikosti, pásek cíle u spodního okraje) hned od odpočtu startu. Klepnutí mimo tlačítko nic nedělá, Zpět v Androidu = Stop /
+     Zrušit (navBack), displej drží Wake Lock vždy (ne jen s volbou screenOn).
+     Stav S.stw: { i, j, exId, ref, pre, goal, t0, runAt, fl }; ref je objekt série (po zavření appky se
+     série najde podle i, j a exId), runAt prázdné = běží odpočet startu, fl = už zahrané signály.
+     Stopky ukončí konec tréninku (activeEnd) i smazání série (stwSet sérii nenajde). Názvy začínají
+     stw, protože sw je tah doleva u série (F2-03). */
+  // (STW_PRE je nahoře u ostatních rozsahů, protože cfgNorm běží už při startu)
+  const STW_WARN = 10; // s před cílem, kdy stopky ještě dvakrát pípnou
+  const STW_MAX_AGE = 2 * 3600 * 1000; // starší rozběhnuté stopky po obnově appky zahodit
+  // odpočet před startem: celé sekundy v rozsahu, jinak výchozí
+  function stwNorm(v) {
+    const n = Math.round(+v);
+    return v !== "" && v != null && n >= STW_PRE.min && n <= STW_PRE.max ? n : STW_PRE.def;
+  }
+  const stwPreTxt = (sec) => (sec ? fmtClock(sec) : "Vypnuto");
+  // posuvník v Nastavení → Trénink
+  function stwSettings() {
+    const sec = stwNorm(S.cfg.stwPre);
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Stopky u série na čas</h2>
+        ${helpBtn("stw")}
+      </div>
+      <div class="card stack">
+        <div class="rest-sl">
+          <div class="row">
+            <span class="grow">Odpočet před startem</span>
+            <span class="num" id="stwPreV">${stwPreTxt(sec)}</span>
+          </div>
+          <input type="range" class="range" id="stwPre" min="${STW_PRE.min}" max="${STW_PRE.max}" step="1"
+              value="${sec}" aria-label="Odpočet před startem">
+        </div>
+        <div class="stack tight">
+          <span>Zobrazení stopek</span>
+          <div class="seg seg-wide">
+            ${[
+              ["bar", "Pruh"],
+              ["full", "Celá obrazovka"],
+            ]
+              .map(
+                ([k, l]) =>
+                  `<button data-act="stwView" data-v="${k}" aria-pressed="${S.cfg.stwView === k}">${l}</button>`,
+              )
+              .join("")}
+          </div>
+        </div>
+      </div>
+    </section>`;
+  }
+  {
+    // stopky rozběhnuté před zavřením appky
+    const w = Local.get("stw", null);
+    if (w && w.t0 > 0 && Date.now() - (w.runAt || w.t0) < STW_MAX_AGE) {
+      S.stw = Object.assign({ fl: {} }, w);
+    }
+  }
+  let stwLast = 0; // čas posledního tiku (po delší pauze se pípnutí přeskočí)
+  // buňka s tlačítkem stopek v řádku série
+  function stwCell(i, j, s) {
+    const run = !!S.stw && S.stw.i === i && S.stw.j === j;
+    return `<td class="c-stw">
+      <button class="stwb${run ? " run" : ""}" data-act="stwGo" data-i="${i}" data-j="${j}"
+          aria-label="${run ? "Zastavit stopky" : "Spustit stopky"}"${s.done ? " disabled" : ""}>
+        ${run ? IC.stop : IC.play}
+      </button>
+    </td>`;
+  }
+  // série, na které stopky běží: { e, s }, jinak null (zmizela, je hotová nebo už není na čas)
+  function stwSet() {
+    const d = S.active,
+      w = S.stw;
+    if (!d || !w) return null;
+    if (w.ref) {
+      d.ex.forEach((e, i) => {
+        const j = e.sets.indexOf(w.ref);
+        if (j >= 0) {
+          w.i = i;
+          w.j = j;
+          w.exId = e.exId;
+        }
+      });
+    }
+    const e = d.ex[w.i];
+    const s = e && e.exId === w.exId ? e.sets[w.j] : null;
+    if (!s || (w.ref && s !== w.ref) || s.done || !isTimed(kindOf(e.exId))) return null;
+    w.ref = s;
+    return { e, s };
+  }
+  function stwSave() {
+    const w = S.stw;
+    const keep = w && { i: w.i, j: w.j, exId: w.exId, pre: w.pre, goal: w.goal };
+    Local.set("stw", w ? Object.assign(keep, { t0: w.t0, runAt: w.runAt, fl: w.fl }) : null);
+    wakeSync();
+    renderRest();
+  }
+  // tlačítko v řádku: spustí stopky série, na běžící sérii je zastaví
+  function stwGo(d, i, j) {
+    if (d !== S.active) return;
+    if (S.stw && S.stw.i === i && S.stw.j === j) {
+      stwStop();
+      return;
+    }
+    const e = d.ex[i],
+      s = e.sets[j];
+    if (s.done) return;
+    audioUnlock(); // klepnutí = povolení zvuku na později
+    if (S.restEnd) {
+      restStop();
+    }
+    // cíl: přepsaná hodnota v políčku, jinak šedá hodnota z minula nebo ze šablony
+    const typed = Math.round(parseSec(s.sec));
+    const hint = draftHints(d, e)[j].h;
+    const now = Date.now();
+    const pre = stwNorm(S.cfg.stwPre);
+    S.stw = {
+      i,
+      j,
+      exId: e.exId,
+      ref: s,
+      pre,
+      goal: typed > 0 ? typed : hint && hint.sec > 0 ? Math.round(hint.sec) : 0,
+      t0: now,
+      runAt: pre ? null : now,
+      fl: {},
+    };
+    stwLast = now;
+    if (!pre) {
+      stwCue("start");
+    }
+    stwSave();
+    scheduleRender();
+  }
+  // konec stopek: sec (celé sekundy) se zapíše do políčka série, bez sec nic
+  function stwEnd(sec) {
+    const c = stwSet();
+    if (c && sec > 0) {
+      c.s.sec = fmtSec(sec);
+      touchDraft();
+    }
+    S.stw = null;
+    stwSave();
+    scheduleRender();
+  }
+  // Stop / Zrušit: za běhu zapíše naměřený čas, při odpočtu startu nic
+  function stwStop() {
+    const w = S.stw;
+    if (!w) return;
+    stwEnd(w.runAt ? Math.floor((Date.now() - w.runAt) / 1000) : 0);
+  }
+  // stopky skončí beze zápisu (pauza, odškrtnutí série, konec tréninku)
+  function stwCancel() {
+    if (!S.stw) return;
+    S.stw = null;
+    stwSave();
+    scheduleRender();
+  }
+  // signály: tick = krátké pípnutí, warn = dvojité, start = delší tón; podle restAlert (zvuk / vibrace)
+  const STW_CUE = {
+    tick: { tones: [[0, 880, 0.12]], vib: [80] },
+    warn: {
+      tones: [
+        [0, 880, 0.12],
+        [0.25, 880, 0.12],
+      ],
+      vib: [120, 80, 120],
+    },
+    start: { tones: [[0, 1320, 0.45]], vib: [400] },
+  };
+  function stwCue(kind) {
+    const mode = S.cfg.restAlert,
+      cue = STW_CUE[kind];
+    if (mode !== "vib") {
+      try {
+        audioUnlock();
+        cue.tones.forEach(([at, freq, len]) => {
+          const osc = audioCtx.createOscillator(),
+            gain = audioCtx.createGain();
+          osc.frequency.value = freq;
+          gain.gain.value = 0.15;
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(audioCtx.currentTime + at);
+          osc.stop(audioCtx.currentTime + at + len);
+        });
+      } catch (e) {}
+    }
+    if (mode !== "sound") {
+      try {
+        navigator.vibrate && navigator.vibrate(cue.vib);
+      } catch (e) {}
+    }
+  }
+  // čas na hodinách pruhu: odpočet startu (zbývá) nebo uplynulé sekundy
+  function stwClock(w, now) {
+    return w.runAt ? Math.floor((now - w.runAt) / 1000) : Math.ceil(w.pre - (now - w.t0) / 1000);
+  }
+  // pruh pauzy (#rest) se stopkami: odpočet startu bez pásku, za běhu s cílem pásek roste k cíli
+  function stwRender() {
+    const el = document.getElementById("rest"),
+      w = S.stw,
+      run = !!w.runAt,
+      now = Date.now();
+    const label = !run ? "Start za" : w.goal ? "Výdrž · cíl " + fmtSec(w.goal) : "Výdrž";
+    const barPct = run && w.goal ? Math.min(100, (now - w.runAt) / 10 / w.goal) : 0;
+    if (S.cfg.stwView === "full") {
+      el.hidden = true;
+      stwFullShow(w, label, barPct, now);
+      return;
+    }
+    stwFullHide();
+    el.hidden = false;
+    el.innerHTML = `<div class="rest-in">
+      ${run && w.goal ? `<div class="bar" id="restBar" style="width:${barPct}%"></div>` : ""}
+      <b id="restClock">${fmtClock(stwClock(w, now))}</b>
+      <span class="rest-l"><i>${esc(label)}</i></span>
+      <button data-act="stwStop">${run ? "Stop" : "Zrušit"}</button>
+    </div>`;
+  }
+  // vrstva přes celou obrazovku (volba Celá obrazovka): čas, popisek, cvik a série, tlačítko Stop
+  function stwFullShow(w, label, barPct, now) {
+    const c = stwSet();
+    if (!c) return;
+    const n = c.e.sets.slice(0, w.j + 1).filter((x) => x.t === "n").length;
+    const what = c.s.t === "n" ? n + ". série" : TYPE_NAME[c.s.t].toLowerCase() + " série";
+    const run = !!w.runAt;
+    if (!stwFullEl) {
+      stwFullEl = document.createElement("div");
+      stwFullEl.className = "stwf";
+      stwFullEl.setAttribute("role", "dialog");
+      stwFullEl.setAttribute("aria-label", "Stopky");
+      stwFullEl.addEventListener("touchmove", (ev) => ev.preventDefault(), { passive: false });
+      document.body.appendChild(stwFullEl);
+    }
+    stwFullEl.innerHTML = `
+      <b class="stwf-clock" id="stwfClock">${fmtClock(stwClock(w, now))}</b>
+      <span class="stwf-lab">${esc(label)}</span>
+      <span class="stwf-ex">${esc(exName(c.e.exId))} · ${esc(what)}</span>
+      ${run && w.goal ? `<div class="stwf-bar" id="stwfBar" style="width:${barPct}%"></div>` : ""}
+      <button class="btn block${run ? " primary" : ""}" data-act="stwStop">${run ? "Stop" : "Zrušit"}</button>`;
+  }
+  function stwFullHide() {
+    if (!stwFullEl) return;
+    stwFullEl.remove();
+    stwFullEl = null;
+  }
+  /* tik stopek (každých 200 ms): přechod z odpočtu startu na běh, signály, konec v cíli, obnova hodin.
+     Stopky, jejichž série zmizela, se tiše ukončí. */
+  function stwTick() {
+    const w = S.stw;
+    if (!w) return;
+    if (!S.active || !stwSet()) {
+      S.stw = null;
+      stwSave();
+      scheduleRender();
+      return;
+    }
+    const now = Date.now(),
+      stale = now - stwLast > 1500; // appka byla na pozadí: pozdní pípnutí nehrát
+    stwLast = now;
+    if (!w.runAt) {
+      const left = w.pre - (now - w.t0) / 1000;
+      if (left > 0) {
+        const n = Math.ceil(left);
+        if (n <= 3 && !w.fl["p" + n]) {
+          w.fl["p" + n] = 1;
+          if (!stale) {
+            stwCue("tick");
+          }
+        }
+        stwClockShow(w, now);
+        return;
+      }
+      w.runAt = w.t0 + w.pre * 1000;
+      if (!stale) {
+        stwCue("start");
+      }
+      stwSave();
+    }
+    const sec = (now - w.runAt) / 1000;
+    if (w.goal > STW_WARN && sec >= w.goal - STW_WARN && !w.fl.warn) {
+      w.fl.warn = 1;
+      if (!stale && sec < w.goal) {
+        stwCue("warn");
+      }
+    }
+    if (w.goal && sec >= w.goal) {
+      if (sec - w.goal < 10) {
+        beep();
+      } else {
+        toast("Stopky doběhly do cíle");
+      }
+      stwEnd(w.goal);
+      return;
+    }
+    stwClockShow(w, now);
+  }
+  // obnoví hodiny a pásek v pruhu bez překreslení
+  function stwClockShow(w, now) {
+    const text = fmtClock(stwClock(w, now)),
+      width = w.runAt && w.goal ? Math.min(100, (now - w.runAt) / 10 / w.goal) + "%" : "";
+    for (const id of ["restClock", "stwfClock"]) {
+      const clock = document.getElementById(id);
+      if (clock) {
+        clock.textContent = text;
+      }
+    }
+    for (const id of ["restBar", "stwfBar"]) {
+      const bar = document.getElementById(id);
+      if (bar && width) {
+        bar.style.width = width;
+      }
+    }
+  }
+  setInterval(stwTick, 200);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      stwLast = 0;
+      stwTick(); // po návratu hned správný čas
+    }
+  });
+
+  /* ---------- displej během pauzy (F1-02) ----------
+     S.cfg.screenOn: během odpočinkové pauzy (i přečasu) v rozdělaném tréninku displej nezhasne
+     (Screen Wake Lock, jen když je appka na očích; Chrome zámek při skrytí appky sám pustí,
+     po návratu ho appka vezme znovu). Pojistka: po WAKE_IDLE bez dotyku se zámek pustí.
+     Baterie pod WAKE_BATT bez nabíječky: funkce dočasně neplatí, Nastavení to ukáže.
+     S.cfg.screenDim: po WAKE_DIM bez dotyku černá obrazovka jen s odpočtem (jas webová appka
+     měnit neumí; na OLED displeji černá šetří baterii). Klepnutí ji schová a nic pod ní nezmáčkne.
+     Vše řídí wakeSync() (volá ho restSave, visibilitychange, baterie a interval s restTick). Dotyk wakeTouch,
+     baterie batteryLow (navigator.getBattery), upozornění ve wakeSettings, vrstva .dim (dimEl). screenOn
+     výchozí vypnuto. */
+  const WAKE_IDLE = 10 * 60 * 1000,
+    WAKE_DIM = 30 * 1000,
+    WAKE_BATT = 0.15,
+    WAKE_RETRY = 30 * 1000;
+  const wakeApi = !!(navigator.wakeLock && navigator.wakeLock.request);
+  let wakeLock = null; // držený zámek (WakeLockSentinel)
+  let wakeBusy = false; // žádost o zámek právě běží
+  let wakeFailAt = 0; // kdy telefon zámek naposledy odmítl
+  let wakeTouch = Date.now(); // poslední dotyk (pro pojistku a ztmavení)
+  let battery = null; // stav baterie (navigator.getBattery), když ho prohlížeč umí
+  let dimEl = null; // černá obrazovka se odpočtem
+
+  // baterie pod 15 % a telefon se nenabíjí
+  const batteryLow = () => !!battery && !battery.charging && battery.level < WAKE_BATT;
+
+  // pauza v rozdělaném tréninku se zapnutou volbou, appka na očích, baterie v pořádku
+  function wakeActive() {
+    // stopky na celé obrazovce drží displej vždy, jinak jen s volbou (F1-24)
+    const want = (S.stw && (S.cfg.screenOn || S.cfg.stwView === "full")) || (S.cfg.screenOn && S.restEnd);
+    return !!(want && S.active && !document.hidden && !batteryLow());
+  }
+
+  // srovná zámek displeje a ztmavení se stavem appky; volá se při změně pauzy a z restTick
+  function wakeSync() {
+    const on = wakeActive();
+    const idle = Date.now() - wakeTouch;
+    const want = on && idle < WAKE_IDLE;
+    if (want && !wakeLock && !wakeBusy && wakeApi && Date.now() - wakeFailAt > WAKE_RETRY) {
+      wakeRequest();
+    }
+    if (!want && wakeLock) {
+      wakeRelease();
+    }
+    // ztmavení zůstane i po pojistce, displej pak zhasne podle Androidu
+    if (on && S.restEnd && S.cfg.screenDim && idle >= WAKE_DIM) {
+      dimShow(); // ztmavení jen při pauze, stopky se sledují na displeji (F1-24)
+    } else if (!on || !S.restEnd) {
+      dimHide();
+    }
+    dimUpdate();
+  }
+
+  // požádá Chrome, aby displej nezhasl
+  async function wakeRequest() {
+    wakeBusy = true;
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      wakeLock = lock;
+      lock.addEventListener("release", () => {
+        if (wakeLock === lock) {
+          wakeLock = null;
+        }
+      });
+      evLog("displej: zámek zapnutý");
+      // mezitím se stav mohl změnit (pauza skončila, appka šla na pozadí)
+      if (!wakeActive()) {
+        wakeRelease();
+      }
+    } catch (e) {
+      wakeFailAt = Date.now();
+      evLog("displej: telefon zámek odmítl (" + ((e && e.name) || "chyba") + ")");
+    }
+    wakeBusy = false;
+  }
+
+  function wakeRelease() {
+    const lock = wakeLock;
+    wakeLock = null;
+    if (!lock) return;
+    lock.release().catch(() => {});
+    evLog("displej: zámek puštěný");
+  }
+
+  // černá obrazovka se odpočtem (po WAKE_DIM bez dotyku)
+  function dimShow() {
+    if (dimEl) return;
+    const el = document.createElement("div");
+    el.className = "dim";
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", "Zpět do appky");
+    el.innerHTML = `
+    <b class="dim-clock"></b>
+    <span class="dim-lab"></span>
+    <span class="dim-next"></span>
+    <span class="dim-hint">Klepni pro návrat</span>`;
+    // klepnutí jen schová ztmavení, do appky pod ním neprojde
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      wakeTouch = Date.now();
+      dimHide();
+    });
+    el.addEventListener("touchmove", (ev) => ev.preventDefault(), { passive: false });
+    document.body.appendChild(el);
+    dimEl = el;
+    dimUpdate();
+  }
+
+  function dimHide() {
+    if (!dimEl) return;
+    dimEl.remove();
+    dimEl = null;
+  }
+
+  // odpočet na černé obrazovce; po konci pauzy se zesvětlí
+  function dimUpdate() {
+    if (!dimEl || !S.restEnd) return;
+    const left = (S.restEnd - Date.now()) / 1000;
+    const over = left <= 0;
+    dimEl.classList.toggle("over", over);
+    dimEl.querySelector(".dim-clock").textContent = restClock(left);
+    dimEl.querySelector(".dim-lab").textContent = over ? "Odpočinek skončil" : "Odpočinek";
+    const next = restNext();
+    const nextEl = dimEl.querySelector(".dim-next");
+    if (nextEl.textContent !== next) {
+      nextEl.textContent = next;
+    }
+  }
+
+  // každý dotyk (i Zpět) = aktivita: obnoví pojistku a odloží ztmavení
+  function wakeActivity() {
+    wakeTouch = Date.now();
+  }
+  document.addEventListener("pointerdown", wakeActivity, true);
+  document.addEventListener("keydown", wakeActivity, true);
+  window.addEventListener("popstate", () => {
+    wakeActivity();
+    dimHide();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      wakeActivity();
+    } // návrat do appky = aktivita, ať hned nezčerná
+    wakeSync();
+  });
+
+  // stav baterie: pod 15 % se funkce dočasně vypne, v Nastavení je upozornění
+  if (navigator.getBattery) {
+    navigator
+      .getBattery()
+      .then((b) => {
+        battery = b;
+        const onChange = () => {
+          wakeSync();
+          if (S.route === "set") {
+            scheduleRender();
+          }
+        };
+        b.addEventListener("levelchange", onChange);
+        b.addEventListener("chargingchange", onChange);
+        onChange();
+      })
+      .catch(() => {});
+  }
+
+  /* Nastavení → Trénink → vypínače pod Odpočinkem */
+  function wakeSettings() {
+    const c = S.cfg;
+    let h = `<label class="switch">
+      <input type="checkbox" data-act="screenOn"
+          ${c.screenOn ? "checked" : ""}${wakeApi ? "" : " disabled"}>
+      <span>Displej nezhasne během pauzy</span>
+    </label>`;
+    if (!wakeApi) {
+      h += '<div class="xs muted">Tento prohlížeč neumí držet displej zapnutý.</div>';
+      return h;
+    }
+    // ztmavení zůstává na místě, s vypnutou volbou Displej nezhasne jen zešedne (F3-23)
+    h += `<label class="switch dep${c.screenOn ? "" : " off"}"${c.screenOn ? "" : " inert"}>
+      <input type="checkbox" data-act="screenDim" ${c.screenDim ? "checked" : ""}>
+      <span>Po 30 s ztmavit obrazovku</span>
+    </label>`;
+    if (c.screenOn && batteryLow()) {
+      h += `<div class="banner" style="margin-top:0">
+        Baterie je pod ${WAKE_BATT * 100} %, displej teď během pauzy zhasne jako obvykle. Znovu to začne
+        fungovat nad ${WAKE_BATT * 100} % nebo při nabíjení.
+      </div>`;
+    }
+    return h;
+  }
+
+  /* ---------- grafy (SVG, F3-08) ----------
+     spec grafu: type ("bar" / "line"), label, unit (přípona hodnoty v bublině), yUnit (jednotka u čísel
+     na ose Y, F3-08), fmt (druh hodnot podle CH_FMT, jinak obyčejná čísla), whole (jen celá čísla na ose)
+     a data (bars / series).
+     Vložení chartPh(spec, výška), kreslí drawCharts. Jednotka yUnit je u každého čísla na ose (opakování
+     „10×“ bez mezery přes withUnit). CH_FMT: min = minuty jako „2:00 h“, sec = sekundy jako „1:30 min“, vol =
+     kg, od 10 000 tuny jako fmtVol. whole u počtů (opakování, tréninky, série). Graf je přes celou šířku
+     karty: levý okraj = změřená šířka nejdelšího popisku (chartTextWidth), vpravo bez okraje. Popisky pod
+     sloupci se při nedostatku místa pravidelně vynechají (poslední zůstane). Nový graf s jednotkou jen přes
+     tato pole. Grafy, které nepatří fitku, mají var(--chart), ne --s1. */
+  const CH = {};
+  let chN = 0;
+  function chartPh(spec, h) {
+    const id = "ch" + ++chN;
+    CH[id] = Object.assign({ h }, spec);
+    return `<div class="chart" id="${id}" data-chart="${id}" style="height:${h}px"></div>`;
+  }
+  // hodnoty na ose: asi n kulatých kroků (1, 2, 5 × 10ⁿ), u času kroky ze seznamu steps (F3-08),
+  // whole = počty (opakování, tréninky, série), krok aspoň 1
+  function niceTicks(min, max, n, steps, whole) {
+    if (min === max) {
+      min = min - 1;
+      max = max + 1;
+    }
+    const span = max - min,
+      step0 = span / n;
+    let step;
+    if (steps) {
+      const last = steps[steps.length - 1];
+      step = steps.find((x) => x >= step0) || Math.ceil(step0 / last) * last;
+    } else {
+      const mag = Math.pow(10, Math.floor(Math.log10(step0))),
+        r = step0 / mag;
+      step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag;
+    }
+    if (whole && step < 1) {
+      step = 1;
+    }
+    const lo = Math.floor(min / step) * step,
+      hi = Math.ceil(max / step) * step;
+    const t = [];
+    for (let v = lo; v <= hi + step / 2; v += step) {
+      t.push(+v.toFixed(6));
+    }
+    return t;
+  }
+  // číslo na ose: celé od tisíce s mezerou („12 500“, F3-08), menší i s desetinami
+  function yFmt(v) {
+    return Math.abs(v) >= 1000 ? fmtInt(v) : fmtKg(v);
+  }
+  // minuty jako hodiny „1:30“ (osa času v Průběhu)
+  const fmtHM = (m) => Math.floor(Math.round(m) / 60) + ":" + d2(Math.round(m) % 60);
+  /* Druhy hodnot grafu (spec.fmt, F3-08): kroky osy (steps, jinak kulatá čísla), číslo na ose (tick, top =
+     nejvyšší hodnota osy), jednotka na ose a hodnota v bublině.
+     min = minuty zobrazené v hodinách (0:30, 1:00…), sec = sekundy jako m:ss (výdrž, čas cviku),
+     vol = objem v kg, od 10 000 na ose v tunách jako v dlaždicích (fmtVol). */
+  const CH_FMT = {
+    min: {
+      steps: [5, 10, 15, 30, 60, 120, 180, 300, 600, 1200, 3000, 6000],
+      tick: fmtHM,
+      unit: () => "h",
+      tip: (v) => fmtDurS(v * 60000),
+    },
+    sec: {
+      steps: [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200],
+      tick: fmtSec,
+      unit: (top) => (top >= 3600 ? "h" : "min"),
+      tip: (v) => fmtSec(v) + (v >= 3600 ? " h" : " min"),
+    },
+    vol: {
+      tick: (v, top) => (top >= 10000 ? fmtKg(v / 1000) : yFmt(v)),
+      unit: (top) => (top >= 10000 ? "t" : "kg"),
+      tip: fmtVol,
+    },
+  };
+  // číslo s jednotkou: „80 kg“, „2:00 h“, opakování bez mezery „10×“
+  const withUnit = (text, unit) => (!unit ? text : unit === "×" ? text + unit : text + " " + unit);
+  // osa Y grafu: hodnoty (ticks) a jejich popisky i s jednotkou
+  function chartAxis(sp, min, max) {
+    const f = CH_FMT[sp.fmt];
+    const ticks = niceTicks(min, max, 4, f && f.steps, sp.whole);
+    const top = ticks[ticks.length - 1];
+    const unit = f ? f.unit(top) : sp.yUnit || "";
+    return {
+      ticks,
+      labels: ticks.map((t) => withUnit(f ? f.tick(t, top) : yFmt(t), unit)),
+    };
+  }
+  // šířka nejdelšího z textů v grafu el v px (změří prohlížeč, takže sedí i s větším písmem F3-11)
+  function chartTextWidth(el, texts) {
+    el.innerHTML = `<svg width="1" height="1">${texts.map((t) => `<text>${esc(t)}</text>`).join("")}</svg>`;
+    let max = 0;
+    for (const t of el.querySelectorAll("text")) {
+      max = Math.max(max, t.getComputedTextLength());
+    }
+    // skrytý graf nejde změřit → odhad podle počtu znaků
+    if (!max && texts.length) {
+      max = Math.max(...texts.map((t) => t.length)) * 7 * fontK();
+    }
+    return Math.ceil(max);
+  }
+  // hodnota v bublině po klepnutí (podle spec.fmt, jinak číslo s příponou spec.unit)
+  function chartTip(sp, v) {
+    const f = CH_FMT[sp.fmt];
+    if (f) return f.tip(v);
+    return (v >= 1000 ? fmtInt(v) : fmtKg(Math.round(v * 10) / 10)) + sp.unit;
+  }
+  function drawCharts() {
+    document.querySelectorAll("[data-chart]").forEach((el) => {
+      const sp = CH[el.dataset.chart];
+      if (!sp) return;
+      const W = el.clientWidth || 320,
+        H = sp.h;
+      // osa Y podle dat (u čáry i rozsah osy X)
+      let axis, pts, x0, x1;
+      if (sp.type === "bar") {
+        axis = chartAxis(sp, 0, Math.max(1, ...sp.bars.map((b) => b.v)));
+      } else {
+        pts = sp.series.flatMap((s) => s.pts);
+        if (!pts.length) {
+          el.innerHTML = `<div class="muted small chart-empty">
+            V tomto období žádná data.
+          </div>`;
+          return;
+        }
+        x0 = Math.min(...pts.map((p) => p.x));
+        x1 = Math.max(...pts.map((p) => p.x));
+        if (x1 - x0 < DAY) {
+          x0 -= 3 * DAY;
+          x1 += 3 * DAY;
+        }
+        const y0 = Math.min(...pts.map((p) => p.y)),
+          y1 = Math.max(...pts.map((p) => p.y));
+        const pad = (y1 - y0) * 0.08 || 1;
+        axis = chartAxis(sp, Math.max(0, y0 - pad), y1 + pad);
+      }
+      const ticks = axis.ticks;
+      // okraje pro popisky os rostou s písmem (F3-11); graf je přes celou šířku karty: nejdelší popisek
+      // osy Y začíná na levém okraji textu, čáry končí na pravém (F3-08)
+      const textScale = fontK();
+      const xTexts = sp.type === "bar" ? sp.bars.map((b) => String(b.label)) : [];
+      const xLabelW = chartTextWidth(el, xTexts);
+      const padL = chartTextWidth(el, axis.labels) + 6,
+        padR = 0,
+        padT = 12,
+        padB = Math.round(24 * textScale);
+      const iw = W - padL - padR,
+        ih = H - padT - padB;
+      let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+          aria-label="${esc(sp.label)}">`;
+      // vodorovné čáry a popisky osy Y
+      const yLines = (Y) => {
+        ticks.forEach((t, i) => {
+          svg += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${Y(t)}" y2="${Y(t)}"/>
+          <text x="${padL - 6}" y="${Y(t) + 4 * textScale}" text-anchor="end">${axis.labels[i]}</text>`;
+        });
+      };
+      if (sp.type === "bar") {
+        const ymax = ticks[ticks.length - 1];
+        const Y = (v) => padT + ih - (v / ymax) * ih;
+        yLines(Y);
+        const bw = iw / sp.bars.length;
+        const xLabels = [];
+        sp.hit = [];
+        sp.bars.forEach((b, i) => {
+          const x = padL + i * bw + 1,
+            w = Math.max(2, bw - 2),
+            y = Y(b.v),
+            hh = padT + ih - y;
+          if (b.v > 0) {
+            const r = Math.min(4, w / 2, hh);
+            svg +=
+              `<path fill="var(--chart)" d="M${x},${padT + ih}V${y + r}Q${x},${y} ${x + r},${y}` +
+              `H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${padT + ih}Z"/>`;
+          }
+          if (
+            b.tip !== undefined ? b.label : i % 4 === 3 || (i === sp.bars.length - 1 && sp.bars.length < 5)
+          ) {
+            xLabels.push({ x: x + w / 2, text: String(b.label) });
+          }
+          sp.hit.push({
+            x: x + w / 2,
+            y: Math.min(y, padT + ih - 2),
+            html: `<b>${chartTip(sp, Math.round(b.v))}</b><br>${b.tip || "týden od " + b.label}`,
+          });
+        });
+        // popisky pod sloupci: když se nevejdou vedle sebe, jen každý k-tý (poslední zůstane vždy)
+        const gap = xLabels.length > 1 ? xLabels[1].x - xLabels[0].x : iw;
+        const every = Math.max(1, Math.ceil((xLabelW + 4) / gap));
+        xLabels.forEach((l, i) => {
+          if ((xLabels.length - 1 - i) % every) return;
+          svg += `<text x="${l.x}" y="${H - 6}" text-anchor="middle">${esc(l.text)}</text>`;
+        });
+        svg += `<line class="axis" x1="${padL}" x2="${W - padR}" y1="${padT + ih}" y2="${padT + ih}"/>`;
+      } else {
+        const ya = ticks[0],
+          yb = ticks[ticks.length - 1];
+        const X = (x) => padL + ((x - x0) / (x1 - x0)) * iw,
+          Y = (y) => padT + ih - ((y - ya) / (yb - ya)) * ih;
+        yLines(Y);
+        // x ticks: months
+        const span = x1 - x0;
+        const stepM = span > 730 * DAY ? 6 : span > 365 * DAY ? 3 : span > 150 * DAY ? 2 : 1;
+        const d = new Date(x0);
+        d.setDate(1);
+        d.setHours(0, 0, 0, 0);
+        d.setMonth(d.getMonth() + 1);
+        let lastX = -99;
+        while (d.getTime() <= x1) {
+          if (d.getMonth() % stepM === 0 || stepM === 1) {
+            const x = X(d.getTime());
+            if (x - lastX > 34) {
+              svg +=
+                `<text x="${x}" y="${H - 6}" text-anchor="middle">
+                ${MONTHS[d.getMonth()]}` +
+                `${d.getMonth() === 0 ? " " + String(d.getFullYear()).slice(2) : ""}
+              </text>`;
+              lastX = x;
+            }
+          }
+          d.setMonth(d.getMonth() + 1);
+        }
+        if (lastX < 0) {
+          svg += `<text x="${padL}" y="${H - 6}">${fmtDateS(x0)}</text>
+          <text x="${W - padR}" y="${H - 6}" text-anchor="end">${fmtDateS(x1)}</text>`;
+        }
+        svg += `<line class="axis" x1="${padL}" x2="${W - padR}" y1="${padT + ih}" y2="${padT + ih}"/>`;
+        sp.hit = [];
+        for (const s of sp.series) {
+          if (!s.pts.length) continue;
+          if (!s.noLine) {
+            const path = s.pts
+              .map((p, i) => (i ? "L" : "M") + X(p.x).toFixed(1) + "," + Y(p.y).toFixed(1))
+              .join("");
+            svg += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="${s.w || 2}"
+                stroke-linejoin="round" stroke-linecap="round"/>`;
+          }
+          const many = s.pts.length > 60 && !s.dots;
+          s.pts.forEach((p, i) => {
+            const last = i === s.pts.length - 1;
+            if (s.noDots) {
+            } else if (s.dots) {
+              svg += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="2.6" fill="${s.color}"/>`;
+            } else if (!many || last) {
+              svg += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${last ? 5 : 3.2}" fill="${s.color}"
+                  stroke="var(--surface)" stroke-width="2"/>`;
+            }
+            sp.hit.push({
+              x: X(p.x),
+              y: Y(p.y),
+              html:
+                `${
+                  sp.series.length > 1
+                    ? `<span class="sw" style="background:${s.color}"></span>${esc(s.name)}<br>`
+                    : ""
+                }` +
+                `<b>${chartTip(sp, p.y)}</b> · ${fmtDate(p.x)}${p.n > 1 ? " (" + p.n + " měření)" : ""}` +
+                `${
+                  p.s && p.s.bestSet && S.detailMetric === "e1rm"
+                    ? `<br>${fmtKg(p.s.bestSet.kg)}×${p.s.bestSet.reps}`
+                    : ""
+                }`,
+            });
+          });
+        }
+      }
+      svg += `<line id="${el.id}-cx" x1="0" x2="0" y1="${padT}" y2="${padT + ih}" stroke="var(--ink-3)"
+          stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      </svg>
+      <div class="tip" hidden></div>`;
+      el.innerHTML = svg;
+      const tip = el.querySelector(".tip"),
+        cx = el.querySelector("#" + el.id + "-cx");
+      const move = (ev) => {
+        const r = el.getBoundingClientRect();
+        const mx = ev.clientX - r.left,
+          my = ev.clientY - r.top;
+        let best = null,
+          bd = 1e9;
+        for (const p of sp.hit) {
+          const dd = Math.abs(p.x - mx) + Math.abs(p.y - my) * 0.25;
+          if (dd < bd) {
+            bd = dd;
+            best = p;
+          }
+        }
+        if (!best) return;
+        tip.hidden = false;
+        tip.innerHTML = best.html;
+        const tx = Math.min(Math.max(best.x, 70), W - 70);
+        tip.style.left = tx + "px";
+        tip.style.top = best.y - 10 + "px";
+        cx.setAttribute("x1", best.x);
+        cx.setAttribute("x2", best.x);
+        cx.setAttribute("visibility", "visible");
+      };
+      el.onpointermove = move;
+      el.onpointerdown = move;
+      el.onpointerleave = () => {
+        tip.hidden = true;
+        cx.setAttribute("visibility", "hidden");
+      };
+    });
+  }
+  let rsT;
+  window.addEventListener("resize", () => {
+    clearTimeout(rsT);
+    rsT = setTimeout(drawCharts, 150);
+  });
+
+  /* ---------- STISK TLAČÍTEK (F3-53) ----------
+     Ovládací prvek ukáže stisk, jakmile na něj prst sáhne, a to i při rychlém klepnutí. Samotné CSS :active
+     nestačí: Chrome na Androidu ho při rychlém klepnutí skoro neukáže (čeká, jestli nejde o rolování) a appka
+     tlačítko hned po akci překreslí, takže stisk zmizí dřív, než je vidět (zjištěno na videu z telefonu).
+     - Při dotyku (pointerdown) dostane prvek z PRESS_SEL třídu .prs, vzhled stisku je v CSS (sekce STISK
+       TLAČÍTEK na konci css/app.css, :active i .prs). Zaškrtávátko: .prs má celý řádek .switch, políčko se
+       zaškrtne hned (dělá to prohlížeč), odloží se jen akce data-act políčka uvnitř řádku.
+     - Klepnutí kratší než PRESS_MIN (160 ms, odsouhlaseno v náhledu) odloží akci o zbytek, takže je stisk vidět
+       aspoň 160 ms; delší stisk spustí akci hned po zvednutí prstu jako dřív (pressRun).
+     - Další dotyk během čekání nejdřív provede čekající akci (pressFlush), rychlé ✓ ✓ nic neztratí.
+     - Rolování (pointercancel) nebo posun prstu o víc než PRESS_MOVE stisk zruší, akce se odloží jen u prvku,
+       na který prst opravdu klepl.
+     - Bez zdržení zůstává: krokovač − / + (reaguje už na dotyk, data-kk), políčka, ztmavení pozadí panelu (scrim),
+       prvky mimo PRESS_SEL a klepnutí bez prstu (klávesnice, testy přes app.act).
+     - Krok Zpět po odložené akci doplní vykreslení (navEnsure v render), klepnutí zůstává pro Chrome
+       uživatelským gestem několik sekund; stejně tak výběr fotky nebo sdílení fungují i po odkladu.
+     Nový ovládací prvek s vlastní třídou doplnit do PRESS_SEL i do CSS. Žádné vibrace (zamítnuto v návrhu). */
+  const PRESS_MIN = 160; // ms
+  const PRESS_MOVE = 10; // px, větší posun prstu = rolování, ne klepnutí
+  const PRESS_SEL = [
+    ".btn",
+    ".iconbtn",
+    ".okb",
+    ".stype",
+    ".chip",
+    ".seg button",
+    ".tabs button",
+    ".hw",
+    ".exrow",
+    ".pickrow .pick",
+    ".tpl.tap",
+    ".gym-c",
+    ".setrow",
+    ".exh-w",
+    ".infob",
+  ].join(", ");
+  let press = null; // právě stisknutý prvek: {el, at, x, y}
+  let pressPending = null; // odložená akce: {el, run, timer}
+
+  // prvek, který dostane stisk (tlačítko s data-act ze seznamu PRESS_SEL nebo řádek zaškrtávátka), jinak null
+  function pressTarget(node) {
+    if (!node || !node.closest || node.closest(".dnd-h")) return null;
+    const box = node.closest(".switch");
+    if (box) return box; // zaškrtávátko: stisk má celý řádek, akci (data-act) políčko uvnitř
+    const el = node.closest("[data-act]");
+    if (!el || el.matches("input, select, textarea, [data-kk]") || !el.matches(PRESS_SEL)) return null;
+    return el;
+  }
+  function pressOff(el) {
+    if (el) {
+      el.classList.remove("prs");
+    }
+  }
+  // provede odloženou akci hned (další dotyk nebo uplynutí PRESS_MIN)
+  function pressFlush() {
+    if (!pressPending) return;
+    const pending = pressPending;
+    pressPending = null;
+    clearTimeout(pending.timer);
+    pending.run();
+  }
+  // spustí akci klepnutí: hned, nebo až stisk trval aspoň PRESS_MIN
+  function pressRun(el, run) {
+    const p = press;
+    press = null;
+    const mine = p && p.el.contains(el); // klepnutí patří k právě stisknutému prvku (i políčko v řádku)
+    const shown = mine ? p.el : el; // prvek, který má stisk vidět
+    const wait = mine ? PRESS_MIN - (performance.now() - p.at) : 0;
+    if (wait <= 0) {
+      pressOff(shown);
+      run();
+      return;
+    }
+    pressPending = {
+      el: shown,
+      run: () => {
+        pressOff(shown);
+        run();
+      },
+      timer: setTimeout(pressFlush, wait),
+    };
+  }
+  document.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      pressFlush();
+      if (press) {
+        pressOff(press.el);
+      }
+      const el = pressTarget(ev.target);
+      press = el ? { el, at: performance.now(), x: ev.clientX, y: ev.clientY } : null;
+      if (el) {
+        el.classList.add("prs");
+      }
+    },
+    true,
+  );
+  document.addEventListener("pointermove", (ev) => {
+    if (!press) return;
+    if (Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > PRESS_MOVE) {
+      pressOff(press.el);
+      press = null;
+    }
+  });
+  document.addEventListener("pointercancel", () => {
+    if (!press) return;
+    pressOff(press.el);
+    press = null;
+  });
+  // prst puštěný mimo prvek (bez klepnutí): stisk zmizí po PRESS_MIN
+  document.addEventListener("pointerup", () => {
+    if (!press) return;
+    const el = press.el;
+    setTimeout(() => {
+      if (!pressPending || pressPending.el !== el) {
+        pressOff(el);
+      }
+    }, PRESS_MIN);
+  });
+
+  /* ---------- akce: klepnutí (data-act), psaní a změny v políčkách ---------- */
+  document.addEventListener("click", (ev) => {
+    const t = ev.target.closest("[data-act]");
+    if (!t) return;
+    if (ev.target.closest(".dnd-h")) return; // úchyt v kartě, která je tlačítko (F2-06), kartu neotevře
+    pressRun(t, () => actClick(ev, t)); // F3-53: krátké klepnutí počká, až je stisk vidět
+  });
+  // provedení akce klepnutí (t = prvek s data-act)
+  function actClick(ev, t) {
+    const act = t.dataset.act,
+      v = t.dataset.v,
+      i = +t.dataset.i,
+      j = +t.dataset.j;
+    saveChipScroll();
+    saveChipScroll(document.getElementById("sheetRoot"));
+    if (act === "scrim") {
+      if (ev.target === t) {
+        closeSheet();
+      }
+      return;
+    }
+    const d = curDraft();
+    if (d && t.dataset.i !== undefined) {
+      edMark(d, d.ex[i]);
+    } // F1-11: klepnutí v kartě cviku (série, ✓, krokovač, menu cviku)
+    switch (act) {
+      // přepnutí záložky z rozdělané úpravy (i ze stránky cviku otevřené z úpravy) se zeptá jako Zpět
+      case "tab":
+        if (edChanged() || exEdChanged()) {
+          confirmSheet("Zahodit změny?", "Neuložené změny se ztratí.", "Zahodit", "tabDiscard", v);
+          break;
+        }
+        goTab(v);
+        break;
+      case "tabDiscard":
+        closeSheet();
+        goTab(v);
+        break;
+      case "selGym":
+        S.selGym = v;
+        tplOther = false;
+        // během tréninku mění i fitko tréninku (F2-09)
+        if (S.active && S.active.gymId !== v) {
+          S.active.gymId = v;
+          saveActive();
+          toast("Fitko tréninku: " + gymName(v));
+        }
+        scheduleRender();
+        break;
+      case "runOpen":
+        go("train");
+        break;
+      case "runFinish":
+        closeSheet();
+        go("train");
+        finishAsk(S.active);
+        break;
+      case "runDiscard": {
+        const next = runNext;
+        runNext = null;
+        activeEnd();
+        closeSheet();
+        runStart(next);
+        break;
+      }
+      case "startEmpty":
+        if (S.active) {
+          go("train");
+          break;
+        }
+        startWorkout(null);
+        break;
+      case "startTpl":
+        if (S.active) {
+          sheetRun({ tpl: v });
+          break;
+        }
+        startWorkout(v);
+        break;
+      // karta šablony (F2-13): panel ⋯, Naplánovat, Smazat
+      case "tplMenu":
+        sheetTplMenu(v);
+        break;
+      case "tplPlan":
+        tplPlanNew(v);
+        break;
+      case "tplDel":
+        if (!S.templates[v]) break;
+        confirmSheet(
+          "Smazat šablonu?",
+          "Šablona „" + esc(S.templates[v].name) + "“ se smaže. Tréninky podle ní zůstanou.",
+          "Smazat",
+          "tplDelOk",
+          v,
+        );
+        break;
+      case "tplDelOk":
+        tplDelete(v);
+        closeSheet();
+        toast("Šablona smazaná");
+        break;
+      case "planMenu":
+        sheetPlanDay(v, false, false, true);
+        break;
+      case "newTpl": {
+        // předvybrané fitko, kde teď cvičíš (s jedním fitkem bez přiřazení)
+        const gyms = curGym() && S.cfg.gyms.length > 1 ? [curGym()] : [];
+        S.editDraft = {
+          mode: "template",
+          id: null,
+          // jedinečný název (F2-08): „Nová šablona“, když už je, „Nová šablona 2“…
+          title: tplFreeName("Nová šablona", gyms, null),
+          gyms,
+          hints: "last",
+          ex: [],
+        };
+        goEdit();
+        break;
+      }
+      case "editTpl": {
+        const t = S.templates[v];
+        S.editDraft = {
+          mode: "template",
+          id: v,
+          title: t.name,
+          gymId: curGym(),
+          gyms: tplGyms(t),
+          hints: t.hints === "tpl" ? "tpl" : "last",
+          ex: (t.items || []).map((it) => ({
+            k: uid("e"),
+            exId: it.exId,
+            ...ssOf(it),
+            ...restOf(it),
+            note: it.note || "",
+            sets: (it.sets || []).map(newSetFrom),
+          })),
+        };
+        goEdit();
+        break;
+      }
+      case "cycType": {
+        const s = d.ex[i].sets[j];
+        s.t = TYPES[(TYPES.indexOf(s.t) + 1) % TYPES.length];
+        delete s.rpeEst;
+        if (s.t === "f") {
+          // odhad RIR před selháním (F4-12): zadané RIR/RPE se se zapnutou funkcí pro coache přesune
+          if (coachOn() && effNum(s.rpe) != null) {
+            s.rpeEst = effNum(s.rpe);
+          }
+          delete s.rpe; // do selhání = vždy RIR 0 (F4-04), po přepnutí dál bude RIR prázdné
+        }
+        progTouch(d, d.ex[i]); // změna druhu série mění pracovní série (F4-01)
+        touchDraft();
+        scheduleRender();
+        break;
+      }
+      case "done":
+        toggleSetDone(d, i, j);
+        break;
+      // stopky u série na čas (F1-24)
+      case "stwGo":
+        stwGo(d, i, j);
+        break;
+      case "stwStop":
+        stwStop();
+        break;
+      case "kk":
+        sheetStepper(i, j, v);
+        break;
+      // RIR/RPE (F4-04)
+      case "eff":
+        // v rozdělaném tréninku s krokovačem celý panel série (kg, opakování, RIR), jinak jen RIR
+        if (kkOn(d)) {
+          sheetStepper(i, j, kFields(kindOf(d.ex[i].exId))[0]);
+        } else {
+          sheetEffort(i, j);
+        }
+        break;
+      case "effFix":
+        toast("Série do selhání má vždy " + (effMode() === "rpe" ? "RPE 10" : "RIR 0") + ".");
+        break;
+      case "effSet":
+        effSet(d, i, j, +v);
+        break;
+      case "effDel":
+        effSet(d, i, j, null);
+        break;
+      case "kkStep": {
+        const a = S.active;
+        if (!kk || !a) break;
+        const step = kkStepNext(a, a.ex[kk.i], v);
+        t.innerHTML = `<span>krok</span> ${esc(kkStepStr(v, step))}`;
+        // tlačítko zahřívací série (F1-08) zaokrouhluje na krok kg
+        const warmBtn = document.getElementById("kk-warm");
+        const warm = warmBtn && v === "kg" ? warmInfo(a, kk.i, kk.j) : null;
+        if (warm) {
+          warmBtn.innerHTML = warmLabel(warm);
+        }
+        break;
+      }
+      case "kkWarm": {
+        const a = S.active;
+        const warm = kk && a ? warmInfo(a, kk.i, kk.j) : null;
+        if (warm) {
+          kkSet("kg", warm.kg);
+        }
+        break;
+      }
+      case "kkKbd":
+        kkKeyboard();
+        break;
+      case "kkDone": {
+        const at = kk;
+        closeSheet();
+        if (at && S.active) {
+          toggleSetDone(S.active, at.i, at.j);
+        }
+        break;
+      }
+      case "jumpFix":
+        closeSheet();
+        focusInput("in-" + d.ex[i].k + "-" + j + "-" + v);
+        break;
+      case "jumpOk":
+        closeSheet();
+        d.ex[i].sets[j].jumpOk = true;
+        toggleSetDone(d, i, j);
+        break;
+      case "delSet":
+        swOpen = null;
+        if (d.ex[i].sets[j].t !== "w") {
+          progTouch(d, d.ex[i]); // smazaná pracovní série (F4-01), zahřívací návrh nechá
+        }
+        d.ex[i].sets.splice(j, 1);
+        touchDraft();
+        scheduleRender();
+        break;
+      case "progUse": {
+        // návrh progrese (F4-01) použít: šedé předvyplnění pracovních sérií = návrh, řádek zmizí
+        const e = d && d.ex[i];
+        if (!e) break;
+        e.progUse = true;
+        touchDraft();
+        scheduleRender();
+        break;
+      }
+      case "undo": {
+        const fn = toast.undo;
+        toast.undo = null;
+        clearTimeout(toast.t);
+        document.getElementById("toastRoot").innerHTML = "";
+        if (fn) {
+          fn();
+        }
+        break;
+      }
+      case "addSet": {
+        const ss = d.ex[i].sets;
+        const l = [...ss].reverse().find((s) => s.t !== "w");
+        const n =
+          d.mode === "template" && l
+            ? newSetFrom({ t: l.t, kg: num(l.kg), reps: num(l.reps) })
+            : newSetFrom(l ? { t: l.t } : null);
+        ss.push(n);
+        progTouch(d, d.ex[i]); // přidaná pracovní série (F4-01)
+        touchDraft();
+        scheduleRender();
+        break;
+      } // mimo šablonu prázdná, šedé předvyplnění z minula, jinak ze série nad (F1-13), jinak „–“
+      case "addWarm": {
+        const ss = d.ex[i].sets;
+        let k = 0;
+        while (k < ss.length && ss[k].t === "w") {
+          k++;
+        }
+        ss.splice(k, 0, { t: "w", kg: "", reps: "", done: false });
+        touchDraft();
+        scheduleRender();
+        break;
+      }
+      // F3-22: vysvětlení ikon za názvem cviku v kartě
+      case "gdTip":
+        toast(GD_TIP);
+        break;
+      // pauza cviku v úpravě šablony (F2-14): panel a z něj formulář cviku
+      case "restInfo":
+        restInfoSheet(d, i);
+        break;
+      case "restInfoEx":
+        exEdOpen(v, "detail");
+        render.toSel = "#x-rest-on"; // formulář rovnou u sekce Během tréninku (vypínač Vlastní pauza)
+        break;
+      // nastavení stroje podle fitka (F1-07)
+      case "machEdit":
+        machSheet(v, t.dataset.g);
+        // klávesnice jen z nabídky cviku (chci psát); klepnutí na řádek nastavení jen ukáže
+        if (!t.dataset.focus) break;
+        setTimeout(() => {
+          const txt = document.getElementById("mach-txt");
+          txt && txt.focus();
+        }, 60);
+        break;
+      case "machSave":
+      case "machDel": {
+        const txt = document.getElementById("mach-txt");
+        const text = act === "machSave" && txt ? txt.value : "";
+        closeSheet();
+        if (!machEd) break;
+        const had = !!machOf(machEd.exId, machEd.gymId);
+        machPut(machEd.exId, machEd.gymId, text);
+        machEd = null;
+        if (text.trim()) {
+          toast("Nastavení stroje uloženo");
+        } else if (had) {
+          toast("Nastavení stroje smazáno");
+        }
+        break;
+      }
+      case "recTip":
+        toast("Nový rekord: " + v);
+        break;
+      // F1-19: řádek Minule se rozbalí / sbalí (bez překreslení)
+      case "prevMore":
+        t.classList.toggle("open");
+        t.setAttribute("aria-expanded", String(t.classList.contains("open")));
+        break;
+      case "exMenu": {
+        const e = d.ex[i];
+        const run = ssRun(d.ex, i);
+        // supersérie (F4-05): spojit s dalším cvikem, pokud už s ním není; zrušit celou supersérii
+        const ssBtns =
+          (i < d.ex.length - 1 && !(run && run[1] > i)
+            ? `<button class="btn block" data-act="ssOn" data-i="${i}">Supersérie s dalším cvikem</button>`
+            : "") +
+          (run ? `<button class="btn block" data-act="ssOff" data-i="${i}">Zrušit supersérii</button>` : "");
+        openSheet(
+          exName(e.exId),
+          `<div class="stack">
+            <button class="btn block" data-act="exNote" data-i="${i}">
+              ${e.note ? "Upravit poznámku" : "Přidat poznámku"}
+            </button>
+            ${
+              machCan(d, e)
+                ? `<button class="btn block" data-act="machEdit" data-v="${esc(e.exId)}"
+                    data-g="${esc(d.gymId)}" data-focus="1">
+                  ${machOf(e.exId, d.gymId) ? "Upravit" : "Přidat"} nastavení stroje
+                </button>`
+                : ""
+            }
+            <button class="btn block" data-act="exReplace" data-i="${i}">Nahradit jiným cvikem</button>
+            ${ssBtns}
+            ${
+              d.ex.length > 1
+                ? '<button class="btn block" data-act="exOrder">Změnit pořadí cviků</button>'
+                : ""
+            }
+            <button class="btn block" data-act="openEx" data-v="${esc(e.exId)}">
+              Stránka cviku (popis, statistiky)
+            </button>
+            <div class="bzone"></div>
+            <button class="btn block danger" data-act="exRemove" data-i="${i}">
+              Odebrat cvik ${d.mode === "template" ? "ze šablony" : "z tréninku"}
+            </button>
+          </div>`,
+        );
+        break;
+      }
+      // F1-26: poznámka k tréninku přes ⋯ karty tréninku; z nabídky s klávesnicí, z řádku bez ní
+      case "wMenu":
+        if (d) {
+          wMenu(d);
+        }
+        break;
+      case "wNote":
+      case "wNoteEdit":
+        if (!d) break;
+        wNoteSheet(d);
+        if (act === "wNoteEdit") break;
+        setTimeout(() => {
+          const txt = document.getElementById("wnote-txt");
+          txt && txt.focus();
+        }, 60);
+        break;
+      case "wNoteSave":
+      case "wNoteDel": {
+        const txt = document.getElementById("wnote-txt");
+        const note = act === "wNoteSave" && txt ? txt.value.trim() : "";
+        closeSheet();
+        if (!d) break;
+        if (note) {
+          d.note = note;
+        } else {
+          delete d.note;
+        }
+        touchDraft();
+        scheduleRender();
+        break;
+      }
+      // F3-52: poznámka ke cviku jen v panelu; z nabídky ⋯ rovnou s klávesnicí, z řádku v kartě bez ní
+      case "exNote":
+      case "noteEdit":
+        noteSheet(d, i);
+        if (act === "noteEdit") break;
+        setTimeout(() => {
+          const txt = document.getElementById("note-txt");
+          txt && txt.focus();
+        }, 60);
+        break;
+      case "noteSave":
+      case "noteDel": {
+        const txt = document.getElementById("note-txt");
+        const note = act === "noteSave" && txt ? txt.value.trim() : "";
+        closeSheet();
+        if (!d || !d.ex[i]) break;
+        if (note) {
+          d.ex[i].note = note;
+        } else {
+          delete d.ex[i].note;
+        }
+        touchDraft();
+        scheduleRender();
+        break;
+      }
+      case "exOrder":
+        sheetExOrder();
+        break;
+      case "ssOn":
+        ssLink(d.ex, i);
+        edMark(d, d.ex[i]);
+        touchDraft();
+        closeSheet();
+        scheduleRender();
+        break;
+      case "ssOff":
+        ssUnlink(d.ex, i);
+        edMark(d, d.ex[i]);
+        touchDraft();
+        closeSheet();
+        scheduleRender();
+        break;
+      case "exRemove": {
+        const ssBefore = d.ex.map((e) => [e, e.ss]); // Vrátit obnoví i supersérii (F4-05)
+        const old = d.ex.splice(i, 1)[0];
+        ssNorm(d.ex);
+        touchDraft();
+        closeSheet();
+        scheduleRender();
+        exUndoOffer(d, i, old, null, "Cvik odebrán", ssBefore);
+        break;
+      }
+      case "exReplace":
+        openPicker("replace", i);
+        break;
+      case "addEx":
+        openPicker("add");
+        break;
+      case "pickToggle":
+        if (pick.mode === "replace") {
+          pick.sel = [v];
+        } else {
+          const k = pick.sel.indexOf(v);
+          k < 0 ? pick.sel.push(v) : pick.sel.splice(k, 1);
+        }
+        renderPicker(true);
+        break;
+      // filtr partií a vybavení (F3-41): čip s výběrem ho zruší, bez výběru otevře panel
+      case "mfOpen":
+        if (MF[v].get() !== "all") {
+          MF[v].set("all");
+          mfDone(v);
+        } else {
+          sheetMf(v);
+        }
+        break;
+      case "eqOpen":
+        if (MF[v].eq() !== "all") {
+          MF[v].setEq("all");
+          mfDone(v);
+        } else {
+          sheetEq(v);
+        }
+        break;
+      case "mfSet":
+      case "eqSet": {
+        const [from, val] = v.split("|");
+        act === "mfSet" ? MF[from].set(val) : MF[from].setEq(val);
+        mfDone(from);
+        break;
+      }
+      case "pickHist":
+        pick.hist = !pick.hist;
+        pick.limit = 0;
+        renderPicker(true);
+        break;
+      case "pickMore":
+        pick.limit = (pick.limit || 120) + 120;
+        refreshPickList();
+        break;
+      case "exInfo":
+        galReset();
+        pick.infoFs = false;
+        sheetExInfo(v);
+        break;
+      case "exInfoGym":
+        pick.infoGym = v;
+        sheetExInfo(pick.infoId, true);
+        break;
+      case "pickDone": {
+        const dd = curDraft();
+        if (!dd) {
+          closeSheet();
+          break;
+        }
+        let replaced = null;
+        if (pick.mode === "replace") {
+          // nahrazený cvik zůstává v supersérii
+          const e = Object.assign(exEntryFor(pick.sel[0], dd.gymId), ssOf(dd.ex[pick.replaceI]));
+          replaced = { i: pick.replaceI, old: dd.ex[pick.replaceI], k: e.k };
+          dd.ex[pick.replaceI] = e;
+          edMark(dd, e);
+        } else {
+          for (const id of pick.sel) {
+            dd.ex.push(
+              dd.mode === "template"
+                ? {
+                    k: uid("e"),
+                    exId: id,
+                    note: "",
+                    sets: [newSetFrom(null), newSetFrom(null), newSetFrom(null)],
+                  }
+                : exEntryFor(id, dd.gymId),
+            );
+          }
+          edMark(dd, dd.ex[dd.ex.length - 1]);
+        }
+        touchDraft();
+        closeSheet();
+        scheduleRender();
+        if (replaced && replaced.old) {
+          exUndoOffer(dd, replaced.i, replaced.old, replaced.k, "Cvik nahrazen");
+        }
+        break;
+      }
+      case "newEx":
+        exEdOpen(null, "picker");
+        break;
+      case "sheetBack":
+        navBack();
+        break;
+      case "fedbOpen": {
+        // v = odkud: picker (výběr cviků), list (záložka Cviky), form (formulář Nový cvik)
+        if (v === "form") {
+          exEdCollect();
+          fedbOpen(exEd ? exEd.from : "picker", exEd ? exEd.f.name.trim() : "", true);
+        } else {
+          fedbOpen(v, v === "list" ? S.exlQ : pick.q);
+        }
+        break;
+      }
+      case "fsBack":
+        navBack();
+        break;
+      case "fsAll":
+        fs.all = !fs.all;
+        fs.limit = 0;
+        refreshFs();
+        break;
+      case "fsMore":
+        fs.limit = (fs.limit || 40) + 40;
+        refreshFs();
+        break;
+      case "fsRetry":
+        renderFs();
+        break;
+      case "fsPick": {
+        const x = typeof FEDB !== "undefined" && FEDB.find((o) => o.id === v);
+        if (x) {
+          exEdOpen(null, fs.from, x);
+        }
+        break;
+      }
+      case "fsHave":
+        // šipka › u cviku, který už mám (F3-50): z výběru cviků Informace o cviku nad hledáním,
+        // jinak (záložka Cviky, hledání z formuláře Nový cvik) stránka cviku, Zpět vrátí hledání
+        if (fs.from === "picker" && !fs.form) {
+          galReset();
+          pick.infoFs = true;
+          sheetExInfo(v);
+          break;
+        }
+        {
+          const f = S.route !== "exd" ? navFrame() : null;
+          closeSheet();
+          S.exPart = "info";
+          S.exDetail = v;
+          S.detailGym = "all";
+          S.exHistLimit = 25;
+          if (f) {
+            S.prevRoute = S.route;
+            S.nav.push(f);
+          }
+          go("exd");
+          break;
+        }
+      case "saveEx": {
+        if (!exEd) break;
+        exEdCollect();
+        const fm = exEd.f;
+        const name = fm.name.trim();
+        if (!name) {
+          toast("Zadej název cviku.");
+          break;
+        }
+        const id =
+          v ||
+          "c-" +
+            name
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[̀-ͯ]/g, "")
+              .replace(/[^a-z0-9]+/g, "-")
+              .slice(0, 40) +
+            "-" +
+            Date.now().toString(36).slice(-4);
+        // F3-17: stejný anglický název jako jiný cvik nepustí (upozornění je pod názvem)
+        const clash = exNameMark();
+        if (clash) {
+          toast("Cvik s tímto názvem už máš: " + S.exLib[clash].name + ".");
+          document.getElementById("x-name").scrollIntoView({ block: "center", behavior: "smooth" });
+          break;
+        }
+        if (!fm.pri.length) {
+          toast("Vyber aspoň jednu hlavní partii.");
+          break;
+        }
+        // F0-09: odkaz jen https://… (http://…), jinak se cvik neuloží
+        const urlInput = document.getElementById("x-url");
+        urlInput.value = urlNormalize(urlInput.value);
+        fm.url = urlInput.value;
+        if (urlMark(urlInput)) {
+          urlInput.scrollIntoView({ block: "center", behavior: "smooth" });
+          break;
+        }
+        // F4-01: návrh progrese u cviku (jen u typů PROG_KINDS), vlastní rozsah jen platný
+        let prog = PROG_KINDS[fm.kind] ? fm.prog : null;
+        if (prog === "on") {
+          const res = progRangeCheck(fm.pmin, fm.pmax);
+          if (!res.range) {
+            const msg = document.getElementById("x-prog-msg");
+            msg.textContent = res.msg;
+            msg.scrollIntoView({ block: "center", behavior: "smooth" });
+            toast(res.msg);
+            break;
+          }
+          prog = res.range;
+        }
+        const items = Object.assign({}, S.exLib);
+        const o = Object.assign({}, items[id] || { custom: true }, {
+          name,
+          cz: fm.cz.trim(),
+          pri: fm.pri.slice(),
+          sec: fm.sec.slice(),
+          muscle: GROUP_OF[fm.pri[0]],
+          equip: fm.equip,
+          kind: fm.kind,
+          gymDep: fm.gd,
+          desc: fm.desc.trim(),
+        });
+        if (!v && exEd.fx) {
+          o.src = "fedb:" + exEd.fx.id;
+        } // F0-03: cvik převzatý z free-exercise-db
+        const url = urlInput.value;
+        if (url) {
+          o.url = url;
+        } else {
+          delete o.url;
+        }
+        if (!o.cz) {
+          delete o.cz;
+        }
+        if (!o.desc) {
+          delete o.desc;
+        }
+        if (prog === "def") {
+          delete o.prog;
+        } else if (prog) {
+          o.prog = prog;
+        }
+        if (fm.restOn) {
+          o.rest = restNorm(fm.rest) || S.cfg.restSec;
+        } else {
+          delete o.rest;
+        } // F1-09: vlastní pauza
+        items[id] = o;
+        putEx(items);
+        if (!v && exEd.fx && exEd.fxPh.length && S.photosOn) {
+          // F2-05: vybrané fotky z online databáze se stáhnou až teď, k uloženému cviku
+          photosFromFedb(
+            id,
+            exEd.fx,
+            exEd.fxPh.slice().sort((a, b) => a - b),
+            null,
+            false,
+          )
+            .then(() => {
+              toast("Cvik uložen i s fotkami");
+              scheduleRender();
+            })
+            .catch((e) => {
+              toast(
+                e && e.message === "img"
+                  ? "Cvik je uložený, fotky se nepodařilo stáhnout. Přidáš je na stránce cviku."
+                  : photoErr(e),
+              );
+              scheduleRender();
+            });
+        }
+        toast("Cvik uložen");
+        // F3-30: kopie cviku: rovnou její stránka, Zpět z ní vede tam, odkud se přišlo k originálu
+        if (exEd.copyOf && !v) {
+          const f = S.nav.pop();
+          exEd = (f && f.exEd) || null;
+          S.exDetail = id;
+          S.exPart = "info";
+          S.detailGym = "all";
+          S.exHistLimit = 25;
+          go("exd");
+          break;
+        }
+        // F3-14: zpět tam, odkud se přišlo (stránka cviku, info o cviku, záložka Cviky, výběr cviků)
+        if (exEd.from === "list" && !v) {
+          // nový cvik ze záložky Cviky: rovnou jeho stránka, Zpět z ní vede na seznam cviků
+          const f = S.nav.pop();
+          exEd = null;
+          S.nav.push({ route: "ex", y: f ? f.y : 0, d: 1 });
+          S.exDetail = id;
+          S.exPart = "info";
+          S.detailGym = "all";
+          S.exHistLimit = 25;
+          S.prevRoute = "ex";
+          go("exd");
+          break;
+        }
+        if (exEd.from === "picker") {
+          // do výběru cviků (i z výsledků online hledání) s novým cvikem vybraným
+          if (!v) {
+            if (pick.mode === "replace") {
+              pick.sel = [id];
+            } else {
+              pick.sel.push(id);
+            }
+          }
+          pick.q = "";
+          exEdLeave(() => renderPicker());
+          break;
+        }
+        exEdLeave();
+        break;
+      }
+      case "resetEx":
+        confirmSheet(
+          "Vrátit cvik na výchozí?",
+          "Tvoje úpravy cviku (názvy, partie, typ zápisu, popis, odkaz…) se nahradí výchozími hodnotami. " +
+            "Tréninky a fotky zůstanou.",
+          "Vrátit",
+          "resetExOk",
+          v,
+        );
+        break;
+      case "resetExOk": {
+        closeSheet();
+        const items = Object.assign({}, S.exLib),
+          a = items[v].archived,
+          machine = items[v].machine,
+          rest = items[v].rest;
+        items[v] = Object.assign({}, EX_DB[v]);
+        if (a) {
+          items[v].archived = true;
+        }
+        if (machine) {
+          items[v].machine = machine; // nastavení stroje (F1-07) není údaj cviku z databáze
+        }
+        if (rest) {
+          items[v].rest = rest; // vlastní pauza (F1-09) taky ne
+        }
+        putEx(items);
+        exEdLeave();
+        toast("Cvik vrácen na výchozí");
+        break;
+      }
+      // smazat cvik (F3-32)
+      case "delEx":
+        exDelAsk(v);
+        break;
+      case "delExOk":
+        closeSheet();
+        exDelete(v);
+        break;
+      case "archExDel": // Skrýt z výběru z panelu „Cvik nejde smazat“ (F3-32)
+        closeSheet();
+      // falls through
+      case "archEx": {
+        const items = Object.assign({}, S.exLib);
+        const was = !!items[v].archived;
+        items[v] = Object.assign({}, items[v]);
+        if (was) {
+          delete items[v].archived;
+        } else {
+          items[v].archived = true;
+        }
+        putEx(items);
+        exEdLeave();
+        toast(was ? "Cvik je znovu ve výběru" : "Cvik skrytý z výběru");
+        break;
+      }
+      // fotky u cviku (F2-05)
+      case "xPh": {
+        const k = +v;
+        const sel = exEd.fxPh;
+        if (sel.includes(k)) {
+          sel.splice(sel.indexOf(k), 1);
+        } else {
+          sel.push(k);
+        }
+        scheduleRender();
+        break;
+      }
+      case "fxView":
+        openFxViewer(+v, t.closest("#sheetRoot") ? "fp" : "form");
+        break;
+      case "fxSel": {
+        if (!pvx) break;
+        const sel = fxViewerSel();
+        if (sel.includes(pvx.k)) {
+          sel.splice(sel.indexOf(pvx.k), 1);
+        } else {
+          sel.push(pvx.k);
+        }
+        fxViewerChrome();
+        break;
+      }
+      case "phView":
+        openViewer(v, t.closest("#sheetRoot") ? "info" : "exd", t.dataset.ex);
+        break;
+      case "phAddGym":
+        if (phAdd) {
+          phAdd.gym = v || null;
+          renderPhAdd(true);
+        }
+        break;
+      case "phAddFirst":
+        if (phAdd) {
+          phAdd.first = t.checked;
+        }
+        break;
+      case "phAddSave":
+        phAddSave();
+        break;
+      case "pvBack":
+      case "fpBack":
+        navBack();
+        break;
+      case "pvGym":
+        if (pv) {
+          pv.gymOpen = !pv.gymOpen;
+          pvChrome();
+        }
+        break;
+      case "pvSetGym":
+        pvUpdate({ gymId: v || null });
+        break;
+      case "pvFirst":
+        pvUpdate({ first: t.checked });
+        break;
+      case "pvDel":
+        pvDelAsk();
+        break;
+      case "pvDelNo":
+        renderViewer();
+        break;
+      case "pvDelOk":
+        pvDelOk();
+        break;
+      case "phAddMenu":
+        sheetPhotoAdd(v);
+        break;
+      case "phAddPick":
+        // popisek otevře výběr souboru až po této obsluze, panel se proto zavře hned potom (F3-51)
+        setTimeout(closeSheet, 0);
+        break;
+      case "phFedb":
+        fedbPhotos(v);
+        break;
+      case "fpRetry":
+        renderFp(true);
+        break;
+      case "fpPick": {
+        const x = typeof FEDB !== "undefined" && FEDB.find((o) => o.id === v);
+        if (fp && x) {
+          fp.x = x;
+          fp.sel = [];
+          renderFp();
+        }
+        break;
+      }
+      case "fpSel": {
+        const k = +v;
+        if (!fp) break;
+        if (fp.sel.includes(k)) {
+          fp.sel.splice(fp.sel.indexOf(k), 1);
+        } else {
+          fp.sel.push(k);
+        }
+        renderFp(true);
+        break;
+      }
+      case "fpGym":
+        if (fp) {
+          fp.gym = v || null;
+          renderFp(true);
+        }
+        break;
+      case "fpFirst":
+        if (fp) {
+          fp.first = t.checked;
+        }
+        break;
+      case "fpSearch":
+        if (fp) {
+          fp.search = true;
+          fp.x = null;
+          fp.sel = [];
+          renderFp();
+        }
+        break;
+      case "fpSave":
+        fpSave();
+        break;
+      case "bkPhotos":
+        lsSet("bkPhotos", t.checked);
+        break;
+      case "xMus": {
+        const k = v;
+        const P = exEd.f.pri,
+          Sx = exEd.f.sec;
+        if (P.includes(k)) {
+          P.splice(P.indexOf(k), 1);
+          Sx.push(k);
+        } else if (Sx.includes(k)) {
+          Sx.splice(Sx.indexOf(k), 1);
+        } else {
+          P.push(k);
+        }
+        scheduleRender();
+        break;
+      }
+      case "editExDetail":
+        exEdOpen(v, "detail");
+        break;
+      case "dupEx":
+        exEdOpen(null, "detail", null, v);
+        break;
+      case "editExInfo":
+        exEdOpen(v, "info");
+        break;
+      case "exEdBack":
+        navBack();
+        break;
+      case "exClashOpen": {
+        // F3-17: stránka cviku se stejným názvem; Zpět vrátí formulář i s napsaným textem
+        const f = navFrame();
+        closeSheet();
+        S.nav.push(f);
+        S.exPart = "info";
+        S.exDetail = v;
+        S.detailGym = "all";
+        S.exHistLimit = 25;
+        S.prevRoute = "exed";
+        go("exd");
+        break;
+      }
+      case "exDiscard":
+        closeSheet();
+        navBack(true);
+        break;
+      case "statsRange":
+        S.statsRange = v;
+        lsSet("statsRange", v);
+        scheduleRender();
+        break;
+      case "sumPeriod":
+        S.sumPeriod = v;
+        scheduleRender();
+        break;
+      case "closeSheet":
+        closeSheet();
+        break;
+      case "restAdj":
+        if (!S.restEnd) break;
+        S.restEnd += +v * 1000;
+        S.restTotal = Math.max(S.restTotal, (S.restEnd - Date.now()) / 1000);
+        restSave();
+        renderRest();
+        break;
+      case "restSkip":
+        restStop();
+        break;
+      case "finish":
+        runNext = null;
+        finishAsk(d);
+        break;
+      case "finMark":
+        // Označit v okně Dokončit trénink (F1-14)
+        finMark(S.active, finState());
+        break;
+      case "finJumpOk":
+        // Ano, je to správně u velkého skoku při Označit (F1-14): označování pokračuje
+        closeSheet();
+        S.active.ex[i].sets[j].jumpOk = true;
+        finMark(S.active, finKeep);
+        break;
+      case "finishOk": {
+        const upd = document.getElementById("updTpl");
+        const sug = suggestEnd(d);
+        const end = finEndValue(d) || sug;
+        // série označené v okně (F1-14) dostanou jako čas odškrtnutí konec tréninku
+        for (const e of d.ex) {
+          for (const s of e.sets) {
+            if (s.done && s.atEnd) {
+              s.at = end;
+            }
+          }
+        }
+        const ex = draftToWorkout(d, true);
+        const w = { title: d.title.trim() || defaultTitle(), start: d.start, end, gymId: d.gymId, ex };
+        if (d.tplId) {
+          w.tplId = d.tplId;
+        }
+        if (typeof d.again === "string") {
+          w.againOf = d.again;
+        }
+        wNoteApply(w, d); // poznámka k tréninku (F1-26)
+        coachApply(w, d); // Pro coache (F4-12)
+        const id = uid("w");
+        saveWorkout(id, w, null);
+        if (upd && upd.checked) {
+          const items = Object.assign({}, S.templates);
+          items[d.tplId] = Object.assign({}, items[d.tplId], { items: tplItemsOf({ ex }, items[d.tplId]) });
+          put("config/templates", { items });
+        }
+        activeEnd();
+        closeSheet();
+        // Dokončit a začít nový (F2-09): rovnou nový trénink, souhrn a oslava se přeskočí (trénink je
+        // v Historii); jinak potvrzením uložení je souhrn, hláška by zakryla jeho nadpis (F3-24)
+        if (runNext) {
+          toast("Trénink uložen");
+          const next = runNext;
+          runNext = null;
+          runStart(next);
+          break;
+        }
+        go("hist"); // Dokončit i Zpět ze stránky „Hotovo“ vedou do Historie
+        openWorkout({ id, mk: monthKey(w.start) }, true);
+        if (S.cfg.recCelW) {
+          const R = wRecs({ id });
+          if (R.length) {
+            celebrate(R, w.title + " · " + R.length + " " + plural(R.length, "rekord", "rekordy", "rekordů"));
+          }
+        }
+        break;
+      }
+      case "discard":
+        confirmSheet("Zahodit trénink?", "Rozdělaný trénink se smaže a neuloží.", "Zahodit", "discardOk");
+        break;
+      case "discardOk":
+        activeEnd();
+        closeSheet();
+        go("train");
+        break;
+      case "edCancel":
+        navBack();
+        break;
+      case "edDiscard":
+        closeSheet();
+        navBack(true);
+        break;
+      case "saveEdit": {
+        const problem = draftProblem(d, false);
+        if (problem) {
+          showProblem(problem.e, problem.j, problem);
+          break;
+        }
+        if (inputProblem("ed-dur")) break;
+        const ex = draftToWorkout(d, false);
+        if (!ex.length) {
+          toast("Trénink je prázdný.");
+          break;
+        }
+        const old = (S.months[d.mk] || {})[d.id] || {};
+        const w = Object.assign({}, old, {
+          title: d.title.trim() || "Trénink",
+          start: d.start,
+          end: d.end,
+          gymId: d.gymId,
+          ex,
+        });
+        delete w.endOrig; // původní délka se už nepamatuje (starší záznamy ji ještě mohou mít)
+        wNoteApply(w, d); // poznámka k tréninku (F1-26)
+        coachApply(w, d); // Pro coache (F4-12)
+        saveWorkout(d.id, w, d.mk);
+        S.editDraft = null;
+        toast("Změny uloženy");
+        // F3-19: zpět na stránku tréninku (s novými údaji, trénink mohl změnit měsíc), jinak do Historie
+        const back = S.nav[S.nav.length - 1];
+        if (back && back.route === "wd" && back.wd) {
+          back.wd = Object.assign({}, back.wd, { mk: monthKey(w.start) });
+          navBack(true);
+        } else {
+          go("hist");
+        }
+        break;
+      }
+      case "delWorkout":
+        confirmSheet(
+          "Smazat trénink?",
+          "Trénink „" + esc(d.title) + "“ se trvale smaže.",
+          "Smazat",
+          "delWorkoutOk",
+        );
+        break;
+      case "delWorkoutOk": {
+        const items = Object.assign({}, S.months[d.mk] || {});
+        delete items[d.id];
+        put("workouts/" + d.mk, { items });
+        S.editDraft = null;
+        closeSheet();
+        toast("Trénink smazán");
+        go("hist");
+        break;
+      }
+      case "saveTpl": {
+        const name = tplClean(d.title);
+        if (!name) {
+          toast("Zadej název šablony.");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          break;
+        }
+        // F2-08: stejný název ve stejném fitku nepustí (upozornění je pod názvem nahoře)
+        const clash = tplNameMark(d);
+        if (clash) {
+          toast(clash + ".");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          break;
+        }
+        const problem = draftProblem(d, false);
+        if (problem) {
+          showProblem(problem.e, problem.j, problem);
+          break;
+        }
+        const items = Object.assign({}, S.templates);
+        const id = d.id || uid("t");
+        // Object.assign: zachová i pole, která editor nezná
+        items[id] = Object.assign({}, items[id], {
+          name,
+          // pořadí 0 (první šablona) se při uložení nesmí změnit
+          order: items[id] ? items[id].order || 0 : tplNextOrder(items),
+          gyms: tplGyms({ gyms: d.gyms }),
+          hints: d.hints === "tpl" ? "tpl" : "last",
+          items: ssNorm(
+            d.ex.map((e) => ({
+              exId: e.exId,
+              ...ssOf(e),
+              ...noteOf(e),
+              ...restOf(e),
+              sets: e.sets.map((s) => ({
+                t: s.t,
+                kg: num(s.kg) || 0,
+                reps: num(s.reps) || 0,
+                sec: parseSec(s.sec) || 0,
+                km: num(s.km) || 0,
+                m: num(s.m) || 0,
+              })),
+            })),
+          ),
+        });
+        put("config/templates", { items });
+        toast("Šablona uložena");
+        tplLeave();
+        break;
+      }
+      case "tplGym": {
+        const gyms = tplGyms({ gyms: d.gyms });
+        d.gyms = gyms.includes(v) ? gyms.filter((g) => g !== v) : tplGyms({ gyms: gyms.concat(v) });
+        scheduleRender();
+        break;
+      }
+      case "tplHints":
+        d.hints = v === "tpl" ? "tpl" : "last";
+        scheduleRender();
+        break;
+      case "tplOrder":
+        sheetTplOrder();
+        break;
+      case "tplOther":
+        tplOther = true;
+        scheduleRender();
+        break;
+      case "tplHid":
+        tplHid = !tplHid;
+        scheduleRender();
+        break;
+      // skrýt / zobrazit šablonu (F2-12); z úpravy šablony se po změně vrací na úvod (jako archEx u cviku)
+      case "tplHide": {
+        if (!S.templates[v]) break;
+        const was = !!S.templates[v].hidden;
+        const items = Object.assign({}, S.templates);
+        items[v] = Object.assign({}, items[v]);
+        if (was) {
+          delete items[v].hidden;
+        } else {
+          items[v].hidden = true;
+        }
+        put("config/templates", { items });
+        closeSheet(); // z panelu ⋯ na úvodu (F2-13)
+        if (S.route === "edit") {
+          tplLeave();
+        }
+        toast(was ? "Šablona je znovu mezi šablonami" : "Šablona skrytá");
+        break;
+      }
+      case "delTpl":
+        confirmSheet(
+          "Smazat šablonu?",
+          "Šablona „" + esc(d.title) + "“ se smaže. Tréninky podle ní zůstanou.",
+          "Smazat",
+          "delTplOk",
+        );
+        break;
+      case "delTplOk": {
+        tplDelete(S.editDraft.id);
+        closeSheet();
+        tplLeave();
+        break;
+      }
+      case "histGym":
+        S.histGym = v;
+        S.histLimit = 40;
+        scheduleRender();
+        break;
+      case "histView":
+        S.histView = v;
+        lsSet("histView", v);
+        scheduleRender();
+        break;
+      case "calM":
+        calShift(+v);
+        break;
+      case "calDay":
+        sheetCalDay(v);
+        break;
+      case "calActive":
+        go("train");
+        break;
+      // plánované tréninky (F4-07)
+      case "planNew":
+        sheetPlan(v, true, false);
+        break;
+      case "planDay":
+        sheetPlanDay(v);
+        break;
+      case "calPlan":
+        sheetPlanDay(t.dataset.k, true, true);
+        break;
+      case "planGym":
+        planGym = v;
+        planOther = false;
+        sheetPlan(t.dataset.k, false, false, true);
+        break;
+      case "planOther":
+        planOther = true;
+        sheetPlan(t.dataset.k, false, false, true);
+        break;
+      case "planPick": {
+        const k = t.dataset.k;
+        planSet(k, { tplId: v, gymId: planGym });
+        closeSheet();
+        toast("Naplánováno: " + S.templates[v].name + ", " + fmtDay(planDay(k)));
+        break;
+      }
+      case "planStart":
+        planStart(v);
+        break;
+      case "planChange":
+        sheetPlan(v, true, true);
+        break;
+      case "planReplan":
+        planReplan(v);
+        break;
+      case "planDel":
+        planSet(v, null);
+        closeSheet();
+        toast("Plán zrušený");
+        break;
+      case "planMove":
+        planMove(v);
+        break;
+      // Zpět ze stránky tréninku znovu otevře výběr dne (navFrame si pamatuje otevřený panel)
+      case "calW":
+        openWorkout({ id: v, mk: t.dataset.m });
+        break;
+      case "calBody":
+        sheetBody(v, { lv: 2, back: () => sheetCalDay(t.dataset.k, true) });
+        break;
+      case "histMore":
+        S.histLimit = (S.histLimit || 40) + 40;
+        scheduleRender();
+        break;
+      case "wAgain":
+        sheetAgain(Object.assign({ id: v, mk: t.dataset.m }, S.months[t.dataset.m][v]));
+        break;
+      case "againGym": {
+        if (!again) break;
+        again.gym = v;
+        document
+          .querySelectorAll('[data-act="againGym"]')
+          .forEach((c) => c.setAttribute("aria-pressed", c.dataset.v === v));
+        const el = document.getElementById("againInfo");
+        if (el) {
+          el.innerHTML = againInfo();
+        }
+        break;
+      }
+      case "againBack":
+        navBack();
+        break;
+      case "againOk":
+        if (again && S.active) {
+          sheetRun({ again }); // během tréninku se nejdřív zeptá, co s ním (F2-09)
+        } else if (again) {
+          startAgain();
+        }
+        break;
+      // porovnání v souhrnu: stránka minulého tréninku, Zpět vrátí na tento
+      case "prevW":
+        if (S.months[t.dataset.m] && S.months[t.dataset.m][v]) {
+          openWorkout({ id: v, mk: t.dataset.m });
+        }
+        break;
+      case "openW":
+        openWorkout({ id: v, mk: t.dataset.m });
+        break;
+      case "wShare": {
+        const x = S.months[t.dataset.m] && S.months[t.dataset.m][v];
+        if (x) {
+          shareOpen(Object.assign({ id: v, mk: t.dataset.m }, x));
+        }
+        break;
+      }
+      case "shrOpt":
+        shrOpt(t.dataset.k, v);
+        break;
+      case "shrFig":
+        if (shr) {
+          shr.fig = !shr.fig;
+          t.setAttribute("aria-pressed", shr.fig);
+          shrSavePrefs();
+          shrRender();
+        }
+        break;
+      case "shrPhotoDel":
+        shrPhotoDel();
+        break;
+      case "shrSave":
+        shrSave();
+        break;
+      case "shrShare":
+        shrShare();
+        break;
+      case "shrFullBack":
+        navBack();
+        break;
+      case "wBack":
+        navBack();
+        break;
+      case "editW": {
+        const w = Object.assign({ id: v, mk: t.dataset.m }, S.months[t.dataset.m][v]);
+        S.editDraft = workoutToDraft(w, "edit");
+        goEdit();
+        break;
+      }
+      case "wToTpl": {
+        const w = S.months[t.dataset.m][v];
+        // fitko tréninku (F2-02; s jedním fitkem bez přiřazení)
+        const gyms = S.cfg.gyms.length > 1 && gymOn(w.gymId) ? [w.gymId] : []; // archivované ne (F2-06)
+        // stejný název ve stejném fitku: zeptat se (F2-08)
+        const clash = tplClash(w.title, gyms, null);
+        if (clash.length) {
+          sheetTplClash(w, gyms, clash[0]);
+          break;
+        }
+        tplFromWorkout(w, tplClean(w.title) || "Trénink", gyms);
+        break;
+      }
+      case "tplAskNew":
+        if (tplAsk) {
+          tplFromWorkout(tplAsk.w, tplAsk.name, tplAsk.gyms);
+        }
+        break;
+      case "tplAskOver": {
+        if (!tplAsk || !S.templates[tplAsk.id]) break;
+        const items = Object.assign({}, S.templates);
+        // jen cviky a série, název, fitka a pořadí šablony zůstanou (jako Aktualizovat šablonu)
+        // pauzy cviků (F1-21) zůstanou z přepisované šablony
+        items[tplAsk.id] = Object.assign({}, items[tplAsk.id], {
+          items: tplItemsOf(tplAsk.w, items[tplAsk.id]),
+        });
+        put("config/templates", { items });
+        closeSheet();
+        toast("Šablona „" + items[tplAsk.id].name + "“ přepsána");
+        break;
+      }
+      case "tplAskBack":
+        navBack();
+        break;
+      case "statsGym":
+        S.statsGym = v;
+        scheduleRender();
+        break;
+      case "statsMetric":
+        S.statsMetric = v;
+        scheduleRender();
+        break;
+      // přepnutí části Statistik (F3-13): nová část začíná nahoře
+      case "statsPart":
+        S.statsPart = v;
+        lsSet("statsPart", v);
+        render.keepScroll = false;
+        scheduleRender();
+        window.scrollTo(0, 0);
+        break;
+      case "exSort":
+        S.exSort = v;
+        lsSet("exSort", v);
+        scheduleRender();
+        break;
+      case "exMore":
+        S.exLimit = (S.exLimit || 60) + 60;
+        scheduleRender();
+        break;
+      // ze záložky Cviky Statistiky, když má cvik záznam, jinak Popis (F3-28); odjinud (trénink, historie,
+      // statistiky) Statistiky
+      case "openEx": {
+        const f = S.route !== "exd" ? navFrame() : null;
+        closeSheet();
+        S.exPart = t.dataset.p || (S.route === "ex" && !(derive().byEx[v] || []).length ? "info" : "stats");
+        S.exDetail = v;
+        S.detailGym = exOpenGym(v); // fitko tréninku, odkud se přišlo (F3-34)
+        S.exHistLimit = 25;
+        if (f) {
+          S.prevRoute = S.route;
+          S.nav.push(f);
+        }
+        go("exd");
+        break;
+      }
+      case "exBack":
+        navBack();
+        break;
+      case "setOpen":
+        setPageOpen(v);
+        break;
+      case "setBack":
+        navBack();
+        break;
+      case "exPart":
+        S.exPart = v;
+        render.keepScroll = false;
+        scheduleRender();
+        window.scrollTo(0, 0);
+        break;
+      case "exlSort":
+        S.exlSort = v;
+        lsSet("exlSort", v);
+        S.exlLimit = 0;
+        scheduleRender();
+        break;
+      case "exlHid":
+        S.exlHid = !S.exlHid;
+        S.exlLimit = 0;
+        scheduleRender();
+        break;
+      case "exlMore":
+        S.exlLimit = (S.exlLimit || 100) + 100;
+        scheduleRender();
+        break;
+      case "exlNew":
+        exEdOpen(null, "list");
+        break;
+      case "detailMetric":
+        S.detailMetric = v;
+        scheduleRender();
+        break;
+      case "detailRange":
+        S.detailRange = v;
+        scheduleRender();
+        break;
+      case "detailGym":
+        S.detailGym = v;
+        scheduleRender();
+        break;
+      case "exHistMore":
+        S.exHistLimit += 25;
+        scheduleRender();
+        break;
+      case "bodyMetric":
+        S.bodyMetric = v;
+        scheduleRender();
+        break;
+      case "bodyRange":
+        S.bodyRange = v;
+        scheduleRender();
+        break;
+      case "bodyMore":
+        S.bodyLimit = (S.bodyLimit || 30) + 30;
+        scheduleRender();
+        break;
+      case "addBody":
+        sheetBody(null);
+        break;
+      case "editBody":
+        sheetBody(v);
+        break;
+      case "saveBody": {
+        if (BODY_F.some(([k]) => inputProblem("b-" + k))) break;
+        // F4-18: skutečný čas měření (prázdný čas = původní, u nového měření teď); úprava zachová ostatní
+        // pole měření (shId z importu ze Samsung Health, F4-13) a beze změny data a času i čas na sekundy
+        const old = v ? S.body[v] : null;
+        const day = document.getElementById("b-date").value;
+        const hm = document.getElementById("b-time").value || toTimeInput(old ? old.date : Date.now());
+        const o = Object.assign({}, old);
+        if (old && day === toDateInput(old.date) && hm === toTimeInput(old.date)) {
+          o.date = old.date;
+        } else {
+          o.date = new Date(day + "T" + hm).getTime() || Date.now();
+        }
+        for (const [k] of BODY_F) {
+          delete o[k];
+          const n = num(document.getElementById("b-" + k).value);
+          if (isFinite(n)) {
+            o[k] = n;
+          }
+        }
+        delete o.note;
+        // prázdné BMI dostane předvyplněnou hodnotu z hmotnosti a výšky (F3-33)
+        const autoBmi = num(document.getElementById("b-bmi").dataset.auto);
+        if (!isFinite(o.bmi) && isFinite(autoBmi)) {
+          o.bmi = autoBmi;
+        }
+        const note = document.getElementById("b-note").value.trim();
+        if (note) {
+          o.note = note;
+        }
+        if (!o.note && !BODY_F.some(([k]) => k in o)) {
+          toast("Vyplň aspoň jednu hodnotu.");
+          break;
+        }
+        if (!old) {
+          o.src = "app"; // F4-19: nové měření zapsané v deníku
+        }
+        const items = Object.assign({}, S.body);
+        items[v || uid("b")] = o;
+        put("body/all", { items });
+        closeSheet();
+        toast("Měření uloženo");
+        break;
+      }
+      case "delBody": {
+        const items = Object.assign({}, S.body);
+        delete items[v];
+        put("body/all", { items });
+        closeSheet();
+        break;
+      }
+      case "addGym":
+        sheetGym(null);
+        break;
+      case "editGym":
+        sheetGym(v);
+        break;
+      case "gymCol":
+        for (const x of document.querySelectorAll(".cpick button")) {
+          const on = x === t;
+          x.setAttribute("aria-checked", on);
+          x.querySelector("i").innerHTML = on ? IC.check : "";
+        }
+        break;
+      case "saveGym": {
+        const name = document.getElementById("g-name").value.trim();
+        if (!name) {
+          toast("Zadej název fitka.");
+          break;
+        }
+        const cfg = JSON.parse(JSON.stringify(S.cfg));
+        let id = v;
+        const pk = document.querySelector(".cpick [aria-checked=true]"),
+          col = pk ? +pk.dataset.v : 0;
+        if (id) {
+          const g = cfg.gyms.find((g) => g.id === id);
+          g.name = name;
+          if (col) {
+            g.col = col;
+          }
+        } else {
+          id = uid("g");
+          cfg.gyms.push({ id, name, col: col || freeGymCol(cfg.gyms) });
+        }
+        if (document.getElementById("g-def").checked) {
+          cfg.defaultGymId = id;
+        }
+        put("config/main", cfg);
+        closeSheet();
+        break;
+      }
+      case "gymArch": {
+        const why = gymBlock(v);
+        if (why) {
+          toast(why);
+          break;
+        }
+        gymArchive(v, true);
+        closeSheet();
+        toast("Fitko archivované.", null, () => gymArchive(v, false));
+        break;
+      }
+      case "gymUnarch":
+        gymArchive(v, false);
+        closeSheet();
+        toast("Fitko obnovené.");
+        break;
+      case "delGym": {
+        const why = gymBlock(v);
+        if (why) {
+          toast(why);
+          break;
+        }
+        // fitko s tréninky: zeptat se, co s nimi (F2-06)
+        if (gymCounts()[v]) {
+          const to = gymsOn().find((g) => g.id !== v);
+          gymDel = { id: v, mode: "move", to: to ? to.id : null };
+          sheetGymDel();
+          break;
+        }
+        gymRemove(v, null);
+        closeSheet();
+        break;
+      }
+      case "gymDelMode":
+        gymDel.mode = v;
+        sheetGymDel(true);
+        break;
+      case "gymDelTo":
+        gymDel.to = v;
+        sheetGymDel(true);
+        break;
+      case "gymDelGo":
+        gymDelDo(v === "!");
+        break;
+      case "restAlert":
+        put("config/main", Object.assign({}, S.cfg, { restAlert: v }));
+        restPost();
+        break;
+      case "stwView":
+        put("config/main", Object.assign({}, S.cfg, { stwView: v === "full" ? "full" : "bar" }));
+        break;
+      case "restOver":
+        put("config/main", Object.assign({}, S.cfg, { restOver: t.checked }));
+        break;
+      case "restOn":
+        put("config/main", Object.assign({}, S.cfg, { restOn: t.checked }));
+        if (!t.checked) {
+          restStop(); // běžící pauzu vypnutí hned ukončí
+        }
+        break;
+      case "stepper":
+        put("config/main", Object.assign({}, S.cfg, { stepper: t.checked }));
+        break;
+      case "progAll":
+        put("config/main", Object.assign({}, S.cfg, { progAll: t.checked }));
+        break;
+      case "progOn":
+        put("config/main", Object.assign({}, S.cfg, { progOn: t.checked })); // F4-15
+        break;
+      case "progSets":
+        put("config/main", Object.assign({}, S.cfg, { progSets: v === "first" ? "first" : "all" }));
+        break;
+      case "effort":
+        put("config/main", Object.assign({}, S.cfg, { effort: v }));
+        break;
+      // kopírování pro coache (F4-12)
+      case "coach":
+        put("config/main", Object.assign({}, S.cfg, { coach: t.checked }));
+        if (!t.checked) {
+          toast("Vypnuto. Zapnout jde 7 klepnutími na kartu Verze aplikace v O aplikaci.");
+        }
+        break;
+      case "verTap":
+        verTap();
+        break;
+      case "coachTap":
+        coachSlide(t);
+        break;
+      case "coachClr":
+        coachClear(t);
+        break;
+      case "coachFold": {
+        const box = t.closest(".coach");
+        box.classList.toggle("fold");
+        t.setAttribute("aria-expanded", String(!box.classList.contains("fold")));
+        break;
+      }
+      case "cxOpen": // F4-18: Export pro coache
+        cxOpen();
+        break;
+      case "cxPer":
+        cxPer(v);
+        break;
+      case "cxCopy":
+        cxCopy();
+        break;
+      case "cxShare":
+        cxShare();
+        break;
+      case "screenOn":
+      case "screenDim":
+        put("config/main", Object.assign({}, S.cfg, { [act]: t.checked }));
+        wakeSync();
+        break;
+      case "restNotify":
+        put("config/main", Object.assign({}, S.cfg, { restNotify: t.checked }));
+        if (t.checked) {
+          notifAsk();
+          exactOffer(); // nativní appka s povolenými oznámeními: chybí-li přesný čas, nabídnout ho (F6-02)
+        }
+        restPost();
+        break;
+      case "notifAsk":
+        notifAsk();
+        break;
+      case "exactAsk":
+        // nativní appka: nastavení Androidu „Budíky a připomenutí“ (F6-02)
+        closeSheet();
+        window.NATIVNI.notif.exactAsk();
+        break;
+      case "recCelEx":
+      case "recCelW":
+      case "stagOn":
+        put("config/main", Object.assign({}, S.cfg, { [act]: t.checked }));
+        break;
+      case "stagN":
+        put("config/main", Object.assign({}, S.cfg, { stagN: +v }));
+        break;
+      case "recSnd":
+        put("config/main", Object.assign({}, S.cfg, { recSnd: v }));
+        if (v !== "off") {
+          celSound(true, v);
+        }
+        break;
+      case "recSndPlay":
+        celSound(true, v);
+        break;
+      case "recTry":
+        celebrate([{ exId: "", type: "e1rm", v: 100, prev: 95 }], "Ukázka");
+        break;
+      case "notifTest":
+        restTest();
+        break;
+      case "evLog":
+        sheetEvLog();
+        break;
+      case "evLogCopy":
+        evLogCopy();
+        break;
+      case "fakeAdd":
+        fakeAdd();
+        break;
+      case "fakeDel":
+        fakeRemove();
+        break;
+      case "evLogClear":
+        evLogClear();
+        break;
+      case "theme":
+        setTheme(v);
+        scheduleRender();
+        break;
+      case "fontScale":
+        setFontScale(v);
+        scheduleRender();
+        break;
+      case "export":
+        doExport();
+        break;
+      case "bkShare":
+        bkShare();
+        break;
+      case "natMove":
+        natMove();
+        break;
+      case "natMoveOk":
+        natMoveOk();
+        break;
+      case "natBack":
+        natBack();
+        break;
+      case "importOk":
+        doImport(v);
+        break;
+      case "shSrc": // F4-13: zdroj měření v panelu importu ze Samsung Health
+        shSrcSet(v, t.checked);
+        break;
+      case "shGo":
+        shApply(v);
+        break;
+      case "importGo":
+        confirmImport(v);
+        break;
+      case "bkNow":
+        makePoint("manual").then((ok) => {
+          if (ok) {
+            toast("Bod obnovy vytvořen");
+          }
+        });
+        break;
+      case "bkRestore":
+        openPoint(v);
+        break;
+      case "pbRestore":
+        pbRestore();
+        break;
+      case "bkSave":
+        savePoint(v);
+        break;
+      case "bkNoHelp":
+        lsSet("bkHelpOff", true);
+        closeSheet();
+        break;
+      case "help":
+        sheetHelp(v);
+        break;
+      case "updCheck":
+        checkUpdate();
+        break;
+      case "copyMain":
+        confirmSheet(
+          "Zkopírovat data z vydané verze?",
+          "Data této testovací verze se nahradí kopií dat z vydané verze v tomto telefonu. " +
+            "Vydaná verze se nijak nezmění.",
+          "Zkopírovat",
+          "copyMainOk",
+        );
+        break;
+      case "copyMainOk":
+        closeSheet();
+        copyFromMain();
+        break;
+      case "testDel":
+        confirmSheet(
+          "Smazat data testovacích verzí?",
+          "Smažou se tréninky a nastavení ze všech testovacích verzí v tomto telefonu. " +
+            "Data vydané verze zůstanou.",
+          "Smazat",
+          "testDelOk",
+        );
+        break;
+      case "testDelOk":
+        closeSheet();
+        deleteTestData();
+        break;
+    }
+  }
+  /* F1-11: Enter (✓ na klávesnici) v jednořádkovém textovém poli (hledání, názvy, poznámka u měření) schová
+     klávesnici, napsaný text zůstane. Od F3-33 i v číselných políčkách mimo sérii (hmotnost a výška
+     v Nastavení, formulář měření, délka tréninku, rozsah opakování), od F1-25 tam Enter přechází na další
+     číselné políčko (numEnter). Políčka série (.cell) řeší setEnter, datum a čas beze změny. */
+  // karta jako tlačítko (div role="button" kvůli ⋯ uvnitř, F2-13): Enter a mezerník = klepnutí
+  document.addEventListener("keydown", (ev) => {
+    const t = ev.target;
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    if (!t.dataset || !t.dataset.act || t.getAttribute("role") !== "button") return;
+    ev.preventDefault();
+    t.click();
+  });
+  document.addEventListener("keydown", (ev) => {
+    const t = ev.target;
+    if (ev.key !== "Enter" || t.tagName !== "INPUT" || t.classList.contains("cell")) return;
+    if (t.dataset.num) return; // číselná políčka řeší numEnter (F1-25)
+    if (!["text", "search", "url", "email"].includes(t.type)) return;
+    ev.preventDefault();
+    t.blur();
+  });
+  /* ---------- TEXTY A DROBNOSTI (F3-24) ----------
+     Drobnosti z UX auditu 27. 9. 2026 bez změny dat: počty přes plural (karta šablony, Historie, Statistiky),
+     záložka Cviky ukazuje počet podle hledání a filtrů (vExList), úvod bez fitka tlačítko Přidat fitko,
+     nadpis rozdělaného tréninku „Trénink“, Historie „N dní od tréninku“ / „Dnes trénink“. Souhrn po uložení
+     bez hlášky „Trénink uložen“ (zůstává jen u Dokončit a začít nový) a bez dlaždice Rekordy, když je 0
+     a předchozí běh rekord neměl (sumKpis, třída k3 = 3 dlaždice se stejným písmem jako 4). Štítek fitka
+     u tréninku přes gymPill: trénink bez fitka štítek nemá, trénink ze smazaného fitka „Smazané fitko“
+     (gymName) bez barevné tečky.
+     Klávesa Enter v políčkách série (setEnter): Gboard v číselné klávesnici sám do dalšího políčka nepřejde
+     (ověřeno v telefonu), proto políčka mají enterkeyhint (next / done) a Enter přesune kurzor do dalšího
+     políčka stejné série, v posledním (nebo před políčkem s krokovačem) schová klávesnici. Se zapnutým
+     RIR/RPE (F4-04) a nevyplněnou hodnotou série pak otevře panel RIR/RPE (sheetEffort). Od F1-23 Enter
+     mimo rozdělaný trénink přechází i do další série (sekce RYCHLÉ PŘEPISOVÁNÍ ČÍSEL V SÉRIÍCH). */
+  /* ---------- RYCHLÉ PŘEPISOVÁNÍ ČÍSEL V SÉRIÍCH (F1-23) ----------
+     Úprava šablony byla nepohodlná: klepnutí do políčka dalo kurzor před nebo za číslo, staré číslo se muselo
+     mazat a Enter na posledním políčku série klávesnici zavřel.
+     Klepnutí (focus) do políčka série (.cell, ne jen ke čtení s krokovačem) políčko zprázdní a starou hodnotu
+     ukáže šedě místo předvyplnění (cellClear), napsané číslo ji nahradí. Odchod bez psaní starou hodnotu vrátí
+     (cellRestore), data se mění jen psaním (input), jako dřív. Po prvním psaní (cellTyped) se značky zruší, takže
+     smazání napsaného čísla políčko opravdu vyprázdní. Políčko s chybou (červený rámeček .bad, sem vede
+     focusInput při kontrole čísel) se nezprázdní, aby byla chyba vidět. Platí všude (šablona, úprava uloženého
+     tréninku, rozdělaný trénink při psaní klávesnicí).
+     Enter (setEnter): v posledním políčku série mimo rozdělaný trénink (šablona, úprava uloženého tréninku)
+     přejde na první políčko další série stejného cviku (enterkeyhint next), na poslední sérii cviku klávesnici
+     schová. Nevyplněné RIR/RPE má přednost (panel sheetEffort). V rozdělaném tréninku beze změny: série má
+     dostat ✓, skok dál by ho přeskočil. Stará hodnota je během psaní v input.cellOld, původní předvyplnění
+     v input.cellPh. Překreslení stránky (render) vrací kurzor do políčka s cellKeep a zprázdnění zopakuje,
+     jen když bylo políčko před překreslením zprázdněné (napsané číslo zůstane). */
+  function setEnter(ev) {
+    const t = ev.target;
+    if (ev.key !== "Enter" || t.tagName !== "INPUT" || !t.classList.contains("cell")) return;
+    ev.preventDefault();
+    const tr = t.closest("tr");
+    const row = [...tr.querySelectorAll("input.cell")];
+    const next = row[row.indexOf(t) + 1];
+    if (next && !next.readOnly) {
+      next.focus();
+      next.select();
+      return;
+    }
+    // nevyplněné RIR/RPE série (tlačítko bez hodnoty): rovnou panel s výběrem
+    if (tr.querySelector('.effb[data-act="eff"]:not(.on)')) {
+      t.blur();
+      sheetEffort(+t.dataset.i, +t.dataset.j);
+      return;
+    }
+    const d = curDraft();
+    const below = d && d.mode !== "active" ? cellBelow(tr) : null;
+    if (below) {
+      below.focus();
+      return;
+    }
+    t.blur();
+  }
+  document.addEventListener("keydown", setEnter);
+  // první políčko série pod řádkem tr ve stejném cviku, jinak null
+  function cellBelow(tr) {
+    for (let row = tr.nextElementSibling; row; row = row.nextElementSibling) {
+      const input = row.querySelector("input.cell");
+      if (input) return input.readOnly ? null : input;
+    }
+    return null;
+  }
+  // klepnutí do políčka: stará hodnota šedě, políčko prázdné (data beze změny)
+  function cellClear(input) {
+    if (input.readOnly || input.value === "" || input.classList.contains("bad")) return;
+    input.cellOld = input.value;
+    input.cellPh = input.placeholder;
+    input.placeholder = input.value;
+    input.value = "";
+    input.numLast = "";
+  }
+  // první psaní: stará hodnota se už nevrací, předvyplnění zpět (hintsRefresh ho pak může obnovit)
+  function cellTyped(input) {
+    if (input.cellOld == null) return;
+    input.placeholder = input.cellPh;
+    input.cellOld = null;
+  }
+  // odchod bez psaní: vrátit starou hodnotu
+  function cellRestore(input) {
+    if (input.cellOld == null) return;
+    input.value = input.cellOld;
+    input.numLast = input.cellOld;
+    cellTyped(input);
+  }
+  document.addEventListener("focusin", (ev) => {
+    if (isNumField(ev.target) && !cellKeep) {
+      cellClear(ev.target);
+    }
+  });
+  document.addEventListener("focusout", (ev) => {
+    if (isNumField(ev.target)) {
+      cellRestore(ev.target);
+    }
+  });
+  /* ---------- PŘEPISOVÁNÍ ČÍSEL VE FORMULÁŘÍCH (F1-25) ----------
+     Číselná políčka mimo série (Nastavení → Tělo: hmotnost a výška, rozsah opakování návrhu progrese
+     v Nastavení i v Upravit cvik, formulář měření těla, Délka v úpravě tréninku) se chovají jako políčka
+     série (F1-23): klepnutí políčko zprázdní a starou hodnotu ukáže šedě (cellClear), odchod bez psaní
+     ji vrátí (cellRestore), napsané číslo ji nahradí (cellTyped). Platí pro každé políčko s data-num
+     (isNumField), takže nové číselné políčko se tak chová samo.
+     Enter (numEnter) přejde na další číselné políčko ve stejné kartě nebo panelu (numNext), v posledním
+     schová klávesnici. Textová políčka (poznámka u měření) se přeskakují. Políčko proto v HTML dostává
+     enterkeyhint next (další číslo v kartě je) / done (poslední). Políčka série (.cell) dál řeší setEnter. */
+  const isNumField = (t) => t && t.tagName === "INPUT" && !!t.dataset.num;
+  // další číselné políčko (ne série) ve stejné kartě nebo panelu, jinak null
+  function numNext(input) {
+    const box = input.closest(".card, .sheet-b");
+    if (!box) return null;
+    const all = [...box.querySelectorAll("input[data-num]:not(.cell)")];
+    const rest = all.slice(all.indexOf(input) + 1);
+    return rest.find((x) => !x.readOnly && !x.disabled && !x.closest("[inert]")) || null;
+  }
+  function numEnter(ev) {
+    const t = ev.target;
+    if (ev.key !== "Enter" || !isNumField(t) || t.classList.contains("cell")) return;
+    ev.preventDefault();
+    const next = numNext(t);
+    if (next) {
+      next.focus();
+      return;
+    }
+    t.blur();
+  }
+  document.addEventListener("keydown", numEnter);
+  document.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t.id === "warmPct") {
+      document.getElementById("warmPctV").textContent = t.value + " %";
+      return;
+    } // F1-08: posuvník ukazuje procenta hned, uloží se po puštění (change)
+    if (restSliderShow(t) && t.id !== "x-rest") return; // F1-09, F1-21: délka pauzy hned při tažení
+    if (t.id === "stwPre") {
+      document.getElementById("stwPreV").textContent = stwPreTxt(+t.value);
+      return;
+    } // F1-24: odpočet před startem stopek hned při tažení
+    if (isNumField(t)) {
+      cellTyped(t);
+    } // F1-23, F1-25: napsané číslo nahradilo starou hodnotu
+    if (t.dataset && t.dataset.num) {
+      numInput(t);
+    } // F1-10: jen povolené znaky, červený rámeček
+    if (t.id === "b-weight") {
+      bmiHintRefresh();
+    } // F3-33: předvyplnění BMI podle hmotnosti
+    if (t.id === "x-url" && t.classList.contains("bad") && !urlProblem(t.value)) {
+      urlMark(t);
+    } // F0-09: opravený odkaz už není červený
+    if (exEd && t.id && t.id.startsWith("x-")) {
+      exEdCollect();
+      if (t.id === "x-name" || t.id === "x-cz") {
+        exNameMark();
+      } // F3-17: shoda názvu s jiným cvikem hned při psaní
+    } // F3-14: formulář cviku přežije překreslení stránky
+    const f = t.dataset && t.dataset.f;
+    if (!f) return;
+    const d = curDraft();
+    const i = +t.dataset.i,
+      j = +t.dataset.j;
+    if (d && t.dataset.i !== undefined) {
+      edMark(d, d.ex[i]);
+    } // F1-11: psaní v kartě cviku
+    if (f === "kg" || f === "reps" || f === "sec" || f === "km" || f === "m") {
+      const set = d.ex[i].sets[j];
+      set[f] = t.value;
+      delete set.jumpOk; // změněná hodnota = znovu zkontrolovat velký skok
+      touchDraft();
+      hintsRefresh(d, i); // F1-13: série pod ní můžou brát předvyplnění z této
+      return;
+    }
+    // Pro coache (F4-12)
+    if (f === "coach") {
+      coachSlide(t);
+      return;
+    }
+    if (f === "coachWhere") {
+      d.pain = Object.assign({}, d.pain, { where: t.value });
+      touchDraft();
+      return;
+    }
+    if (f === "wNote") {
+      d.note = t.value;
+      touchDraft();
+      return;
+    }
+    if (f === "title") {
+      d.title = t.value;
+      touchDraft();
+      if (d.mode === "template") {
+        tplNameMark(d);
+      } // F2-08: shoda názvu šablony hned při psaní
+      return;
+    }
+    if (f === "finEnd") {
+      const a = S.active;
+      if (a) {
+        const e = finEndValue(a);
+        const inf = document.getElementById("fin-info");
+        if (e && inf) {
+          inf.innerHTML = finInfo(a, e, lastSetAt(a));
+        }
+      }
+      return;
+    }
+    if (f === "bodyWeight") {
+      const n = num(t.value);
+      if (isFinite(n) && numCheck("bw", t.value).ok) {
+        clearTimeout(S._bwT);
+        S._bwT = setTimeout(() => put("config/main", Object.assign({}, S.cfg, { bodyWeight: n })), 700);
+      }
+      return;
+    }
+    if (f === "height") {
+      // výška (F3-33): prázdné políčko výšku smaže
+      const res = numCheck("height", t.value);
+      if (res.ok) {
+        const height = isFinite(res.v) ? res.v : null;
+        clearTimeout(S._htT);
+        S._htT = setTimeout(() => put("config/main", Object.assign({}, S.cfg, { height })), 700);
+      }
+      return;
+    }
+    if (f === "exSearch") {
+      S.exSearch = t.value;
+      scheduleRender();
+      return;
+    }
+    if (f === "exlQ") {
+      S.exlQ = t.value;
+      S.exlLimit = 0;
+      scheduleRender();
+      return;
+    }
+    if (f === "pickQ") {
+      pick.q = t.value;
+      pick.limit = 0;
+      refreshPickList();
+      return;
+    }
+    if (f === "fsQ") {
+      fs.q = t.value;
+      fs.limit = 0;
+      refreshFs();
+      return;
+    }
+    if (f === "fpQ" && fp) {
+      fp.q = t.value;
+      refreshFp();
+      return;
+    }
+  });
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    const f = t.dataset && t.dataset.f;
+    const d = curDraft();
+    if (t.dataset && t.dataset.num) {
+      // po opuštění políčka jednotná podoba („85“ → „1:25“), u série i v rozdělaném tréninku
+      const norm = numNormalize(t.dataset.num, t.value);
+      if (norm !== t.value) {
+        t.value = norm;
+        t.numLast = norm;
+        if (d && (f === "kg" || f === "reps" || f === "sec" || f === "km" || f === "m")) {
+          d.ex[+t.dataset.i].sets[+t.dataset.j][f] = norm;
+          touchDraft();
+        }
+      }
+      const msg = numMsg(t);
+      if (msg) {
+        toast(msg);
+      } // u políčka s červeným rámečkem krátká nápověda
+    }
+    if (t.id === "impFile") {
+      readImport(t);
+      return;
+    }
+    if (t.id === "cx-from" || t.id === "cx-to") {
+      cxDate(); // F4-18
+      return;
+    }
+    if (t.id === "shFileIn" || t.id === "shDevIn") {
+      shRead(t); // F4-13, profil zařízení F4-19
+      return;
+    }
+    if (f === "coachEx" && d) {
+      d.pain = Object.assign({}, d.pain, { exId: t.value });
+      touchDraft();
+      return;
+    } // cvik u bolesti (F4-12)
+    if (f === "prog") {
+      // výchozí rozsah opakování pro návrh progrese (F4-01): uloží se jen platná dvojice
+      const res = progRangeCheck(
+        document.getElementById("progMin").value,
+        document.getElementById("progMax").value,
+      );
+      document.getElementById("prog-msg").textContent = res.msg || "";
+      if (res.range) {
+        put("config/main", Object.assign({}, S.cfg, { progMin: res.range[0], progMax: res.range[1] }));
+      }
+      return;
+    }
+    if (t.id === "warmPct") {
+      put("config/main", Object.assign({}, S.cfg, { warmPct: +t.value }));
+      return;
+    }
+    if (t.id === "restWarm" || t.id === "restSec" || t.id === "restSs") {
+      put("config/main", Object.assign({}, S.cfg, { [t.id]: restNorm(t.value) || S.cfg[t.id] }));
+      return;
+    } // F1-09: posuvníky délky pauzy
+    if (t.id === "stwPre") {
+      put("config/main", Object.assign({}, S.cfg, { stwPre: stwNorm(t.value) }));
+      return;
+    } // F1-24: odpočet před startem stopek
+    if (t.id === "phCamIn" || t.id === "phPickIn") {
+      photoFiles(t);
+      return;
+    }
+    if (t.id === "shrPhotoIn") {
+      shrPhoto(t);
+      return;
+    }
+    if (t.id === "x-url") {
+      // odkaz u cviku (F0-09): doplnit https://, neplatný zvýraznit s nápovědou pod polem
+      t.value = urlNormalize(t.value);
+      urlMark(t);
+      exEdCollect();
+      return;
+    }
+    if (f === "xEquip") {
+      const gd = document.getElementById("x-gd");
+      if (gd) {
+        gd.checked = !!GYMDEP_EQUIP[t.value];
+      }
+      exEdCollect();
+      return;
+    }
+    if ((t.id === "x-kind" || t.id === "x-prog") && exEd) {
+      exEdCollect();
+      scheduleRender(); // nápověda pod typem zápisu, návrh progrese (F4-01)
+      return;
+    }
+    if (t.id === "x-gd") {
+      exEdCollect();
+      return;
+    }
+    if (t.id === "x-rest-on") {
+      exEdCollect();
+      scheduleRender(); // vypnutý vypínač = posuvník zešedne a ukáže Výchozí časovač (F1-09)
+      return;
+    }
+    if (t.id === "t-rest-on" || t.id === "t-rest") {
+      tplRestChange(t);
+      return;
+    } // F1-21: pauza cviku v šabloně
+    if (!f || !d) return;
+    if (f === "gymId") {
+      d.gymId = t.value;
+      // fitko rozdělaného tréninku = Kde dnes cvičíš na úvodní obrazovce (F2-09)
+      if (d.mode === "active") {
+        S.selGym = t.value;
+      }
+      touchDraft();
+      scheduleRender();
+    }
+    if (f === "date" || f === "time") {
+      const ds = document.getElementById("ed-date").value,
+        ts = document.getElementById("ed-time").value;
+      const dur = (d.end || d.start) - d.start;
+      const n = new Date(ds + "T" + (ts || "12:00")).getTime();
+      if (isFinite(n)) {
+        d.start = n;
+        d.end = n + dur;
+      }
+    }
+    if (f === "dur") {
+      const m = num(t.value);
+      if (isFinite(m) && numCheck("min", t.value).ok) {
+        d.end = d.start + m * 60000;
+      }
+    }
+  });
+
+  /* ---------- KLÁVESNICE NEZAKRYJE ŘÁDEK SÉRIE (F1-27) ----------
+     V index.html má viewport volbu interactive-widget=resizes-content: s otevřenou klávesnicí Chrome zmenší
+     stránku na místo nad klávesnicí (dřív ji klávesnice jen překryla a řádek série u posledního cviku zůstal
+     schovaný). Pevné prvky dole (lišta se záložkami, pruh pauzy, panely) tím vyjedou nad klávesnici, panel celý
+     i s tlačítky. Aby lišta nebrala místo, appka pozná otevřenou klávesnici (kbSync: okno je výrazně nižší než
+     nejvyšší naměřené při stejné šířce a fokus je v políčku pro psaní, kbEditable) a dá body třídu kb: lišta se
+     záložkami se schová (vždy, na všech obrazovkách), pruh pauzy zůstane těsně nad klávesnicí (css/app.css,
+     body.kb). Při otevření klávesnice appka posune políčko s fokusem na stránce (ne v panelu) doprostřed viditelné
+     části: pojistka, kdyby to Chrome neudělal sám (např. po Napsat z krokovače). Stejný problém měl panel krokovače
+     u posledního cviku (pod řádkem nebylo dost stránky na posun nad panel): kkScroll přidá chybějící místo pod
+     stránku (--kk-room), kkEnd ho po zavření panelu odebere (sekce KROKOVAČ).
+     Pravidla: nový pevný prvek dole musí počítat s body.kb (schovaná lišta má nulový rozměr). V nativní appce
+     (F6-01) řídí zmenšení stránky Android, třída kb platí dál. */
+  const KB_RATIO = 0.8; // klávesnice je otevřená, když okno kleslo pod 80 % plné výšky
+  let kbFullH = window.innerHeight;
+  let kbFullW = window.innerWidth;
+  // otevírá políčko při psaní klávesnici? (zaškrtávátka, datum a čas mají vlastní výběr)
+  function kbEditable(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    if (el.tagName === "TEXTAREA") return !el.readOnly;
+    if (el.tagName !== "INPUT" || el.readOnly) return false;
+    return !/^(checkbox|radio|range|button|submit|reset|color|file|date|time|datetime-local|month|week)$/.test(
+      el.type,
+    );
+  }
+  // zjistí, jestli je otevřená klávesnice, a nastaví třídu kb; při otevření posune políčko do viditelné části
+  function kbSync() {
+    const height = window.innerHeight;
+    if (window.innerWidth !== kbFullW) {
+      // otočení telefonu: plná výška se měří znovu
+      kbFullW = window.innerWidth;
+      kbFullH = height;
+    }
+    kbFullH = Math.max(kbFullH, height);
+    const input = document.activeElement;
+    const open = height < kbFullH * KB_RATIO && kbEditable(input);
+    if (open === document.body.classList.contains("kb")) return;
+    document.body.classList.toggle("kb", open);
+    if (open && !input.closest(".sheet")) {
+      requestAnimationFrame(() => input.scrollIntoView({ block: "center" }));
+    }
+  }
+  window.addEventListener("resize", kbSync);
+  document.addEventListener("focusin", kbSync);
+  // po opuštění políčka až po přesunu fokusu (přechod na další políčko klávesnici nezavře)
+  document.addEventListener("focusout", () => setTimeout(kbSync, 0));
+
+  /* ---------- pravidla zabezpečení (F0-08) ----------
+     Content-Security-Policy v index.html: kód a data jen z vlastních souborů, obrázky navíc
+     z raw.githubusercontent.com a blob: (fotky u cviků z IndexedDB, F2-05). Kód zapsaný přímo v HTML (onclick=, onerror= …) prohlížeč
+     nespustí, proto se události řeší tady posluchači. */
+
+  // náhled fotky z free-exercise-db, který se nenačetl (offline, chybí), se schová
+  document.addEventListener(
+    "error",
+    (ev) => {
+      const t = ev.target;
+      if (t && t.tagName === "IMG" && (t.classList.contains("fsimg") || t.closest(".thumbs"))) {
+        t.style.visibility = "hidden";
+      }
+    },
+    true,
+  );
+  // v testovací verzi a lokálně ukázat, co pravidla zablokovala (do záznamu událostí to píše vždy js/zaznam.js)
+  document.addEventListener("securitypolicyviolation", (ev) => {
+    if (!DEV) return;
+    const what = !ev.blockedURI || ev.blockedURI === "inline" ? "kód přímo v HTML" : ev.blockedURI;
+    toast("Zabezpečení zablokovalo: " + ev.effectiveDirective + " " + what);
+    console.warn("CSP:", ev.effectiveDirective, what, ev.sourceFile + ":" + ev.lineNumber);
+  });
+
+  /* ---------- tlačítko Zpět (F0-06) ----------
+     Každý stisk systémového Zpět (i gesto) = jeden krok navBack() podle toho, co je na obrazovce:
+     panel → o úroveň / zavřít, stránka cviku, úprava a formulář cviku → tam, odkud se přišlo,
+     jiná záložka → Trénink, rozdělaný trénink → úvodní obrazovka (F2-09).
+     Na úvodní obrazovce Tréninku první Zpět jen ukáže hlášku, další appku zavře.
+     Historie prohlížeče jen „počítá kroky“: drží se v ní aspoň tolik záznamů, kolik kroků zbývá
+     na hlavní obrazovku, + 1 pojistka. Záznamy se přidávají jen po klepnutí – Chrome záznamy
+     přidané bez klepnutí může při Zpět přeskočit. Po hlášce na hlavní obrazovce zůstanou kroky
+     „dopředu“ v historii; dotyk (klepnutí i swipe) pojistku obnoví krokem vpřed (history.forward),
+     ten klepnutí nepotřebuje. Rozdělaný trénink Zpět nikdy neukončí.
+     Nový panel přes openSheet(…, noanim, nav): panel v panelu dostane nav.lv (hloubka) a nav.back (krok o
+     úroveň), dynamický panel nav.re (znovu otevření). Nová podstránka (jako exd, edit, exed, wd) uloží místo
+     návratu S.nav.push(navFrame()) a musí se doplnit do navBack, navDepth a go (stránky, které nemažou
+     S.nav). Šipky ← v appce volají navBack(). Záznamy historie se přidávají jen po klepnutí (navEnsure).
+     Nativní appka (F0-20): WebView historii prohlížeče pro Zpět nepoužívá, systémové Zpět (tlačítko i tah
+     od okraje) přijde přes doplněk App v js/nativni.js a volá nativeBack: stejný krok navBack(), na úvodní
+     obrazovce Tréninku první Zpět hláška, druhé aplikaci schová na pozadí (neukončí ji, pauza běží dál).
+     Záznamy historie se tam nepřidávají (navEnsure nic nedělá). */
+  // pos = kde v historii appky jsme, top = nejvyšší existující záznam, wait = čeká se na krok vpřed
+  const Nav = { pos: 0, top: 0, ignore: false, exit: false, wait: false };
+  (function () {
+    const st = history.state;
+    Nav.pos = Nav.top = st && typeof st.zd === "number" ? st.zd : 0;
+    try {
+      history.replaceState({ zd: Nav.pos }, "");
+    } catch (e) {}
+  })();
+  // kolik stisků Zpět zbývá na hlavní obrazovku Tréninku
+  function navDepth() {
+    const r = S.route,
+      top = S.nav[S.nav.length - 1];
+    // Trénink: úvodní obrazovka, s rozdělaným tréninkem o krok víc (← z tréninku na úvodní obrazovku, F2-09)
+    const train = S.active ? 1 : 0;
+    let page = 1 + train; // jiná záložka: jeden krok na Trénink
+    if (r === "exd" || r === "edit" || r === "exed" || r === "wd" || r === "replan") {
+      page = 1 + (top ? top.d : 1);
+    } else if (r === "train") {
+      page = train;
+    } else if (r === "home") {
+      page = 0;
+    } else if (r === "set" && S.setPage) {
+      page = 2 + train; // podstránka Nastavení → rozcestník → Trénink
+    }
+    return (celEl ? 1 : 0) + (stwFullEl ? 1 : 0) + (sheetNav ? sheetNav.lv : 0) + page;
+  }
+  // místo, kam se vrátit ze stránky cviku, z úpravy nebo z formuláře cviku (i s otevřeným panelem a posunem
+  // stránky)
+  function navFrame() {
+    const f = { route: S.route, re: sheetNav && sheetNav.re, y: window.scrollY, d: navDepth() };
+    if (S.route === "wd") {
+      f.wd = S.wDetail; // stránka tréninku (F3-19): který trénink
+    }
+    if (S.route === "exd") {
+      // stránka cviku (F3-49): který cvik, záložka, fitko a počet tréninků v Historii
+      f.exd = { id: S.exDetail, part: S.exPart, gym: S.detailGym, lim: S.exHistLimit };
+    }
+    return f;
+  }
+  // úprava tréninku/šablony má neuložené změny
+  const edChanged = () => !!S.editDraft && JSON.stringify(S.editDraft) !== S.editOrig;
+  // přepnutí záložky dole (zavře stránku cviku i úpravu; Historie vždy na aktuálním měsíci,
+  // Nastavení na rozcestníku)
+  function goTab(v) {
+    S.exDetail = null;
+    S.editDraft = null;
+    S.wDetail = null;
+    S.replan = null;
+    S.planNew = null;
+    exEd = null;
+    if (v === "hist" && S.route !== "hist") {
+      S.calM = 0;
+    }
+    if (v === "ex" && S.route !== "ex" && S.route !== "exd") {
+      S.exlQ = "";
+      S.exlLimit = 0;
+    }
+    if (v === "set") {
+      setPageOpen("");
+      return;
+    }
+    go(v);
+  }
+  // po uložení nebo smazání šablony zpět na úvodní obrazovku (i během tréninku, F2-09), na stejné místo
+  function tplLeave() {
+    S.editDraft = null;
+    const f = S.nav.pop();
+    go(f ? f.route : "train");
+    if (f) {
+      render.restoreY = f.y;
+    }
+  }
+  // otevře úpravu tréninku nebo šablony (S.editDraft) a zapamatuje si, kam se pak vrátit
+  function goEdit() {
+    const f = navFrame();
+    closeSheet();
+    S.nav.push(f);
+    S.editOrig = JSON.stringify(S.editDraft);
+    go("edit");
+  }
+  /* jeden krok zpět: medaile, panel, stránka cviku / tréninku / úprava (tam, odkud se přišlo), podstránka
+     Nastavení → rozcestník, jiná záložka → Trénink;
+     force = zahodit neuložené změny bez ptaní; false = už není kam (hlavní obrazovka Tréninku) */
+  function navBack(force) {
+    if (stwFullEl) {
+      stwStop(); // stopky na celé obrazovce: Zpět = Stop, při odpočtu startu Zrušit (F1-24)
+      return true;
+    }
+    if (celEl) {
+      celClose();
+      return true;
+    }
+    if (sheetNav) {
+      sheetNav.back();
+      return true;
+    }
+    const r = S.route;
+    if (r === "edit" && !force && edChanged()) {
+      confirmSheet("Zahodit změny?", "Neuložené změny se ztratí.", "Zahodit", "edDiscard");
+      return true;
+    }
+    if (r === "exed") {
+      if (!force && exEdChanged()) {
+        confirmSheet("Zahodit změny?", "Neuložené změny cviku se ztratí.", "Zahodit", "exDiscard");
+        return true;
+      }
+      exEdLeave();
+      return true;
+    }
+    if (r === "exd" || r === "edit" || r === "wd" || r === "replan") {
+      const d = S.editDraft;
+      if (r === "edit") {
+        S.editDraft = null;
+      }
+      const f = S.nav.pop();
+      if (!f) {
+        go(
+          r === "edit"
+            ? d && d.mode === "template"
+              ? S.active
+                ? "home"
+                : "train"
+              : "hist"
+            : r === "wd" || r === "replan"
+              ? "hist"
+              : S.prevRoute && S.prevRoute !== "exd" && S.prevRoute !== "edit" && S.prevRoute !== "wd"
+                ? S.prevRoute
+                : "ex",
+        );
+        return true;
+      }
+      if (f.wd) {
+        S.wDetail = f.wd; // zpět na předchozí trénink (porovnání, F3-19)
+      }
+      if (f.exd) {
+        // zpět na předchozí cvik (F3-49)
+        S.exDetail = f.exd.id;
+        S.exPart = f.exd.part;
+        S.detailGym = f.exd.gym;
+        S.exHistLimit = f.exd.lim;
+      }
+      go(f.route);
+      render.restoreY = f.y;
+      if (f.re) {
+        f.re();
+      }
+      return true;
+    }
+    if (r === "set" && S.setPage) {
+      setPageOpen("");
+      return true;
+    }
+    // rozdělaný trénink → úvodní obrazovka, trénink běží dál (F2-09)
+    if (r === "train" && S.active) {
+      go("home");
+      return true;
+    }
+    if (r !== "train" && r !== "home") {
+      go("train");
+      return true;
+    }
+    return false;
+  }
+  // doplní záznamy do historie prohlížeče, aby na každý krok zpět zbyl jeden (jen po klepnutí)
+  function navEnsure() {
+    if (NATIVE) return; // nativní appka historii prohlížeče nepoužívá (nativeBack)
+    if (Nav.exit || Nav.wait || (navigator.userActivation && !navigator.userActivation.isActive)) return;
+    const need = navDepth() + 1;
+    while (Nav.pos < need) {
+      Nav.pos++;
+      Nav.top = Nav.pos;
+      history.pushState({ zd: Nav.pos }, "");
+    }
+  }
+  window.addEventListener("popstate", (ev) => {
+    const p = ev.state && typeof ev.state.zd === "number" ? ev.state.zd : 0;
+    const fwd = p > Nav.pos;
+    Nav.pos = p;
+    if (p > Nav.top) {
+      Nav.top = p;
+    }
+    if (fwd) {
+      Nav.wait = false;
+      navEnsure();
+      return;
+    }
+    if (Nav.ignore) {
+      Nav.ignore = false;
+      return;
+    }
+    saveChipScroll();
+    if (navBack()) return;
+    // hlavní obrazovka Tréninku: zahodit zbylé kroky, další Zpět appku zavře
+    if (p > 0) {
+      Nav.ignore = true;
+      history.go(-p);
+    }
+    Nav.exit = true;
+    toast("Stiskni Zpět ještě jednou pro zavření", "exit");
+  });
+  // systémové Zpět v nativní appce (F0-20): krok zpět, na úvodní obrazovce hláška a podruhé schovat appku
+  function nativeBack() {
+    wakeActivity();
+    dimHide();
+    saveChipScroll();
+    if (Nav.exit) {
+      Nav.exit = false;
+      const t = document.querySelector(".toast.exit");
+      if (t) {
+        t.remove();
+      }
+      window.NATIVNI.minimize();
+      return;
+    }
+    if (navBack()) return;
+    Nav.exit = true;
+    toast("Stiskni Zpět ještě jednou pro zavření", "exit");
+  }
+  if (NATIVE) {
+    window.NATIVNI.onBack = nativeBack;
+  }
+  // dotyk do appky (klepnutí i swipe) po hlášce: schovat ji a obnovit pojistku proti zavření
+  function navRearm() {
+    if (!Nav.exit) return;
+    Nav.exit = false;
+    const t = document.querySelector(".toast.exit");
+    if (t) {
+      t.remove();
+    }
+    if (Nav.top > Nav.pos) {
+      Nav.wait = true;
+      history.forward();
+      setTimeout(() => {
+        if (Nav.wait) {
+          Nav.wait = false;
+          navEnsure();
+        }
+      }, 800);
+    }
+  }
+  document.addEventListener("pointerdown", navRearm, true);
+  document.addEventListener("touchstart", navRearm, { capture: true, passive: true });
+  document.addEventListener("click", navRearm, true);
+  // po klepnutí doplnit kroky (otevřený panel, stránka)
+  document.addEventListener("click", () => navEnsure());
+
+  /* ---------- ROZEPSANÁ STRÁNKA PO RESTARTU (F3-16) ----------
+     Rozepsaný formulář Nový / Upravit cvik (exEd) a rozepsaná úprava tréninku nebo šablony (S.editDraft) se
+     ukládají do zařízení (Local "unsaved"), aby přežily, když Android appku na pozadí zavře. Po startu
+     unsavedRestore stránku znovu otevře (hláška „Obnoveny neuložené změny“), Zpět se zeptá „Zahodit změny?“
+     jako jindy.
+     unsavedSync() zapíše aktuální stav, nebo uložený koncept smaže, když už nic rozepsaného není (uloženo,
+     zahozeno, přepnutá záložka). Volá se při každém vykreslení, při psaní do formuláře cviku (exEdCollect)
+     a když appka jde do pozadí; žádné jiné místo koncept nemaže ani nezapisuje.
+     Ukládá se jen stránka se změnami: formulář cviku s neuloženými změnami (exEdDirty), úprava se změnami
+     (edChanged) nebo úprava, nad kterou je rozepsaný formulář cviku. Stránka beze změn se neobnovuje.
+     Místo návratu (S.nav) se ukládá zjednodušeně jako řada stránek (pages): záložka dole → stránka tréninku
+     (jen pod úpravou) → úprava → stránka cviku (jen pod formulářem) → formulář cviku. Panely se neukládají:
+     formulář otevřený z výběru cviků (from picker / info) se po restartu vrací jen na stránku pod ním
+     (from "page") a nový cvik se do tréninku sám nepřidá. Stránka cviku otevřená nad formulářem nebo nad
+     úpravou se neobnovuje, appka skončí o stránku níž.
+     Nová stránka s rozepsanými daty: doplnit do unsavedSnap a unsavedRestore. */
+  // stránky nad záložkou (mají místo návratu v S.nav)
+  const UNSAVED_SUB = ["exd", "exed", "edit", "wd", "replan"];
+  // formulář cviku má neuložené změny (jako exEdChanged, ale i se stránkou cviku otevřenou nad ním)
+  const exEdDirty = () => !!exEd && (exEdSnap() !== exEd.orig || ((!!exEd.fx || !!exEd.copyOf) && !exEd.id));
+  // co je teď rozepsané: {pages, ed, ex}, null = nic
+  function unsavedSnap() {
+    const chain = S.nav.map((f) => ({ r: f.route, wd: f.wd })).concat({ r: S.route });
+    const routes = chain.map((p) => p.r);
+    const exAt = routes.lastIndexOf("exed"),
+      edAt = routes.lastIndexOf("edit");
+    const ex = exAt >= 0 && exEdDirty();
+    const ed = edAt >= 0 && !!S.editDraft && (edChanged() || (ex && edAt < exAt));
+    if (!ex && !ed) return null;
+    const pages = [{ r: UNSAVED_SUB.includes(routes[0]) ? tabOf(S.route, S.nav.length) : routes[0] }];
+    if (ed) {
+      const under = chain[edAt - 1];
+      if (under && under.r === "wd" && under.wd) {
+        pages.push({ r: "wd", wd: under.wd });
+      }
+      pages.push({ r: "edit" });
+    }
+    if (ex) {
+      if (S.route === "exed" && routes[exAt - 1] === "exd" && S.exDetail) {
+        pages.push({ r: "exd", id: S.exDetail });
+      }
+      pages.push({ r: "exed" });
+    }
+    return {
+      pages,
+      ed: ed ? { draft: S.editDraft, orig: S.editOrig } : null,
+      ex: ex
+        ? {
+            id: exEd.id,
+            from: exEd.from,
+            fx: exEd.fx,
+            copyOf: exEd.copyOf,
+            fxPh: exEd.fxPh,
+            f: exEd.f,
+            orig: exEd.orig,
+          }
+        : null,
+    };
+  }
+  // naposledy zapsaný koncept jako text (zápis jen při změně); null = ještě se nezapisovalo
+  let unsavedLast = null;
+  function unsavedSync() {
+    let snap = null;
+    try {
+      snap = unsavedSnap();
+    } catch (e) {}
+    const txt = snap ? JSON.stringify(snap) : "";
+    if (txt === unsavedLast) return;
+    unsavedLast = txt;
+    Local.set("unsaved", snap);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      unsavedSync();
+    }
+  });
+  window.addEventListener("pagehide", unsavedSync);
+  // po startu appky otevře rozepsanou stránku; true = něco se obnovilo. Volat před prvním vykreslením
+  // (vykreslení koncept bez rozepsané stránky smaže)
+  function unsavedRestore() {
+    const u = Local.get("unsaved", null);
+    if (!u || !Array.isArray(u.pages) || !u.pages.length) return false;
+    let ed = u.ed && u.ed.draft && Array.isArray(u.ed.draft.ex) ? u.ed : null,
+      ex = u.ex && u.ex.f ? u.ex : null;
+    // upravovaný cvik, trénink nebo šablona mezitím zmizely (obnova zálohy): koncept zahodit
+    if (ex && ((ex.id && !S.exLib[ex.id]) || (ex.copyOf && !S.exLib[ex.copyOf]))) {
+      ex = null;
+    }
+    if (ed && ed.draft.mode === "template" && ed.draft.id && !S.templates[ed.draft.id]) {
+      ed = null;
+    }
+    if (ed && ed.draft.mode !== "template" && !(S.months[ed.draft.mk] || {})[ed.draft.id]) {
+      ed = null;
+    }
+    if (!ed && !ex) return false;
+    const base = u.pages[0].r;
+    const tabs = ["train", "home", "hist", "ex", "stats", "body", "set"];
+    S.nav = [];
+    S.route = !tabs.includes(base) || (base === "home" && !S.active) ? "train" : base;
+    // otevře další stránku nad tou současnou (místo návratu bez panelu a posunu)
+    const open = (route) => {
+      const f = navFrame();
+      f.re = null;
+      f.y = 0;
+      S.nav.push(f);
+      S.prevRoute = S.route;
+      S.route = route;
+    };
+    for (const p of u.pages.slice(1)) {
+      if (p.r === "wd" && ed && p.wd && (S.months[p.wd.mk] || {})[p.wd.id]) {
+        open("wd");
+        S.wDetail = p.wd;
+      } else if (p.r === "edit" && ed) {
+        open("edit");
+        S.editDraft = ed.draft;
+        S.editOrig = ed.orig;
+      } else if (p.r === "exd" && ex && S.exLib[p.id]) {
+        open("exd");
+        S.exDetail = p.id;
+        S.exPart = "info";
+        S.detailGym = "all";
+        S.exHistLimit = 25;
+      } else if (p.r === "exed" && ex) {
+        open("exed");
+        exEd = {
+          id: ex.id || null,
+          // výběr cviků po restartu neexistuje: návrat jen na stránku pod formulářem
+          from: ex.from === "picker" || ex.from === "info" ? "page" : ex.from,
+          fx: ex.fx || null,
+          copyOf: ex.copyOf || null,
+          fxPh: Array.isArray(ex.fxPh) ? ex.fxPh : [],
+          f: ex.f,
+          orig: ex.orig,
+        };
+      }
+    }
+    return true;
+  }
+
+  /* ---------- IMPORT MĚŘENÍ ZE SAMSUNG HEALTH (F4-13) ----------
+     Nastavení → Data a záloha → Samsung Health (shSettings): Vybrat soubor (shFileIn). Soubor vzniká
+     v Samsung Health → Nastavení → Stáhnout osobní data (složka samsunghealth_<účet>_<čas> se všemi daty).
+     Výběr složky (webkitdirectory) zamítnut 13. 10. 2026: Chrome se ptá „Nahrát 44 571 souborů na tento web?“
+     (celý export), hláška děsí a načtení trvá; úspora je jen jedno klepnutí.
+     shRead přečte CSV (shParse: 1. řádek „com.samsung.health.weight,…“, 2. řádek názvy sloupců, sloupce
+     se hledají podle názvu, ne pořadí). Čas start_time je v UTC (ověřeno s uživatelem 13. 10. 2026),
+     ukládá se skutečný čas měření. Převod sloupců SH_COLS (fat_free_mass / fat_free appka nemá).
+     Panel shSheet: zdroje podle pkg_name s počty a zaškrtávátky (shSrcOn: volba se pamatuje v Local
+     shSrc; výchozí zapnuto, kromě Hevy – její vážení už v appce jsou), souhrn shPlan a Importovat.
+     Pravidla shPlan / shApply:
+     - měření nese ID řádku Samsungu v b.shId; řádek, jehož shId už v appce je, se přeskočí
+       (opakovaný import nic nezdvojí),
+     - ruční měření (bez shId) ze stejného dne s hmotností ±SH_TOL kg se přepíše údaji ze Samsungu (každé
+       nejvýš jednou, nejbližší hmotnost); co Samsung nemá (obvody, poznámka, BMI), zůstane,
+     - ostatní řádky = nová měření (víc vážení za den se nechá, graf dělá denní průměr),
+     - BMI chybí-li v souboru: z hmotnosti a výšky z Nastavení, jinak z výšky v souboru (bmiOf, F3-33),
+     - před zápisem bod obnovy (BK_REASON sh), bez něj jen po potvrzení, stejně jako obnova ze zálohy.
+     ZDROJ MĚŘENÍ (F4-19): u měření b.src (druh) a b.srcName (název), text přes WDLOG.srcTxt (formulář měření,
+     export pro coache). Druhy: app = ručně v deníku (nové měření z formuláře, saveBody), sh = ručně v Samsung
+     Health, watch = hodinky (hmotnost do nich uživatel zadává ručně, měří jen složení těla), dev = jiné zařízení
+     (např. budoucí váha spárovaná se Samsung Health), ext = jiná aplikace (Hevy, aplikace váhy). Měření
+     z doby před F4-19 zdroj nemají (nic se nedomýšlí).
+     - shSrcOf: pkg_name jiný než Samsung Health = ext; jinak podle zařízení z deviceuuid: skupina 360001
+       (telefon) = sh, 360003 (hodinky) = watch, ostatní = dev. Samotné deviceuuid nestačí: Hevy zapisuje
+       s deviceuuid telefonu (ověřeno na exportu uživatele 19. 10. 2026). Health Connect se v exportu
+       neukazuje, aplikace se pozná podle pkg_name.
+     - zařízení (deviceuuid → skupina a název) z com.samsung.health.device_profile.*.csv (shDevParse) se
+       pamatují jen v telefonu (Local shDev), do zálohy nejdou. Název = name, u „My Device“ model; fixed_name
+       (obsahuje jméno uživatele) se nebere.
+     - Vybrat soubor bere jeden i oba soubory najednou. Když v souboru vážení je zařízení, které appka nezná,
+       panel ukáže počet měření z neznámých zařízení a Vybrat profil zařízení (shDevIn). Import jde i bez
+       něj, taková měření zůstanou bez zdroje.
+     - opakovaný import doplní zdroj měřením, která už v appce jsou a zdroj nemají (nic jiného nemění),
+       ruční měření přepsané údaji ze Samsungu dostane zdroj ze Samsungu. */
+  const SH_COLS = [
+    ["weight", "weight", 1],
+    ["body_fat", "fat", 1],
+    ["body_fat_mass", "fatMass", 1],
+    ["skeletal_muscle_mass", "muscleMass", 1],
+    ["skeletal_muscle", "muscle", 1],
+    ["total_body_water", "water", 1],
+    ["basal_metabolic_rate", "bmr", 0],
+    ["bmi", "bmi", 1],
+    ["vfa_level", "visceral", 1],
+  ];
+  const SH_TOL = 0.1;
+  const SH_PKG = "com.sec.android.app.shealth";
+  // názvy známých zdrojů (pkg_name), ostatní se ukazují technickým názvem
+  const SH_SRC = {
+    [SH_PKG]: "Samsung Health",
+    "com.hevy": "Hevy",
+  };
+  const SH_SRC_OFF = ["com.hevy"]; // zdroje ve výchozím stavu vypnuté
+  const SH_FILE = /^com\.samsung\.health\.weight\.(\d+)\.csv$/;
+  const SH_PHONE = 360001,
+    SH_WATCH = 360003; // device_group v profilu zařízení (F4-19)
+  let shData = null; // načtený soubor: { rows, fileAt }
+
+  /* zdroj řádku Samsungu (F4-19) jako { src, srcName? }; null = neznámé zařízení (chybí profil zařízení) */
+  function shSrcOf(r, devs) {
+    if (r.src === "?") return null;
+    if (r.src !== SH_PKG) return { src: "ext", srcName: SH_SRC[r.src] || r.src };
+    const dev = devs[r.dev];
+    if (!dev) return null;
+    if (dev.g === SH_PHONE) return { src: "sh" };
+    if (dev.g === SH_WATCH) return { src: "watch", srcName: dev.n };
+    return { src: "dev", srcName: dev.n };
+  }
+
+  /* obsah souboru com.samsung.health.device_profile…csv na { deviceuuid: { g: skupina, n: název } };
+     null = není to profil zařízení */
+  function shDevParse(text) {
+    const lines = csvRows(String(text).replace(/^\uFEFF/, ""));
+    if (lines.length < 2 || !/^com\.samsung\.health\.device_profile$/.test((lines[0][0] || "").trim())) {
+      return null;
+    }
+    const head = lines[1].map((h) => h.trim());
+    const col = (name) => head.indexOf(name);
+    const iDev = col("deviceuuid"),
+      iGroup = col("device_group"),
+      iName = col("name"),
+      iModel = col("model");
+    if (iDev < 0 || iGroup < 0) return null;
+    const out = {};
+    for (const cells of lines.slice(2)) {
+      const id = (cells[iDev] || "").trim();
+      if (!id) continue;
+      const name = iName >= 0 ? (cells[iName] || "").trim() : "";
+      const model = iModel >= 0 ? (cells[iModel] || "").trim() : "";
+      out[id] = { g: +cells[iGroup] || 0, n: name && name !== "My Device" ? name : model };
+    }
+    return out;
+  }
+
+  // je zdroj zaškrtnutý (zapamatovaná volba, jinak výchozí)
+  function shSrcOn(pkg) {
+    const saved = lsGet("shSrc", {});
+    return pkg in saved ? !!saved[pkg] : !SH_SRC_OFF.includes(pkg);
+  }
+
+  /* Nastavení → Data a záloha → Samsung Health */
+  function shSettings() {
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Samsung Health</h2>
+        ${helpBtn("samsung")}
+      </div>
+      <div class="card stack">
+        <label class="btn" for="shFileIn">Vybrat soubor</label>
+        <input type="file" id="shFileIn" multiple hidden>
+      </div>
+    </section>`;
+  }
+
+  // CSV text na pole řádků (pole hodnot); umí hodnoty v uvozovkách včetně čárek a "" uvnitř
+  function csvRows(text) {
+    const rows = [];
+    let row = [],
+      cell = "",
+      quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else if (ch === '"') {
+          quoted = false;
+        } else {
+          cell += ch;
+        }
+      } else if (ch === '"') {
+        quoted = true;
+      } else if (ch === ",") {
+        row.push(cell);
+        cell = "";
+      } else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") {
+          i++;
+        }
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = "";
+      } else {
+        cell += ch;
+      }
+    }
+    if (cell !== "" || row.length) {
+      row.push(cell);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  /* obsah souboru com.samsung.health.weight…csv na měření
+     { shId, src (pkg_name), dev (deviceuuid, F4-19), date, height, vals: { weight, fat, … } };
+     null = není to soubor s měřením */
+  function shParse(text) {
+    const lines = csvRows(String(text).replace(/^﻿/, ""));
+    if (lines.length < 2 || !/^com\.samsung\.health\.weight$/.test((lines[0][0] || "").trim())) return null;
+    const head = lines[1].map((h) => h.trim());
+    const col = (name) => head.indexOf(name);
+    const iTime = col("start_time"),
+      iId = col("datauuid"),
+      iSrc = col("pkg_name"),
+      iDev = col("deviceuuid"),
+      iHeight = col("height");
+    if (iTime < 0 || col("weight") < 0) return null;
+    const out = [];
+    for (const cells of lines.slice(2)) {
+      // čas v UTC: „2026-10-11 13:14:45.569“
+      const date = Date.parse((cells[iTime] || "").trim().replace(" ", "T") + "Z");
+      if (!isFinite(date)) continue;
+      const vals = {};
+      for (const [name, key, dec] of SH_COLS) {
+        const i = col(name);
+        const n = i < 0 ? NaN : num(cells[i]);
+        if (isFinite(n) && n > 0) {
+          const k = Math.pow(10, dec);
+          vals[key] = Math.round(n * k) / k;
+        }
+      }
+      if (!Object.keys(vals).length) continue;
+      out.push({
+        shId: (iId >= 0 && cells[iId].trim()) || "sh" + date + "-" + (vals.weight || ""),
+        src: (iSrc >= 0 && cells[iSrc].trim()) || "?",
+        dev: (iDev >= 0 && (cells[iDev] || "").trim()) || "",
+        date,
+        height: iHeight >= 0 ? num(cells[iHeight]) : NaN,
+        vals,
+      });
+    }
+    return out;
+  }
+
+  /* vybrané soubory (vážení, profil zařízení nebo oba, F4-19): profil zařízení si appka zapamatuje,
+     vážení otevře panel importu; samotný profil při otevřeném panelu jen přepočítá souhrn */
+  async function shRead(inp) {
+    const files = Array.from(inp.files || []);
+    inp.value = "";
+    if (!files.length) return;
+    let rows = null,
+      fileAt = "",
+      devs = null,
+      bad = 0;
+    for (const file of files) {
+      let text = "";
+      try {
+        text = await file.text();
+      } catch (e) {
+        bad++;
+        continue;
+      }
+      const found = shParse(text);
+      if (found) {
+        const m = SH_FILE.exec(file.name);
+        rows = found;
+        fileAt = m ? m[1] : "";
+        continue;
+      }
+      const d = shDevParse(text);
+      if (d) {
+        devs = Object.assign(devs || {}, d);
+      } else {
+        bad++;
+      }
+    }
+    if (devs) {
+      lsSet("shDev", Object.assign({}, lsGet("shDev", {}), devs));
+    }
+    if (!rows && !devs) {
+      toast("Tohle není soubor s měřením ze Samsung Health (com.samsung.health.weight….csv).");
+      return;
+    }
+    if (rows && !rows.length) {
+      toast("Soubor neobsahuje žádné měření.");
+      return;
+    }
+    if (rows) {
+      shData = { rows, fileAt };
+      shSheet();
+    } else if (shData) {
+      shSheet(true);
+    } else {
+      const n = Object.keys(devs).length;
+      toast("Profil zařízení uložen: " + n + " " + plural(n, "zařízení", "zařízení", "zařízení"));
+    }
+    if (bad) {
+      toast("Některý soubor není ze Samsung Health, vynechán.");
+    }
+  }
+
+  // stejný den v místním čase
+  const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+
+  /* co import udělá se zaškrtnutými zdroji: { add: [řádky], upd: [[id, řádek]], src: [[id, zdroj]], skip,
+     off, unknown }; shody s ručním měřením a doplnění zdroje (src, F4-19) viz úvodní komentář sekce,
+     unknown = měření z neznámých zařízení */
+  function shPlan() {
+    const have = new Map(),
+      manual = [];
+    for (const [id, b] of Object.entries(S.body)) {
+      if (b.shId) {
+        have.set(b.shId, id);
+      } else if (isFinite(+b.weight)) {
+        manual.push({ id, b });
+      }
+    }
+    const devs = lsGet("shDev", {});
+    const used = new Set();
+    const plan = { add: [], upd: [], src: [], skip: 0, off: 0, unknown: 0 };
+    for (const r of shData.rows) {
+      if (!shSrcOn(r.src)) {
+        plan.off++;
+        continue;
+      }
+      const from = shSrcOf(r, devs);
+      if (!from) {
+        plan.unknown++;
+      }
+      if (have.has(r.shId)) {
+        const id = have.get(r.shId);
+        if (from && S.body[id] && !S.body[id].src) {
+          plan.src.push([id, from]);
+        } else {
+          plan.skip++;
+        }
+        continue;
+      }
+      have.set(r.shId, "");
+      let best = null;
+      if (r.vals.weight) {
+        for (const x of manual) {
+          const diff = Math.abs(+x.b.weight - r.vals.weight);
+          if (used.has(x.id) || diff > SH_TOL + 1e-9 || !sameDay(x.b.date, r.date)) continue;
+          if (!best || diff < best.diff) {
+            best = { id: x.id, diff };
+          }
+        }
+      }
+      if (best) {
+        used.add(best.id);
+        plan.upd.push([best.id, r]);
+      } else {
+        plan.add.push(r);
+      }
+    }
+    return plan;
+  }
+
+  // panel importu: soubor, zdroje se zaškrtávátky, souhrn a Importovat
+  function shSheet(noanim) {
+    if (!shData) return;
+    const rows = shData.rows;
+    const dates = rows.map((r) => r.date);
+    const fa = shData.fileAt;
+    const fileDate = fa.length >= 8 ? +fa.slice(6, 8) + ". " + +fa.slice(4, 6) + ". " + fa.slice(0, 4) : "";
+    let b = `<p>
+      Soubor${fileDate ? " z <b>" + esc(fileDate) + "</b>" : ""}: ${fmtInt(rows.length)}
+      ${plural(rows.length, "měření", "měření", "měření")}
+      (${fmtDate(Math.min(...dates))} – ${fmtDate(Math.max(...dates))}).
+    </p>`;
+    // zdroje podle počtu měření
+    const bySrc = {};
+    for (const r of rows) {
+      bySrc[r.src] = (bySrc[r.src] || 0) + 1;
+    }
+    b += `<div class="subh">Zdroje</div>`;
+    for (const [pkg, n] of Object.entries(bySrc).sort((a, c) => c[1] - a[1])) {
+      b += `<label class="switch">
+        <input type="checkbox" data-act="shSrc" data-v="${esc(pkg)}" ${shSrcOn(pkg) ? "checked" : ""}>
+        <span>${esc(SH_SRC[pkg] || pkg)} (${fmtInt(n)})</span>
+      </label>`;
+    }
+    const p = shPlan();
+    const nAdd = p.add.length,
+      nUpd = p.upd.length,
+      nSrc = p.src.length;
+    b += `<div class="subh">Co se stane</div>
+    <div class="stack tight">
+      <div class="frow"><span class="grow">Nová měření</span><b class="num">${fmtInt(nAdd)}</b></div>
+      <div class="frow">
+        <span class="grow">Přepíše ruční měření</span><b class="num">${fmtInt(nUpd)}</b>
+      </div>
+      ${
+        nSrc
+          ? `<div class="frow">
+            <span class="grow">Doplní zdroj měření</span><b class="num">${fmtInt(nSrc)}</b>
+          </div>`
+          : ""
+      }
+      <div class="frow"><span class="grow">Už v appce</span><b class="num">${fmtInt(p.skip)}</b></div>
+      <div class="frow"><span class="grow">Vynechané zdroje</span><b class="num">${fmtInt(p.off)}</b></div>
+    </div>`;
+    // F4-19: měření z neznámých zařízení → profil zařízení
+    if (p.unknown) {
+      b += `<div class="subh">Zdroj měření</div>
+      <div class="stack tight">
+        <div class="frow">
+          <span class="grow">Neznámé zařízení</span><b class="num">${fmtInt(p.unknown)}</b>
+        </div>
+        <label class="btn" for="shDevIn">Vybrat profil zařízení</label>
+        <input type="file" id="shDevIn" hidden>
+      </div>
+      <div class="xs muted">Soubor com.samsung.health.device_profile ze stejné složky.</div>`;
+    }
+    if (pointsApi && nAdd + nUpd + nSrc) {
+      b += `<div class="xs muted">
+        Před importem se automaticky vytvoří bod obnovy, takže jde krok vrátit.
+      </div>`;
+    }
+    openSheet(
+      "Import ze Samsung Health",
+      b,
+      `<button class="btn grow" data-act="closeSheet">Zrušit</button>
+      <button class="btn primary grow" data-act="shGo" ${nAdd + nUpd + nSrc ? "" : "disabled"}>
+        Importovat
+      </button>`,
+      noanim,
+    );
+  }
+
+  // zapamatuje volbu zdroje a přepočítá souhrn
+  function shSrcSet(pkg, on) {
+    const saved = Object.assign({}, lsGet("shSrc", {}));
+    saved[pkg] = !!on;
+    lsSet("shSrc", saved);
+    shSheet(true);
+  }
+
+  // údaje řádku Samsungu do měření (BMI z výšky, když ho soubor nemá; zdroj F4-19, neznámý = bez zdroje)
+  function shVals(r, keep) {
+    const o = Object.assign({}, keep, r.vals, { date: r.date, shId: r.shId });
+    delete o.src;
+    delete o.srcName;
+    Object.assign(o, shSrcOf(r, lsGet("shDev", {})));
+    if (!isFinite(o.bmi) && o.weight) {
+      const cm = S.cfg.height || (r.height >= 100 && r.height <= 250 ? r.height : 0);
+      if (cm) {
+        o.bmi = bmiOf(o.weight, cm);
+      }
+    }
+    return o;
+  }
+
+  /* Importovat: bod obnovy (v = "!" bez něj, když se nepodařil), pak zápis do body/all */
+  async function shApply(v) {
+    if (!shData) return;
+    if (pointsApi && v !== "!") {
+      toast("Vytvářím bod obnovy…");
+      const ok = await makePoint("sh");
+      if (!ok) {
+        confirmSheet(
+          "Bod obnovy se nepodařilo vytvořit",
+          "Pokračovat bez pojistky? Import pak nepůjde vrátit.",
+          "Pokračovat",
+          "shGo",
+          "!",
+        );
+        return;
+      }
+    }
+    const p = shPlan();
+    const items = Object.assign({}, S.body);
+    for (const [id, r] of p.upd) {
+      // ruční měření: Samsung přepíše své údaje, obvody, poznámka (a BMI, když ho soubor nemá) zůstanou
+      items[id] = shVals(r, items[id]);
+    }
+    for (const r of p.add) {
+      items[uid("b")] = shVals(r, {});
+    }
+    for (const [id, from] of p.src) {
+      items[id] = Object.assign({}, items[id], from); // F4-19: jen doplní zdroj
+    }
+    put("body/all", { items });
+    shData = null;
+    closeSheet();
+    toast(
+      "Importováno: " +
+        p.add.length +
+        " " +
+        plural(p.add.length, "nové měření", "nová měření", "nových měření") +
+        (p.upd.length ? ", přepsáno " + p.upd.length : "") +
+        (p.src.length ? ", zdroj doplněn " + p.src.length : ""),
+    );
+  }
+
+  /* ---------- záloha (F0-01) ----------
+     Dvě vrstvy ochrany:
+     1) Záloha do souboru (JSON) — sdílením rovnou na Disk / OneDrive / e-mail (F0-13, bkShare), nebo se
+        stáhne do telefonu (doExport). Datum poslední zálohy je v config/backup.last.
+        Po BK_REMIND_DAYS (7) dnech bez zálohy ukáže úvodní obrazovka pruh s připomínkou.
+     2) Body obnovy uvnitř appky (IndexedDB, úložiště "points"): automaticky jednou za 7 dní,
+        vždy před obnovou ze zálohy, před smazáním fitka s tréninky (F2-06) a ručně. Drží se posledních
+        BK_MAX_POINTS.
+     Nepovinné pole "plan" (plánované tréninky, F4-07) verzi nemění, starší zálohy ho nemají.
+     Formát souboru: version 2 = version 1 + pole "photos" (fotky u cviků F2-05, jen v souboru
+     s přepínačem „Zálohovat i fotky“; body obnovy mají photos prázdné, includes.photos = false).
+     Obnova umí "sloučit" (doplní chybějící, nic nepřepíše) a "nahradit vše" (fotky jen přidá).
+     Verze formátu BK_VERSION, načtení a doplnění starých záloh normBackup (měnit jen zpětně kompatibilně).
+     Stažení souboru přes LocalDownloads (odkaz s download). Soubory zálohy i bodů obnovy mají příponu BK_EXT
+     (.json.txt, obsah JSON), obnova ze souboru bere i starší .json.
+     Soubor je čitelně odsazený (bkJson, F0-15). */
+  const BK_VERSION = 2,
+    BK_EXT = ".json.txt", // přípona všech souborů zálohy (F0-13: .json Chrome na Androidu sdílet nedovolí)
+    BK_REMIND_DAYS = 7,
+    BK_AUTO_DAYS = 7,
+    BK_MAX_POINTS = 8;
+  const BK_REASON = {
+    auto: "Automatický (týdenní)",
+    pre: "Před obnovou ze zálohy",
+    gym: "Před smazáním fitka", // F2-06
+    exdb: "Před aktualizací databáze cviků",
+    manual: "Ručně vytvořený",
+    sh: "Před importem ze Samsung Health", // F4-13
+  };
+  // počet tréninků ve všech měsících
+  const countW = (months) => Object.values(months || {}).reduce((a, m) => a + Object.keys(m || {}).length, 0);
+  const daysAgo = (t) => Math.floor((Date.now() - t) / DAY);
+  const agoLabel = (t) => {
+    const n = daysAgo(t);
+    return n <= 0 ? "dnes" : n === 1 ? "včera" : "před " + n + " " + plural(n, "dnem", "dny", "dny");
+  };
+
+  // celá záloha jako objekt (formát v2) bez fotek; stejný obsah má i bod obnovy
+  function snapshotAll() {
+    return {
+      app: "workout-denik",
+      version: BK_VERSION,
+      exported: new Date().toISOString(),
+      includes: { photos: false },
+      // F0-15: pořadí pro čtení souboru (nastavení, šablony, tréninky, měření, cviky, fotky)
+      cfg: S.cfg,
+      templates: S.templates,
+      plan: S.plan, // F4-07: plánované tréninky (nepovinné, starší zálohy ho nemají)
+      months: S.months,
+      body: S.body,
+      exercises: S.exLegacy || S.exLib,
+      exDb: S.exLegacy ? undefined : EX_V,
+      photos: {}, // F2-05: fotky doplní bkBuild (photosExport), formát viz sekce „FOTKY U CVIKU“
+    };
+  }
+  // čas poslední zálohy do souboru (z databáze nebo z Local, novější z nich), jinak null
+  function lastBackupAt() {
+    const a = +(S.bk && S.bk.last) || 0,
+      b = +lsGet("lastBackup", 0) || 0;
+    const m = Math.max(a, b);
+    return m || null;
+  }
+  // zapamatuje si čas zálohy do souboru
+  function markBackup(ts) {
+    lsSet("lastBackup", ts);
+    put("config/backup", Object.assign({}, S.bk, { last: ts }));
+  }
+
+  // je čas zálohovat: máš tréninky a poslední záloha do souboru je starší než BK_REMIND_DAYS (nebo žádná)
+  function backupDue() {
+    if (!countW(S.months)) return false;
+    const last = lastBackupAt();
+    return !last || daysAgo(last) >= BK_REMIND_DAYS;
+  }
+  /* připomínka na úvodní obrazovce (a oranžový řádek Data a záloha v Nastavení);
+     klepnutí na pruh otevře Nastavení → Data a záloha, tlačítko Zálohovat rovnou sdílí zálohu (F0-13) */
+  function backupBanner() {
+    if (!backupDue()) return "";
+    const last = lastBackupAt();
+    const txt = last
+      ? "Poslední záloha do souboru " + agoLabel(last) + "."
+      : "Zatím nemáš žádnou zálohu v souboru.";
+    return (
+      `<div class="banner act" data-act="setOpen" data-v="data" role="button">` +
+      `<span class="grow">${txt}</span>` +
+      `<button class="btn" data-act="bkShare">
+        Zálohovat
+      </button></div>`
+    );
+  }
+
+  /* Nastavení → Data a záloha */
+  function backupSettings() {
+    const last = lastBackupAt();
+    let h = `<section class="sec">
+      <div class="sec-h">
+        <h2>Záloha</h2>
+        ${helpBtn("backup")}
+      </div>
+      <div class="card stack">`;
+    const ps = photoStats();
+    if (ps.n) {
+      h += `<label class="switch">
+        <input type="checkbox" data-act="bkPhotos" ${lsGet("bkPhotos", true) ? "checked" : ""}>
+        <span>Zálohovat i fotky<br><span class="xs muted">Fotky u cviků: ${fmtInt(ps.n)}
+            ${plural(ps.n, "fotka", "fotky", "fotek")} · ${fmtSize(ps.size)}, záloha s nimi bude asi o
+            ${fmtSize((ps.size * 4) / 3)} větší.</span></span>
+      </label>`;
+    }
+    // F0-13: kde jde sdílet soubor, je hlavní Sdílet (cloud, e-mail) a Stáhnout vedlejší
+    h += navigator.canShare
+      ? `<div class="row wrap-r">
+        <button class="btn primary grow" data-act="bkShare">Sdílet</button>
+        <button class="btn grow" data-act="export">Stáhnout</button>
+      </div>
+      <label class="btn" for="impFile">Obnovit ze souboru</label>`
+      : `<div class="row wrap-r">
+        <button class="btn primary grow" data-act="export">Stáhnout</button>
+        <label class="btn grow" for="impFile">Obnovit ze souboru</label>
+      </div>`;
+    h += `<input type="file" id="impFile" accept=".json,.txt,application/json,text/plain" hidden>`;
+    h += `<div class="xs muted">
+      Poslední záloha: ${last ? fmtDate(last) + " (" + agoLabel(last) + ")" : "zatím nikdy"}
+    </div>`;
+    h += "</div></section>";
+
+    h += `<section class="sec">
+      <div class="sec-h">
+        <h2>Body obnovy</h2>
+        <div class="sec-btns">
+          ${helpBtn("points")}
+          ${pointsApi ? icoBtn("bkNow", "plus", "Vytvořit bod obnovy teď") : ""}
+        </div>
+      </div>
+      <div class="card">`;
+    if (!pointsApi) {
+      h += `<div class="small muted">
+        Body obnovy tady nejsou dostupné (prohlížeč nepovolil úložiště).
+      </div>`;
+    } else {
+      const pts = S.bk.points || [];
+      if (!pts.length) {
+        h += '<div class="xs muted">Zatím žádný bod obnovy.</div>';
+      }
+      for (const p of pts) {
+        h +=
+          `<div class="bkpt">
+          <div class="grow">
+            <b class="small">${fmtDate(p.at)} ${toTimeInput(p.at)}</b>
+            <div class="xs muted">
+              ${esc(BK_REASON[p.reason] || p.reason)} · ${fmtInt(p.n || 0)} ` +
+          `${plural(p.n || 0, "trénink", "tréninky", "tréninků")}
+            </div>
+          </div>
+          <button class="btn sm ghost" data-act="bkSave" data-v="${esc(p.id)}">Stáhnout</button>
+          <button class="btn sm" data-act="bkRestore" data-v="${esc(p.id)}">Obnovit</button>
+        </div>`;
+      }
+    }
+    h += "</div></section>";
+    return h;
+  }
+
+  /* ---------- ZÁZNAM UDÁLOSTÍ (F0-21) ----------
+     Záznam toho, co se v appce stalo, i ve vydané verzi (dřív jen vývojový záznam oznámení restLog).
+     Zapisuje js/zaznam.js (ZAZNAM, vlastní databáze IndexedDB, posledních 200 řádků, zápisy sdružené,
+     popis tam); sám zachytí chyby kódu, nezachycené Promise a blokace CSP. Tady:
+     - evLog(text) = řádek do záznamu; text krátký, s předponou oblasti („pauza: …“, „uložení: …“),
+       nikdy tréninková data (názvy cviků, váhy, poznámky). Nová funkce zapisuje své důležité události.
+     - evStart(): start appky (verze, web / PWA / APK, persist, povolení oznámení), evVisible(): návrat
+       na oči s délkou pobytu v pozadí (odchod do pozadí jen během pauzy, aby záznam vydržel déle),
+       evPermCheck(): změna povolení oznámení (při návratu, po dotazu a po změně v Androidu).
+     - Panel sheetEvLog (Nastavení → O aplikaci → Záznam událostí): seznam, nejnovější nahoře;
+       Smazat (evLogClear) vlevo, Zkopírovat (evLogCopy, text s hlavičkou evLogText) vpravo.
+     Do zálohy nepatří a nikam se neposílá. */
+  function evLog(txt) {
+    if (window.ZAZNAM) {
+      window.ZAZNAM.add(txt);
+    }
+  }
+  // popis verze appky jedním řádkem
+  function evVer() {
+    const kind = TEST_PR
+      ? "testovací PR #" + TEST_PR
+      : NATIVE_PR
+        ? "testovací APK PR #" + NATIVE_PR
+        : NATIVE
+          ? "APK"
+          : BUILD.kanal === "main"
+            ? "vydaná"
+            : "lokální";
+    return kind + (BUILD.commit ? " " + BUILD.commit : "") + (BUILD.cas ? " (" + BUILD.cas + ")" : "");
+  }
+  let evPerm = "";
+  // zapíše změnu povolení oznámení od minulé kontroly
+  function evPermCheck() {
+    const now = notifState() + (NATIVE ? ", přesný čas " + window.NATIVNI.notif.exact : "");
+    if (evPerm && now !== evPerm) {
+      evLog("povolení oznámení: " + now);
+    }
+    evPerm = now;
+  }
+  function evStart() {
+    const how = NATIVE
+      ? "APK"
+      : matchMedia("(display-mode: standalone)").matches
+        ? "nainstalovaná PWA"
+        : "prohlížeč";
+    evLog("start appky: " + evVer() + ", " + how);
+    evPermCheck();
+    evLog("povolení oznámení: " + evPerm);
+    if (navigator.storage && navigator.storage.persisted) {
+      navigator.storage
+        .persisted()
+        .then((ok) => {
+          if (!ok) {
+            evLog("úložiště: Chrome neslíbil data nemazat (persist)");
+          }
+        })
+        .catch(() => {});
+    }
+  }
+  let evHiddenAt = document.hidden ? Date.now() : 0;
+  function evVisible() {
+    if (document.hidden) {
+      evHiddenAt = Date.now();
+      return;
+    }
+    if (evHiddenAt) {
+      const min = Math.round((Date.now() - evHiddenAt) / 60000);
+      evLog("appka zpět na očích po " + (min < 1 ? "méně než minutě" : min + " min"));
+    }
+    evHiddenAt = 0;
+    evPermCheck();
+  }
+  document.addEventListener("visibilitychange", evVisible);
+  // řádek záznamu jako text: „12. 11. 14:03:05 text ×3“
+  function evRowTxt(r) {
+    const d = new Date(r.at);
+    return (
+      d.getDate() +
+      ". " +
+      (d.getMonth() + 1) +
+      ". " +
+      d.toLocaleTimeString("cs-CZ") +
+      " " +
+      r.txt +
+      (r.n > 1 ? " ×" + r.n : "")
+    );
+  }
+  // text pro vložení do chatu: hlavička (verze, zařízení) a řádky, nejnovější nahoře
+  function evLogText(rows) {
+    return [
+      "Workout deník – záznam událostí",
+      "Verze: " + evVer(),
+      "Zařízení: " + navigator.userAgent,
+      "Zkopírováno: " + evRowTxt({ at: Date.now(), txt: "" }).trim(),
+      "",
+      ...rows.map(evRowTxt),
+    ].join("\n");
+  }
+  async function sheetEvLog() {
+    const rows = window.ZAZNAM ? await window.ZAZNAM.read() : [];
+    openSheet(
+      "Záznam událostí",
+      `<div class="xs muted mb-list">Posledních ${rows.length} z nejvýš 200 událostí, nejnovější nahoře.</div>
+      ${
+        rows.length
+          ? `<div class="stack tight evlog">
+            ${rows
+              .map((r) => {
+                const t = evRowTxt(r);
+                const sp = t.indexOf(" ", t.indexOf(":"));
+                return `<div class="small">
+                  <b class="num">${esc(t.slice(0, sp))}</b> ${esc(t.slice(sp + 1))}
+                </div>`;
+              })
+              .join("")}
+          </div>`
+          : '<div class="muted small">Zatím nic.</div>'
+      }`,
+      `<button class="btn danger grow" data-act="evLogClear">Smazat</button>
+      <button class="btn primary grow" data-act="evLogCopy">Zkopírovat</button>`,
+    );
+  }
+  async function evLogCopy() {
+    const rows = window.ZAZNAM ? await window.ZAZNAM.read() : [];
+    const text = evLogText(rows);
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      toast("Kopírování tu nejde.");
+      return;
+    }
+    navigator.clipboard.writeText(text).then(
+      () => toast("Záznam zkopírován, vlož ho do chatu"),
+      () => toast("Kopírování se nepovedlo."),
+    );
+  }
+  async function evLogClear() {
+    if (window.ZAZNAM) {
+      await window.ZAZNAM.clear();
+    }
+    sheetEvLog();
+  }
+
+  /* ---------- MÍSTO V ZAŘÍZENÍ (F0-19) ----------
+     Rychlá schránka (localStorage) má limit asi 5 milionů znaků (LS_LIMIT) a sdílí ho vydaná appka se všemi
+     testovacími verzemi na stejné doméně. Při plné schránce Local.set smaže kopii pro rychlý start (cache)
+     a zkusí zápis znovu; když ani to nepomůže, nastaví Local.full a jednou za spuštění ukáže hlášku
+     (storageFull). Rozdělaný trénink má čas změny upd a při startu vyhrává novější kopie (Local nebo
+     databáze, Store.saveActive / boot), konec tréninku jde do databáze hned.
+     Sekci Data a záloha → Místo v zařízení (storageSettings) běžný uživatel nevidí: ukáže se, jen když
+     testovací verze mají v telefonu data (scanTestData, jen ve vydané verzi), schránka je zaplněná aspoň
+     z LS_WARN, nebo zápis selhal. Pruh zaplnění: tahle verze / ostatní (lsUsage). Mazání dat testovacích
+     verzí (testDel, deleteTestData) bylo do F0-19 v O aplikaci. */
+  const LS_LIMIT = 5 * 1024 * 1024,
+    LS_WARN = 0.8;
+  // obsazené místo v localStorage ve znacích (klíč + hodnota): own = tahle verze, other = vše ostatní
+  function lsUsage() {
+    let own = 0,
+      other = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i) || "";
+        const n = k.length + (localStorage.getItem(k) || "").length;
+        if (k.startsWith(Local.P)) {
+          own += n;
+        } else {
+          other += n;
+        }
+      }
+    } catch (e) {}
+    return { own, other };
+  }
+  // hláška při plné schránce, jednou za spuštění
+  function storageFull() {
+    if (storageFull.shown) return;
+    storageFull.shown = true;
+    evLog("úložiště: místo v zařízení je plné (localStorage)"); // F0-21
+    setTimeout(() => {
+      toast("Místo v zařízení je plné. Data jsou v bezpečí, víc v Nastavení → Data a záloha.");
+      scheduleRender();
+    }, 0);
+  }
+  const pctTxt = (x) => (x > 0 && x < 0.005 ? "< 1 %" : Math.min(100, Math.round(x * 100)) + " %");
+  function storageSettings() {
+    if (!TEST_PR && S.testData === undefined) {
+      scanTestData();
+    }
+    const u = lsUsage();
+    const used = (u.own + u.other) / LS_LIMIT;
+    const tests = !TEST_PR && S.testData && S.testData.n ? S.testData : null;
+    if (!tests && !Local.full && used < LS_WARN) return "";
+    const own = Math.min(1, u.own / LS_LIMIT),
+      other = Math.min(1 - own, u.other / LS_LIMIT);
+    let h = `<section class="sec">
+      <div class="sec-h">
+        <h2>Místo v zařízení</h2>
+        ${helpBtn("storage")}
+      </div>
+      <div class="card stack inner">
+        <div class="kv">
+          <span>Rychlá schránka</span>
+          <b>${Local.full ? "plná" : "zaplněno asi " + pctTxt(used)}</b>
+        </div>
+        <div class="lsbar" role="img" aria-label="Zaplněno ${pctTxt(used)}">
+          <i style="width:${(own * 100).toFixed(1)}%"></i>
+          <i class="o" style="width:${(other * 100).toFixed(1)}%"></i>
+        </div>
+        <div class="xs muted">
+          ${TEST_PR ? "Tahle verze" : "Tahle appka"} ${pctTxt(u.own / LS_LIMIT)} ·
+          ${TEST_PR ? "ostatní" : "testovací verze a jiné"} ${pctTxt(u.other / LS_LIMIT)}
+        </div>
+        ${
+          Local.full
+            ? `<div class="fmsg">
+              Schránka je plná. Trénink se ukládá jen do databáze, start appky bude pomalejší.
+            </div>`
+            : ""
+        }
+      </div>`;
+    if (tests) {
+      h += `<div class="card stack inner mt-in">
+        <div class="kv">
+          <span>Testovací verze</span>
+          <b>${tests.n} ${plural(tests.n, "verze", "verze", "verzí")} · ${fmtSize(tests.bytes)}</b>
+        </div>
+        <button class="btn danger block" data-act="testDel">Smazat data testovacích verzí</button>
+      </div>`;
+    }
+    return h + "</section>";
+  }
+
+  /* obsah souboru zálohy jako text a název souboru bez přípony; fotky podle přepínače Zálohovat i fotky;
+     null = fotky se nepodařilo přidat */
+  // withPhotos: true / false = s fotkami / bez nich bez ohledu na přepínač (přesun do nativní appky, F6-01)
+  async function bkBuild(withPhotos) {
+    const o = snapshotAll();
+    const name = FILE_P + "-" + toDateInput(Date.now());
+    const photos = withPhotos === undefined ? lsGet("bkPhotos", true) : withPhotos;
+    if (photos && photoStats().n) {
+      // F2-05: fotky jako base64 (soubor naroste asi o třetinu víc, než fotky zabírají)
+      toast("Připravuji zálohu s fotkami…");
+      try {
+        o.photos = await photosExport();
+        o.includes.photos = true;
+      } catch (e) {
+        toast("Fotky se nepodařilo přidat do zálohy.");
+        return null;
+      }
+    }
+    return { name, data: bkJson(o) };
+  }
+  /* stažení souboru (b = už připravená záloha z bkBuild, jinak se připraví); true = stažena */
+  async function doExport(b) {
+    if (!downloads) {
+      toast("Stahování tady není dostupné.");
+      return;
+    }
+    b = b || (await bkBuild());
+    if (!b) return;
+    const name = b.name + BK_EXT;
+    try {
+      await downloads.save({ filename: name, data: b.data, type: "text/plain" });
+      markBackup(Date.now());
+      scheduleRender();
+      if (!lsGet("bkHelpOff", false)) {
+        showBackupHelp(name);
+      } else {
+        toast("Záloha stažena");
+      }
+      return true;
+    } catch (e) {
+      if (e && e.code !== "declined") {
+        toast("Stažení se nepovedlo (" + (e.code || "chyba") + ")");
+      }
+    }
+  }
+  // okno po stažení zálohy s návodem, jak ji dostat mimo telefon (F0-13: dřív i tlačítko Jak na Disk?)
+  function showBackupHelp(name) {
+    let b = `<p>
+      Soubor <b>${esc(name)}</b> je v telefonu ve složce <b>Stažené</b> (Download).
+    </p>`;
+    b += `<p class="small muted">
+      Aby záloha přežila i ztrátu telefonu, pošli ji mimo něj (rychleji to jde tlačítkem Sdílet):
+    </p>`;
+    b += `<ol class="steps small">
+      <li>
+        V Chromu klepni vpravo nahoře na <b>tři tečky</b> → <b>Stažené soubory</b> (nebo otevři appku
+        <b>Soubory</b> → Stažené).
+      </li>
+      <li>Podrž soubor zálohy a zvol <b>Sdílet</b>.</li>
+      <li>Vyber <b>Disk</b> → Uložit (nebo Gmail a pošli si ho).</li>
+    </ol>`;
+    b += `<p class="xs muted">
+      Obnova: Nastavení → Data a záloha → Obnovit ze souboru a vybrat soubor (z Disku jde vybrat přímo).
+    </p>`;
+    const foot = `<button class="btn grow" data-act="bkNoHelp">Příště neukazovat</button>
+      <button class="btn primary grow" data-act="closeSheet">Hotovo</button>`;
+    openSheet("Záloha stažena", b, foot);
+  }
+
+  /* ---------- ČITELNÝ SOUBOR ZÁLOHY (F0-15) ----------
+     Soubor zálohy (Stáhnout, Sdílet, Zálohovat) je rozdělený na řádky a odsazený o 2 mezery, aby šel
+     přečíst a upravit v textovém editoru. Krátké části, které se vejdou do BK_WIDTH (100) znaků
+     i s odsazením (série, seznam partií, malé objekty), zůstanou na jednom řádku:
+     {"t": "n", "kg": 80, "reps": 8}. Fotka (base64) je vždy jeden dlouhý řádek. Obsah je stejný jako dřív,
+     jen s mezerami, obnova (JSON.parse) je nevnímá.
+     - bkJson(o) = text souboru, výsledek jako JSON.stringify (vynechá undefined, v poli z něj udělá null),
+       bkInline zkouší jednořádkovou podobu a skončí, jakmile přeroste zbylé místo (rychlé i u velké zálohy).
+     - Body obnovy v telefonu zůstávají na jednom řádku (makePoint, JSON.stringify), nikdo je nečte.
+     - Pořadí částí souboru určuje snapshotAll: hlavička, nastavení, šablony, tréninky, měření, cviky, fotky.
+     - Chyba v ručně upraveném souboru: hláška obnovy uvede řádek a sloupec (bkJsonErrAt podle zprávy
+       Chromu). */
+  const BK_WIDTH = 100;
+  // jednoduchá hodnota jako text JSON (undefined a funkce jako null, stejně jako v poli u JSON.stringify)
+  function bkPrim(v) {
+    const s = JSON.stringify(v);
+    return s === undefined ? "null" : s;
+  }
+  // klíče objektu, které JSON.stringify zapíše (bez undefined a funkcí)
+  function bkKeys(o) {
+    return Object.keys(o).filter((k) => o[k] !== undefined && typeof o[k] !== "function");
+  }
+  // hodnota na jednom řádku, nebo null, když se nevejde do max znaků
+  function bkInline(v, max) {
+    if (max < 2) return null;
+    if (v && typeof v.toJSON === "function") v = v.toJSON();
+    if (v === null || typeof v !== "object") {
+      const s = bkPrim(v);
+      return s.length <= max ? s : null;
+    }
+    const isArr = Array.isArray(v);
+    const keys = isArr ? null : bkKeys(v);
+    const n = isArr ? v.length : keys.length;
+    let s = isArr ? "[" : "{";
+    for (let i = 0; i < n; i++) {
+      const head = (i ? ", " : "") + (isArr ? "" : JSON.stringify(keys[i]) + ": ");
+      const part = bkInline(isArr ? v[i] : v[keys[i]], max - s.length - head.length - 1);
+      if (part === null) return null;
+      s += head + part;
+    }
+    s += isArr ? "]" : "}";
+    return s.length <= max ? s : null;
+  }
+  // hodnota odsazená podle struktury; ind = odsazení řádku, room = místo na řádku za klíčem
+  function bkFmt(v, ind, room) {
+    const one = bkInline(v, room);
+    if (one !== null) return one;
+    if (v && typeof v.toJSON === "function") v = v.toJSON();
+    if (v === null || typeof v !== "object") return bkPrim(v); // dlouhý text (fotka)
+    const inner = ind + "  ";
+    const lines = [];
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        lines.push(inner + bkFmt(item, inner, BK_WIDTH - inner.length - 1));
+      }
+      return "[\n" + lines.join(",\n") + "\n" + ind + "]";
+    }
+    for (const k of bkKeys(v)) {
+      const key = JSON.stringify(k) + ": ";
+      lines.push(inner + key + bkFmt(v[k], inner, BK_WIDTH - inner.length - key.length - 1));
+    }
+    return "{\n" + lines.join(",\n") + "\n" + ind + "}";
+  }
+  // text souboru zálohy
+  function bkJson(o) {
+    return bkFmt(o, "", BK_WIDTH) + "\n";
+  }
+  // kde je chyba v souboru, který nejde přečíst: " (řádek 56, sloupec 3)", " (soubor je neúplný)" nebo ""
+  function bkJsonErrAt(e, text) {
+    const msg = String((e && e.message) || "");
+    const lc = /line (\d+) column (\d+)/.exec(msg);
+    if (lc) return " (chyba na řádku " + lc[1] + ", sloupec " + lc[2] + ")";
+    const pos = /position (\d+)/.exec(msg);
+    if (pos && typeof text === "string") {
+      const before = text.slice(0, +pos[1]).split("\n");
+      const col = before[before.length - 1].length + 1;
+      return " (chyba na řádku " + before.length + ", sloupec " + col + ")";
+    }
+    if (/end of JSON/i.test(msg)) return " (soubor je neúplný, chybí konec)";
+    return "";
+  }
+
+  /* ---------- ZÁLOHA SDÍLENÍM A ZE SOUHRNU (F0-13) ----------
+     Tlačítko Zálohovat (připomínka na úvodní obrazovce, souhrn po tréninku) a Sdílet v Nastavení → Data a záloha
+     otevře systémovou nabídku sdílení se souborem zálohy: vybere se Disk, OneDrive, Gmail… a Uložit. Oproti
+     Stáhnout (doExport, složka Stažené) odpadá posílání souboru dál. V pruzích zůstává název Zálohovat, protože
+     souhrn má i Sdílet obrázku tréninku (F4-08).
+     - Chrome sdílí jen některé typy souborů (seznam přípon a typů v Chromu, .json v něm není) a navigator.canShare
+       to nekontroluje: .json projde, ale navigator.share ho pak odmítne (NotAllowedError). Záloha proto má všude
+       příponu BK_EXT (.json.txt, text/plain), obsah je stejný. Obnova ze souboru bere .json i .txt (readImport čte
+       obsah, přípona je jedno). Kde sdílení souborů nejde vůbec, záloha se stáhne.
+     - Za zálohu (markBackup) se počítá, až se sdílení splní (vybraný cíl). Zavření nabídky (AbortError) ne.
+       Android splní sdílení už výběrem cíle, i když se pak uložení v Disku zruší.
+     - Záloha s fotkami se připravuje déle a Chrome pak sdílení odmítne (NotAllowedError, vypršelo klepnutí,
+       stejně jako obrázek F4-08). Připravený soubor se podrží BK_READY_MS v bkReady a appka řekne „Klepni ještě
+       jednou“, druhé klepnutí ho sdílí hned. Když sdílení odmítne i podruhé, záloha se stáhne (žádná smyčka).
+     - Souhrn po uložení tréninku (vWorkout, S.wDetail.saved) ukáže nad tlačítky pruh bkSumCard, když je
+       poslední záloha do souboru starší než BK_SUM_DAYS nebo od ní přibylo BK_SUM_NEW tréninků (bkSumDue,
+       počet bkSince podle konce tréninku). Připomínka na úvodní obrazovce dál jen podle BK_REMIND_DAYS.
+     Automatické nahrávání na Google Disk přímo z appky je samostatná úloha F0-14. */
+  const BK_SUM_DAYS = 7,
+    BK_SUM_NEW = 5,
+    BK_READY_MS = 120000;
+  let bkReady = null; // připravená záloha {b, file, at} pro druhé klepnutí po NotAllowedError
+
+  // soubor zálohy ke sdílení (BK_EXT), nebo null, když sdílení nejde
+  function bkShareFile(b) {
+    if (!navigator.canShare) return null;
+    const f = new File([b.data], b.name + BK_EXT, { type: "text/plain" });
+    return navigator.canShare({ files: [f] }) ? f : null;
+  }
+  // Zálohovat: sdílení souboru zálohy, kde nejde, stažení
+  async function bkShare() {
+    const again = bkReady && Date.now() - bkReady.at < BK_READY_MS ? bkReady : null;
+    bkReady = null;
+    const b = again ? again.b : await bkBuild();
+    if (!b) return;
+    const f = again ? again.file : bkShareFile(b);
+    if (!f) {
+      toast("Sdílení tady nejde, záloha se stáhne.");
+      doExport(b);
+      return;
+    }
+    try {
+      await navigator.share({ files: [f] });
+      markBackup(Date.now());
+      scheduleRender();
+      toast("Záloha předána k uložení");
+    } catch (e) {
+      if (e && e.name === "NotAllowedError" && again) {
+        // odmítnuto i podruhé: nejde o vypršelé klepnutí, záloha se aspoň stáhne
+        toast("Sdílení se nepovedlo, záloha se stáhne.");
+        doExport(b);
+      } else if (e && e.name === "NotAllowedError") {
+        bkReady = { b, file: f, at: Date.now() };
+        toast("Záloha je připravená, klepni ještě jednou.");
+      } else if (!e || e.name !== "AbortError") {
+        toast("Sdílení se nepovedlo (" + ((e && e.name) || "chyba") + ")");
+      }
+    }
+  }
+  // počet tréninků uložených po čase t (podle konce tréninku), bez t všechny
+  const bkSince = (t) => derive().all.filter((w) => !t || (w.end || w.start) > t).length;
+  // nabídnout zálohu v souhrnu po tréninku: stará záloha nebo hodně nových tréninků
+  function bkSumDue() {
+    if (!countW(S.months)) return false;
+    const last = lastBackupAt();
+    return !last || daysAgo(last) >= BK_SUM_DAYS || bkSince(last) >= BK_SUM_NEW;
+  }
+  // pruh Zálohovat v souhrnu po uložení tréninku (stejný vzhled jako připomínka na úvodní obrazovce)
+  function bkSumCard() {
+    if (!bkSumDue()) return "";
+    const last = lastBackupAt();
+    const n = bkSince(last);
+    const txt = last
+      ? `Poslední záloha do souboru ${agoLabel(last)}, od té doby ${n} ` +
+        `${plural(n, "trénink", "tréninky", "tréninků")}.`
+      : "Zatím nemáš žádnou zálohu v souboru.";
+    return `<div class="banner act" style="margin-top:0">
+      <span class="grow">${txt}</span>
+      <button class="btn" data-act="bkShare">Zálohovat</button>
+    </div>`;
+  }
+
+  /* načtení a kontrola zálohy */
+  function normBackup(o) {
+    if (!o || typeof o !== "object" || (o.app !== "zelezny-denik" && o.app !== "workout-denik")) {
+      throw new Error("Tohle není záloha Workout deníku.");
+    }
+    if ((+o.version || 1) > BK_VERSION) {
+      throw new Error("Záloha je z novější verze appky. Nejdřív appku aktualizuj.");
+    }
+    const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
+    const months = {};
+    for (const mk in obj(o.months)) {
+      if (/^\d{4}-\d{2}$/.test(mk)) {
+        months[mk] = obj(o.months[mk]);
+      }
+    }
+    const cfg = cfgNorm(obj(o.cfg));
+    return {
+      exported: o.exported,
+      cfg,
+      exercises: exLoad(exRestClean(machClean(exProgClean(exUrlsClean(obj(o.exercises))))), o.exDb !== EX_V),
+      templates: tplNorm(obj(o.templates)),
+      plan: planNorm(obj(o.plan)),
+      months,
+      body: obj(o.body),
+      photos: photosClean(obj(o.photos)),
+    };
+  }
+  let importData = null;
+  // přečte vybraný soubor zálohy a nabídne obnovu (importSheet)
+  function readImport(inp) {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        importSheet(normBackup(JSON.parse(r.result)), "Soubor zálohy");
+      } catch (e) {
+        const bad = e instanceof SyntaxError;
+        toast(bad ? "Soubor není platný JSON" + bkJsonErrAt(e, r.result) + "." : e.message);
+      }
+    };
+    r.readAsText(f);
+    inp.value = "";
+  }
+  // kolik tréninků ze zálohy o v appce chybí (přidá je Sloučit)
+  function mergeCount(o) {
+    let n = 0;
+    for (const mk in o.months) {
+      const cur = S.months[mk] || {};
+      for (const id in o.months[mk]) {
+        if (!(id in cur)) {
+          n++;
+        }
+      }
+    }
+    return n;
+  }
+  // okno obnovy: co je v záloze (label = soubor nebo bod obnovy), volba Sloučit / Nahradit vše
+  function importSheet(o, label) {
+    importData = o;
+    const nb = countW(o.months),
+      nc = countW(S.months),
+      nm = mergeCount(o);
+    let b =
+      `<p>
+      ${esc(label)}${o.exported ? ` z <b>${esc(fmtDate(Date.parse(o.exported)))}</b>` : ""}: ` +
+      `${fmtInt(nb)} ${plural(nb, "trénink", "tréninky", "tréninků")}. V appce je teď ${fmtInt(nc)}.
+    </p>`;
+    const np = Object.keys(o.photos).length;
+    if (np) {
+      b += `<p class="small muted">
+        Záloha obsahuje i ${fmtInt(np)} ${plural(np, "fotku", "fotky", "fotek")} u cviků. Sloučit doplní
+        chybějící, Nahradit vše je přidá. Fotky, které v appce máš, se nesmažou.
+      </p>`;
+    }
+    b += `<div class="card stack inner">
+      <b>Sloučit</b>
+      <div class="small muted">
+        Doplní jen to, co v appce chybí (tréninky, cviky, šablony, měření, fitka). Nic se nepřepíše ani
+        nesmaže. Přibude ${fmtInt(nm)} ${plural(nm, "trénink", "tréninky", "tréninků")}.
+      </div>
+      <button class="btn primary" data-act="importGo" data-v="merge">Sloučit</button>
+    </div>`;
+    b += `<div class="card stack inner">
+      <b>Nahradit vše</b>
+      <div class="small muted">
+        Současná data se smažou a nahradí obsahem zálohy. Fotky u cviků zůstanou.
+      </div>
+      <button class="btn danger" data-act="importGo" data-v="replace">Nahradit vše</button>
+    </div>`;
+    if (pointsApi) {
+      b += `<div class="xs muted">
+        Před obnovou se automaticky vytvoří bod obnovy, takže jde krok vrátit.
+      </div>`;
+    }
+    openSheet("Obnovit ze zálohy", b, '<button class="btn grow" data-act="closeSheet">Zrušit</button>');
+  }
+  // Nahradit vše se ještě jednou zeptá, Sloučit rovnou
+  function confirmImport(mode) {
+    if (mode === "replace") {
+      confirmSheet(
+        "Nahradit všechna data?",
+        "Všechny současné tréninky, šablony, cviky, fitka a měření se nahradí obsahem zálohy.",
+        "Nahradit",
+        "importOk",
+        "replace",
+      );
+    } else {
+      doImport("merge");
+    }
+  }
+  /* obnova ze zálohy importData: nejdřív bod obnovy „před obnovou“, pak sloučit nebo nahradit;
+     v = "merge" / "replace", s „!“ na konci bez bodu obnovy (když se ho nepodařilo vytvořit) */
+  async function doImport(v) {
+    const o = importData;
+    if (!o) return;
+    const force = String(v || "").endsWith("!"),
+      mode = String(v || "merge").replace("!", "");
+    if (pointsApi && !force) {
+      toast("Vytvářím bod obnovy…");
+      const ok = await makePoint("pre");
+      if (!ok) {
+        confirmSheet(
+          "Bod obnovy se nepodařilo vytvořit",
+          "Pokračovat bez pojistky? Krok pak nepůjde vrátit.",
+          "Pokračovat",
+          "importOk",
+          mode + "!",
+        );
+        return;
+      }
+    }
+    // F2-05: fotky ze zálohy (do IndexedDB mimo Store); žádná se nesmaže
+    let np = 0;
+    if (S.photosOn && Object.keys(o.photos).length) {
+      toast("Obnovuji fotky…");
+      try {
+        np = await photosImport(o.photos, mode === "replace");
+      } catch (e) {
+        toast("Některé fotky se nepodařilo obnovit (" + photoErr(e) + ")");
+      }
+    }
+    if (mode === "replace") {
+      applyReplace(o);
+      importData = null;
+      closeSheet();
+      toast("Data nahrazena zálohou" + (np ? ", fotky: " + np : ""));
+    } else {
+      const r = applyMerge(o);
+      r.other += np;
+      importData = null;
+      closeSheet();
+      toast(
+        r.w || r.other
+          ? "Doplněno: " +
+              r.w +
+              " " +
+              plural(r.w, "trénink", "tréninky", "tréninků") +
+              (r.other ? ", " + r.other + " dalších položek" : "")
+          : "Nic nechybělo, vše už v appce je.",
+      );
+    }
+  }
+  // Nahradit vše: data appky = obsah zálohy (měsíce, které v záloze nejsou, se smažou)
+  function applyReplace(o) {
+    put("config/main", o.cfg);
+    putEx(o.exercises);
+    put("config/templates", { items: o.templates });
+    put("config/plan", { items: o.plan });
+    put("body/all", { items: o.body });
+    for (const mk in S.months) {
+      if (!(mk in o.months)) {
+        put("workouts/" + mk, null);
+      }
+    }
+    for (const mk in o.months) {
+      put("workouts/" + mk, { items: o.months[mk] });
+    }
+  }
+  // Sloučit: doplní jen to, co v appce chybí, nic nepřepíše; vrací počty přidaných položek
+  function applyMerge(o) {
+    const r = { w: 0, other: 0 };
+    const addMissing = (cur, src) => {
+      const out = Object.assign({}, cur);
+      let n = 0;
+      for (const k in src) {
+        if (!(k in out)) {
+          out[k] = src[k];
+          n++;
+        }
+      }
+      return [out, n];
+    };
+    for (const mk in o.months) {
+      const [items, n] = addMissing(S.months[mk] || {}, o.months[mk]);
+      if (n) {
+        put("workouts/" + mk, { items });
+        r.w += n;
+      }
+    }
+    let [ex, ne] = addMissing(S.exLib, o.exercises);
+    if (ne) {
+      putEx(ex);
+      r.other += ne;
+    }
+    let [tp, nt] = addMissing(S.templates, o.templates);
+    if (nt) {
+      put("config/templates", { items: tp });
+      r.other += nt;
+    }
+    let [pl, np] = addMissing(S.plan, o.plan);
+    if (np) {
+      put("config/plan", { items: pl });
+      r.other += np;
+    }
+    let [bd, nb] = addMissing(S.body, o.body);
+    if (nb) {
+      put("body/all", { items: bd });
+      r.other += nb;
+    }
+    const have = new Set(S.cfg.gyms.map((g) => g.id)),
+      add = o.cfg.gyms.filter((g) => !have.has(g.id));
+    if (add.length) {
+      const gs = S.cfg.gyms.slice();
+      for (const g of add) {
+        gs.push(gs.some((x) => x.col === g.col) ? Object.assign({}, g, { col: freeGymCol(gs) }) : g);
+      }
+      put("config/main", Object.assign({}, S.cfg, { gyms: gs }));
+      r.other += add.length;
+    }
+    return r;
+  }
+
+  /* převod cviků na výchozí databázi (F0-02): jednou, s bodem obnovy předem */
+  async function migrateEx() {
+    if (!S.exLegacy || !pointsApi || Store.state !== "ok" || migrateEx.busy) return;
+    migrateEx.busy = true;
+    try {
+      await makePoint("exdb");
+      if (S.exLegacy) {
+        S.exLegacy = null;
+        putEx(S.exLib);
+        scheduleRender();
+      }
+    } finally {
+      migrateEx.busy = false;
+    }
+  }
+
+  /* body obnovy (IndexedDB) */
+  async function makePoint(reason) {
+    if (!pointsApi || makePoint.busy) return false;
+    makePoint.busy = true;
+    try {
+      const data = JSON.stringify(snapshotAll());
+      const res = await pointsApi.upload(new Blob([data], { type: "application/json" }), {
+        type: "application/json",
+      });
+      const pt = { id: res.id, at: Date.now(), reason, n: countW(S.months), bytes: res.sizeBytes };
+      const all = [pt].concat(S.bk.points || []);
+      const keep = all.slice(0, BK_MAX_POINTS),
+        drop = all.slice(BK_MAX_POINTS);
+      put("config/backup", Object.assign({}, S.bk, { points: keep }));
+      for (const d of drop) {
+        pointsApi.delete(d.id).catch(() => {});
+      }
+      scheduleRender();
+      return true;
+    } catch (e) {
+      toast(
+        e && e.code === "quota_or_state"
+          ? "Úložiště bodů obnovy je plné."
+          : "Bod obnovy se nepodařilo vytvořit (" + ((e && e.code) || "chyba") + ")",
+      );
+      return false;
+    } finally {
+      makePoint.busy = false;
+    }
+  }
+  // automatický bod obnovy jednou za BK_AUTO_DAYS dní (jen jednou za spuštění appky)
+  function autoPoint() {
+    if (autoPoint.armed || !pointsApi || Store.state !== "ok") return;
+    autoPoint.armed = true;
+    // počkat, až dorazí všechna data z databáze
+    setTimeout(() => {
+      if (!countW(S.months)) return;
+      const lastAuto = Math.max(
+        0,
+        ...(S.bk.points || []).filter((p) => p.reason === "auto").map((p) => +p.at || 0),
+      );
+      if (Date.now() - lastAuto >= BK_AUTO_DAYS * DAY) {
+        makePoint("auto");
+      }
+    }, 20000);
+  }
+  // obsah bodu obnovy (JSON text zálohy)
+  function fetchPoint(id) {
+    return pointsApi.read(id);
+  }
+  // Obnovit z bodu obnovy: otevře stejné okno jako soubor zálohy
+  async function openPoint(id) {
+    const p = (S.bk.points || []).find((x) => x.id === id);
+    try {
+      const o = normBackup(JSON.parse(await fetchPoint(id)));
+      importSheet(o, "Bod obnovy " + (p ? fmtDate(p.at) + " " + toTimeInput(p.at) : ""));
+    } catch (e) {
+      toast(e.message || "Bod obnovy nejde načíst.");
+    }
+  }
+  // stáhne bod obnovy jako soubor zálohy
+  async function savePoint(id) {
+    const p = (S.bk.points || []).find((x) => x.id === id);
+    if (!downloads) {
+      toast("Stahování tady není dostupné.");
+      return;
+    }
+    try {
+      const data = await fetchPoint(id);
+      await downloads.save({
+        filename: FILE_P + "-bod-obnovy-" + toDateInput(p ? p.at : Date.now()) + BK_EXT,
+        data,
+        type: "text/plain",
+      });
+      toast("Bod obnovy stažen");
+    } catch (e) {
+      if (!(e && e.code === "declined")) {
+        toast(e.message || "Stažení se nepovedlo.");
+      }
+    }
+  }
+
+  /* ---------- NATIVNÍ APPKA (F6-01) ----------
+     Appka jde nainstalovat i jako nativní aplikace pro Android (APK z GitHub Releases, aktualizace přes
+     Obtainium). Je to stejný kód zabalený Capacitorem (složka nativni/, postup v nativni/README.md), nativní
+     doplňky dodává js/nativni.js (window.NATIVNI, uložení a sdílení souborů). Tady jen to, co se z toho
+     ukazuje v appce: NATIVE / NATIVE_PR (definice u BUILD), testBar a versionSettings v sekci verze appky,
+     a přesun dat z webové appky do nativní.
+     Přesun dat (rozhodnuto 14. 10. 2026: žádné dvě živé kopie dat, synchronizace není): ve webové appce
+     Nastavení → Data a záloha → Nativní appka → Přesunout data do nativní appky stáhne zálohu i s fotkami
+     (bkBuild(true), doExport) a zapamatuje si čas přesunu (Local „nativeMoved“). Od té chvíle je na každé
+     obrazovce webové appky výrazný pruh movedBar „Data jsou v nativní appce“. Data webové appky zůstanou,
+     jen se dál nemají používat; Zrušit přesun (natBack) pruh vypne. V nativní appce se sekce neukazuje,
+     zálohu tam obnoví Obnovit ze souboru → Nahradit vše. Hlavní funkce: nativeSettings, movedBar,
+     natMove (potvrzení), natMoveOk, natBack. */
+  const nativeMoved = () => (NATIVE ? 0 : +Local.get("nativeMoved", 0) || 0);
+  // pruh nahoře na každé obrazovce webové appky po přesunu dat
+  function movedBar() {
+    if (!nativeMoved()) return "";
+    return `<div class="movedbar">
+        <b>Data jsou v nativní appce</b>
+        <span>Co zapíšeš tady, se do ní nepřenese.</span>
+      </div>`;
+  }
+  /* Nastavení → Data a záloha → Nativní appka (jen ve webové appce) */
+  function nativeSettings() {
+    if (NATIVE) return "";
+    const at = nativeMoved();
+    let h = `<section class="sec">
+      <div class="sec-h">
+        <h2>Nativní appka</h2>
+        ${helpBtn("native")}
+      </div>
+      <div class="card stack">`;
+    if (at) {
+      h += `<div class="small">Data přesunuta do nativní appky ${esc(fmtDate(at))}.</div>
+        <button class="btn" data-act="natBack">Zrušit přesun</button>`;
+    } else {
+      h += '<button class="btn" data-act="natMove">Přesunout data do nativní appky</button>';
+    }
+    return h + "</div></section>";
+  }
+  function natMove() {
+    confirmSheet(
+      "Přesunout data?",
+      "Stáhne se záloha i s fotkami. Obnov ji v nativní appce (Obnovit ze souboru → Nahradit vše) a dál " +
+        "zapisuj jen tam. Tady pak bude pruh, že data jsou v nativní appce.",
+      "Přesunout",
+      "natMoveOk",
+    );
+  }
+  async function natMoveOk() {
+    closeSheet();
+    const b = await bkBuild(true);
+    if (!b || !(await doExport(b))) return;
+    Local.set("nativeMoved", Date.now());
+    scheduleRender();
+  }
+  function natBack() {
+    Local.set("nativeMoved", null);
+    toast("Přesun zrušen, appku tady můžeš zase používat.");
+    scheduleRender();
+  }
+
+  /* ---------- ZÁLOHA SE ZÁLOHOU TELEFONU (F6-03) ----------
+     Jen v nativní appce. Android sám (zhruba jednou denně při nabíjení a na Wi-Fi) zálohuje do Google One
+     jediný soubor ve vnitřní složce appky; data zabudovaného prohlížeče ze zálohy vyřazují pravidla
+     nativni/android/app/src/main/res/xml/zaloha_pravidla.xml. Soubor zapisuje a čte js/nativni.js
+     (NATIVNI.phoneBackup), tady se řeší kdy a co:
+     - Zápis (pbWrite): celá záloha bez fotek (snapshotAll, formát F0-01) jako kompaktní JSON, 15 s
+       po poslední změně dat (put → pbSchedule) a hned při odchodu appky do pozadí, pokud zápis čeká.
+       Pojistka: appka bez tréninků nebo s nenačtenými daty soubor nikdy nepřepíše (smazaná data appky by
+       jinak přepsala dobrou zálohu prázdnou).
+     - Obnova (pbOffer): když nativní appka po načtení dat nemá žádný trénink a soubor tréninky má (nový
+       telefon, přeinstalovaná appka; Android soubor vrátí při instalaci), otevře jednou za spuštění stejné
+       okno obnovy jako soubor zálohy (importSheet, Sloučit / Nahradit vše). Trvale Nastavení → Data a záloha
+       → Záloha telefonu → Obnovit ze zálohy telefonu (pbRestore).
+     - Stav (S.pbInfo z NATIVNI.phoneBackup.info: čas posledního zápisu, velikost) ukazuje pbSettings.
+       Kdy soubor opravdu odešel do Google One, appka nezjistí.
+     Záznam událostí: nabídnutí obnovy a selhání zápisu nebo čtení (pbLog, selhání jednou za spuštění). */
+  // doplněk nativní appky (null ve webové verzi); funkce a stav jako vlastnosti funkcí, protože put volá
+  // pbSchedule i dřív, než start appky dojde až sem
+  function phoneBk() {
+    return (NATIVE && window.NATIVNI && window.NATIVNI.phoneBackup) || null;
+  }
+  // zápis selhal: do záznamu událostí jen poprvé za spuštění (zápisy se opakují po každé změně)
+  function pbLog(what, e) {
+    if (pbLog[what]) return;
+    pbLog[what] = true;
+    evLog("záloha telefonu: " + what + " selhal (" + ((e && (e.message || e.code)) || "chyba") + ")");
+  }
+  // změna dat: zápis za 15 s (další změna ho odsune)
+  function pbSchedule() {
+    if (!phoneBk()) return;
+    clearTimeout(pbSchedule.timer);
+    pbSchedule.timer = setTimeout(pbWrite, 15000);
+  }
+  // zapíše soubor pro zálohu telefonu (jen s načtenými daty a aspoň jedním tréninkem)
+  async function pbWrite() {
+    clearTimeout(pbSchedule.timer);
+    pbSchedule.timer = 0;
+    const api = phoneBk();
+    if (!api || Store.state !== "ok" || !countW(S.months)) return;
+    if (pbWrite.busy) {
+      pbSchedule();
+      return;
+    }
+    pbWrite.busy = true;
+    try {
+      await api.write(JSON.stringify(snapshotAll()));
+      await pbInfoLoad();
+    } catch (e) {
+      pbLog("zápis", e);
+    } finally {
+      pbWrite.busy = false;
+    }
+  }
+  // čas a velikost souboru pro Nastavení
+  async function pbInfoLoad() {
+    const api = phoneBk();
+    if (!api) return;
+    S.pbInfo = await api.info();
+    scheduleRender();
+  }
+  // obsah souboru jako záloha (normBackup), null = soubor není nebo nejde přečíst
+  async function pbRead() {
+    try {
+      const text = await phoneBk().read();
+      return text ? normBackup(JSON.parse(text)) : null;
+    } catch (e) {
+      pbLog("čtení", e);
+      return null;
+    }
+  }
+  // po načtení dat: prázdná appka a soubor s tréninky = nabídka obnovy (jednou za spuštění)
+  async function pbOffer() {
+    if (!phoneBk() || pbOffer.done || Store.state !== "ok") return;
+    pbOffer.done = true;
+    pbInfoLoad();
+    if (countW(S.months)) return;
+    const o = await pbRead();
+    if (!o || !countW(o.months) || countW(S.months)) return;
+    evLog("záloha telefonu: prázdná appka, nabízím obnovu");
+    importSheet(o, "Záloha telefonu");
+  }
+  // Nastavení → Obnovit ze zálohy telefonu
+  async function pbRestore() {
+    const o = await pbRead();
+    if (!o) {
+      toast("Záloha telefonu nejde načíst.");
+      return;
+    }
+    importSheet(o, "Záloha telefonu");
+  }
+  // při odchodu do pozadí zapsat hned, pokud zápis čeká
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && pbSchedule.timer) {
+      pbWrite();
+    }
+  });
+  /* Nastavení → Data a záloha → Záloha telefonu (jen v nativní appce) */
+  function pbSettings() {
+    if (!phoneBk()) return "";
+    const info = S.pbInfo;
+    const state = info
+      ? `Poslední zápis: ${fmtDate(info.mtime)} ${toTimeInput(info.mtime)} (${agoLabel(info.mtime)}) · ` +
+        fmtSize(info.size)
+      : "Zatím nezapsáno, zapíše se po prvním uloženém tréninku.";
+    return `<section class="sec">
+      <div class="sec-h">
+        <h2>Záloha telefonu</h2>
+        ${helpBtn("phonebk")}
+      </div>
+      <div class="card stack">
+        ${info ? '<button class="btn" data-act="pbRestore">Obnovit ze zálohy telefonu</button>' : ""}
+        <div class="xs muted">${esc(state)}</div>
+      </div>
+    </section>`;
+  }
+
+  /* ---------- verze appky (F0-04) ----------
+     Vydaná verze = …/workout-denik/ (větev main), testovací verze PR = …/workout-denik-test/pr-12/
+     (jiné repo, aby šla v Androidu nainstalovat vedle vydané appky; stejná doména = stejné úložiště).
+     Údaje o nasazení jsou v BUILD (js/verze.js), aktualizaci řídí js/pwa.js (window.PWA).
+     BUILD (z js/verze.js), TEST_PR (číslo PR z adresy, jinak ""). Nastavení → O aplikaci → Verze aplikace:
+     versionSettings, kontrola aktualizace window.PWA.check(), v testu copyFromMain. Data testovacích verzí
+     (scanTestData / deleteTestData) se od F0-19 ukazují a mažou v Data a záloha → Místo v zařízení
+     (storageSettings). Pruh testBar() je součástí topbar(). */
+  const MAIN_URL = BUILD.vydana || "../"; // adresa vydané verze (z testovací verze)
+  const fmtSize = (b) =>
+    b < 1048576
+      ? Math.max(1, Math.round(b / 1024)) + " kB"
+      : (b / 1048576).toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) + " MB";
+  function testBar() {
+    if (NATIVE_PR) {
+      return `<div class="testbar"><b>TEST APK · PR #${esc(NATIVE_PR)}</b><span class="grow">
+          ${esc(BUILD.nazev)}
+        </span></div>`;
+    }
+    if (!TEST_PR) return "";
+    return `<div class="testbar"><b>TEST · PR #${esc(TEST_PR)}</b><span class="grow">
+        ${esc(BUILD.nazev)}
+      </span><a href="${esc(MAIN_URL)}">Vydaná verze${icon("next")}</a></div>`;
+  }
+  /* Nastavení → O aplikaci → Verze aplikace */
+  function versionSettings() {
+    const t = Date.parse(BUILD.cas);
+    let h = `<section class="sec">
+      <div class="sec-h"><h2>Verze aplikace</h2></div>
+      <div class="card stack">`;
+    // 7 rychlých klepnutí zapne kopírování pro coache (F4-12)
+    h += `<div class="row" data-act="verTap"><b class="grow">${
+      TEST_PR
+        ? "Testovací verze · PR #" + esc(TEST_PR)
+        : NATIVE_PR
+          ? "Testovací APK · PR #" + esc(NATIVE_PR)
+          : NATIVE
+            ? "Nativní appka"
+            : BUILD.kanal === "main"
+              ? "Vydaná verze"
+              : "Lokální spuštění"
+    }</b>${TEST_PR || NATIVE_PR ? '<span class="pill test">TEST</span>' : ""}</div>`;
+    if ((TEST_PR || NATIVE_PR) && BUILD.nazev) {
+      h += `<div class="small">
+        ${esc(BUILD.nazev)}${BUILD.vetev ? `<div class="xs muted">Větev ${esc(BUILD.vetev)}</div>` : ""}
+      </div>`;
+    }
+    h += `<div class="small muted">${
+      BUILD.commit && isFinite(t)
+        ? (NATIVE ? "Sestaveno " : "Nasazeno ") +
+          fmtDate(t) +
+          " " +
+          fmtTime(t) +
+          " · kód změny " +
+          esc(BUILD.commit)
+        : "Bez údajů o nasazení (spuštěno mimo GitHub Pages)."
+    }</div>`;
+    // F6-01: nativní appka se aktualizuje novým APK (Obtainium z GitHub Releases), ne sama
+    h += NATIVE
+      ? '<div class="small muted">Novou verzi stáhne aplikace Obtainium.</div>'
+      : '<button class="btn" data-act="updCheck">Zkontrolovat aktualizaci</button>';
+    if (TEST_PR) {
+      h += `<div class="small muted">
+        Testovací verze má vlastní data, oddělená od vydané verze. Co tady zapíšeš nebo smažeš, se
+        vydané verze netýká.
+      </div>`;
+      h += `<button class="btn" data-act="copyMain">Zkopírovat data z vydané verze</button>
+      <a class="btn" href="${esc(MAIN_URL)}">Otevřít vydanou verzi</a>`;
+    }
+    h += '<button class="btn" data-act="evLog">Záznam událostí</button>'; // F0-21
+    return `${h}</div></section>`;
+  }
+  /* ---------- ZKUŠEBNÍ DATA (jen vývoj) ----------
+     Jen v testovací verzi PR a lokálně (DEV), ve vydané verzi se karta neukáže. „Přidat“ založí fitko
+     „Zkušební fitko“ (FAKE_GYM) a FAKE_DAYS.length tréninků s id začínajícím FAKE_ID, data počítaná od dneška,
+     takže jsou pořád čerstvá. Cviky a série podle FAKE_PLAN (scénáře pro stagnaci F4-06, další úlohy můžou
+     přidat své). „Smazat“ odebere jen fitko FAKE_GYM a tréninky s FAKE_ID, nic jiného. Cviky, které nejsou
+     vázané na fitko (plank, shyby, bicepsový zdvih), se sčítají se skutečnými tréninky v testovací verzi.
+     Karta fakeSettings (Nastavení → O aplikaci), fakeAdd (znovu klepnutím se data obnoví) a fakeRemove. Nová
+     úloha může do FAKE_PLAN přidat své scénáře (a doplnit popis v PR). */
+  const FAKE_GYM = "fake-gym";
+  const FAKE_ID = "fake-";
+  const FAKE_DAYS = [36, 30, 24, 18, 12, 6]; // před kolika dny byl každý zkušební trénink (od nejstaršího)
+  // n pracovních sérií kg × opakování (warm = zahřívací série navíc)
+  function fakeSets(kg, reps, n, warm) {
+    const sets = warm ? [{ t: "w", kg: warm, reps: 10 }] : [];
+    for (let k = 0; k < n; k++) {
+      sets.push({ t: "n", kg, reps });
+    }
+    return sets;
+  }
+  /* série cviku v každém zkušebním tréninku (pořadí jako FAKE_DAYS), null = cvik v tréninku není;
+     note = co má appka ukázat (jen pro přehled v kódu) */
+  const FAKE_PLAN = [
+    {
+      exId: "leg-extension-machine",
+      note:
+        "návrh progrese (F4-01) s různými vahami: se zapnutým návrhem 8–12 Všem sériím „42,5 kg × 8 · " +
+        "45 kg × 8 (1. a 2. série)“, Postupně „42,5 kg × 8 (1. série)“; RIR/RPE (F4-04) v posledním tréninku " +
+        "(stránka tréninku a historie cviku: RIR 2, 1, 0, zahřívací bez)",
+      sets: [
+        null,
+        null,
+        null,
+        null,
+        [
+          { t: "n", kg: 40, reps: 10 },
+          { t: "n", kg: 40, reps: 10 },
+          { t: "n", kg: 45, reps: 10 },
+        ],
+        [
+          { t: "w", kg: 20, reps: 12 },
+          { t: "n", kg: 40, reps: 12, rpe: 8 },
+          { t: "n", kg: 42.5, reps: 12, rpe: 9 },
+          { t: "n", kg: 45, reps: 12, rpe: 10 },
+        ],
+      ],
+    },
+    {
+      exId: "bench-press-barbell",
+      note: "vázaný na fitko, 4 tréninky bez zlepšení",
+      sets: [
+        fakeSets(70, 8, 2, 40),
+        fakeSets(80, 8, 2, 40),
+        fakeSets(80, 8, 2, 40),
+        fakeSets(80, 7, 2, 40),
+        fakeSets(80, 8, 2, 40),
+        fakeSets(80, 8, 2, 40),
+      ],
+    },
+    {
+      exId: "leg-press-machine",
+      note: "vázaný na fitko, 3 tréninky bez zlepšení (ukáže se jen při volbě 3)",
+      sets: [
+        null,
+        fakeSets(100, 10, 3),
+        fakeSets(110, 10, 3),
+        fakeSets(110, 10, 3),
+        fakeSets(110, 9, 3),
+        fakeSets(110, 10, 3),
+      ],
+    },
+    {
+      exId: "farmers-walk",
+      note:
+        "na čas se zátěží (F3-42): stránka cviku → Statistiky čipy Nejdelší výdrž, Čas celkem, Max zátěž " +
+        "(24 → 30 kg), dlaždice Čas místo Objemu; váha roste, proto bez stagnace (F4-14)",
+      sets: [
+        [
+          { t: "n", kg: 24, sec: 40 },
+          { t: "n", kg: 24, sec: 35 },
+        ],
+        [
+          { t: "n", kg: 24, sec: 45 },
+          { t: "n", kg: 24, sec: 40 },
+        ],
+        [
+          { t: "n", kg: 26, sec: 40 },
+          { t: "n", kg: 26, sec: 40 },
+        ],
+        [
+          { t: "n", kg: 28, sec: 35 },
+          { t: "n", kg: 28, sec: 30 },
+        ],
+        [
+          { t: "n", kg: 28, sec: 45 },
+          { t: "n", kg: 28, sec: 40 },
+        ],
+        [
+          { t: "n", kg: 30, sec: 40 },
+          { t: "n", kg: 30, sec: 35 },
+        ],
+      ],
+    },
+    {
+      exId: "sled-push",
+      note:
+        "vzdálenost se zátěží (F4-16): série „20m×90kg“, nedotlačené série 14 m a 12 m, stránka cviku → " +
+        "Statistiky čipy Max zátěž, Práce série, Práce tréninku, Nejdelší, dlaždice Práce kg·m, rekordy",
+      sets: [
+        null,
+        [
+          { t: "n", kg: 60, m: 20 },
+          { t: "n", kg: 60, m: 20 },
+        ],
+        [
+          { t: "n", kg: 70, m: 20 },
+          { t: "n", kg: 70, m: 20 },
+          { t: "n", kg: 70, m: 16 },
+        ],
+        [
+          { t: "n", kg: 80, m: 20 },
+          { t: "n", kg: 80, m: 20 },
+          { t: "n", kg: 80, m: 20 },
+        ],
+        null,
+        [
+          { t: "w", kg: 40, m: 20 },
+          { t: "n", kg: 90, m: 20 },
+          { t: "n", kg: 90, m: 14 },
+          { t: "n", kg: 90, m: 12 },
+        ],
+      ],
+    },
+    {
+      exId: "wrist-roller",
+      note: "na čas se zátěží, stejná váha i výdrž: 4 tréninky bez zlepšení (F4-14)",
+      sets: [
+        null,
+        [{ t: "n", kg: 10, sec: 35 }],
+        [{ t: "n", kg: 10, sec: 30 }],
+        [{ t: "n", kg: 10, sec: 35 }],
+        [{ t: "n", kg: 10, sec: 30 }],
+        [{ t: "n", kg: 10, sec: 35 }],
+      ],
+    },
+    {
+      exId: "plank",
+      note: "na čas, 5 tréninků bez zlepšení",
+      sets: FAKE_DAYS.map(() => [{ t: "n", kg: 0, reps: 0, sec: 60 }]),
+    },
+    {
+      exId: "pull-up",
+      note: "vlastní váha, pořád se zlepšuje (nic)",
+      sets: FAKE_DAYS.map((_, i) => fakeSets(0, 6 + i, 3)),
+    },
+    {
+      exId: "lateral-raise-dumbbell",
+      note:
+        "progres po cvicích (F3-26): 15 opakování, Statistiky → Cviky ukazují max. zátěž (ne odh. 1RM), " +
+        "+2 kg a v Největším zlepšení +25 %",
+      sets: [fakeSets(8, 15, 3), null, fakeSets(8, 15, 3), fakeSets(9, 15, 3), null, fakeSets(10, 15, 3)],
+    },
+    {
+      exId: "triceps-extension-cable",
+      note: "progres po cvicích (F3-26): pokles, ve Statistikách → Cviky šedě „▼ −3,2 kg“ (řazení Zlepšení −8 %)",
+      sets: [fakeSets(30, 8, 3), fakeSets(30, 8, 3), null, fakeSets(27.5, 8, 3), fakeSets(27.5, 8, 3), null],
+    },
+    {
+      exId: "bicep-curl-dumbbell",
+      note: "stejná váha a opakování, v posledním tréninku série navíc = zlepšení (nic)",
+      sets: [
+        null,
+        fakeSets(12, 10, 3),
+        fakeSets(12, 10, 3),
+        fakeSets(12, 10, 3),
+        fakeSets(12, 10, 3),
+        fakeSets(12, 10, 4),
+      ],
+    },
+  ];
+  // zkušební tréninky podle měsíců {"2026-09": {id: trénink}}
+  function fakeWorkouts() {
+    const byMonth = {};
+    const today = new Date();
+    today.setHours(17, 30, 0, 0);
+    FAKE_DAYS.forEach((daysAgo, i) => {
+      const start = today.getTime() - daysAgo * DAY;
+      const ex = FAKE_PLAN.filter((x) => x.sets[i] && S.exLib[x.exId]).map((x) => ({
+        exId: x.exId,
+        sets: x.sets[i],
+      }));
+      const w = { title: "Zkušební trénink " + (i + 1), start, end: start + 3600000, gymId: FAKE_GYM, ex };
+      const mk = monthKey(start);
+      (byMonth[mk] = byMonth[mk] || {})[FAKE_ID + (i + 1)] = w;
+    });
+    return byMonth;
+  }
+  // počet zkušebních tréninků v appce
+  function fakeCount() {
+    let n = 0;
+    for (const mk in S.months) {
+      n += Object.keys(S.months[mk]).filter((id) => id.startsWith(FAKE_ID)).length;
+    }
+    return n;
+  }
+  // přidá (nebo obnoví na dnešní data) zkušební fitko a tréninky
+  function fakeAdd() {
+    fakeRemoveWorkouts();
+    const cfg = JSON.parse(JSON.stringify(S.cfg));
+    if (!cfg.gyms.some((g) => g.id === FAKE_GYM)) {
+      cfg.gyms.push({ id: FAKE_GYM, name: "Zkušební fitko", col: freeGymCol(cfg.gyms) });
+    }
+    if (!cfg.defaultGymId) {
+      cfg.defaultGymId = FAKE_GYM;
+    }
+    put("config/main", cfg);
+    const byMonth = fakeWorkouts();
+    for (const mk in byMonth) {
+      put("workouts/" + mk, { items: Object.assign({}, S.months[mk] || {}, byMonth[mk]) });
+    }
+    S.selGym = FAKE_GYM;
+    toast("Zkušební data přidána, vybrané je Zkušební fitko.");
+  }
+  // odebere zkušební tréninky ze všech měsíců
+  function fakeRemoveWorkouts() {
+    for (const mk of Object.keys(S.months)) {
+      const ids = Object.keys(S.months[mk]);
+      if (!ids.some((id) => id.startsWith(FAKE_ID))) continue;
+      const items = {};
+      for (const id of ids) {
+        if (!id.startsWith(FAKE_ID)) {
+          items[id] = S.months[mk][id];
+        }
+      }
+      put("workouts/" + mk, Object.keys(items).length ? { items } : null);
+    }
+  }
+  // smaže zkušební tréninky i fitko (ne během rozdělaného tréninku ve zkušebním fitku)
+  function fakeRemove() {
+    if (S.active && S.active.gymId === FAKE_GYM) {
+      toast("Nejdřív dokonči nebo zahoď rozdělaný trénink ve Zkušebním fitku.");
+      return;
+    }
+    fakeRemoveWorkouts();
+    const cfg = JSON.parse(JSON.stringify(S.cfg));
+    cfg.gyms = cfg.gyms.filter((g) => g.id !== FAKE_GYM);
+    if (cfg.defaultGymId === FAKE_GYM) {
+      cfg.defaultGymId = cfg.gyms[0] ? cfg.gyms[0].id : null;
+    }
+    put("config/main", cfg);
+    if (S.selGym === FAKE_GYM) {
+      S.selGym = null;
+    }
+    toast("Zkušební data smazána.");
+  }
+  // Nastavení → O aplikaci: karta Zkušební data (jen DEV)
+  function fakeSettings() {
+    if (!DEV) return "";
+    const n = fakeCount();
+    const has = n || S.cfg.gyms.some((g) => g.id === FAKE_GYM);
+    return `<section class="sec">
+      <div class="sec-h"><h2>Zkušební data</h2></div>
+      <div class="card stack">
+        <div class="small muted">
+          Jen v testovací verzi. Přidá fitko „Zkušební fitko“ a ${FAKE_DAYS.length} tréninků za posledních
+          ${FAKE_DAYS[0]} dní (bench press, leg press, plank, shyby, bicepsový zdvih) pro vyzkoušení
+          upozornění na stagnaci. Smazat odebere jen tato zkušební data.
+        </div>
+        ${
+          has
+            ? `<div class="small">
+              V appce: ${n} ${plural(n, "zkušební trénink", "zkušební tréninky", "zkušebních tréninků")}
+            </div>`
+            : ""
+        }
+        <div class="row">
+          <button class="btn grow" data-act="fakeAdd">
+            ${has ? "Obnovit data" : "Přidat zkušební data"}
+          </button>
+          ${has ? '<button class="btn danger grow" data-act="fakeDel">Smazat</button>' : ""}
+        </div>
+      </div>
+    </section>`;
+  }
+  async function checkUpdate() {
+    if (!window.PWA) {
+      toast("Aktualizace tady nejde zkontrolovat.");
+      return;
+    }
+    toast("Kontroluji…");
+    const r = await window.PWA.check();
+    toast(
+      r === "new"
+        ? "Stahuji novou verzi, appka se hned znovu načte."
+        : r === "same"
+          ? "Máš nejnovější verzi."
+          : r === "offline"
+            ? "Nepodařilo se spojit se serverem. Jsi online?"
+            : "Aktualizace tady nejde zkontrolovat.",
+    );
+  }
+  /* data testovacích verzí v tomto telefonu (jen pro vydanou verzi):
+     databáze workout-denik-prN a klíče zd1-prN: */
+  const testKeys = () => {
+    const out = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (/^zd1-pr\d+:/.test(k || "")) {
+          out.push(k);
+        }
+      }
+    } catch (e) {}
+    return out;
+  };
+  async function testDbs() {
+    try {
+      return indexedDB.databases
+        ? (await indexedDB.databases())
+            .map((d) => d.name)
+            .filter((n) => /^workout-denik(-log)?-pr\d+$/.test(n || "")) // i záznam událostí (F0-21)
+        : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  async function scanTestData() {
+    if (scanTestData.busy) return;
+    scanTestData.busy = true;
+    const prs = {};
+    let bytes = 0;
+    for (const k of testKeys()) {
+      prs[k.match(/^zd1-pr(\d+):/)[1]] = 1;
+      bytes += k.length + (localStorage.getItem(k) || "").length;
+    }
+    for (const n of await testDbs()) {
+      prs[n.match(/\d+$/)[0]] = 1;
+      try {
+        const db = await idbOpenExisting(n);
+        for (const st of ["docs", "points"]) {
+          for (const [k, v] of await idbAll(db, st)) {
+            bytes += String(k).length + JSON.stringify(v).length;
+          }
+        }
+        db.close();
+      } catch (e) {}
+    }
+    S.testData = { n: Object.keys(prs).length, bytes };
+    scanTestData.busy = false;
+    scheduleRender();
+  }
+  async function deleteTestData() {
+    toast("Mažu…");
+    try {
+      for (const k of testKeys()) {
+        localStorage.removeItem(k);
+      }
+      for (const n of await testDbs()) {
+        await new Promise((r) => {
+          const q = indexedDB.deleteDatabase(n);
+          q.onsuccess = q.onerror = q.onblocked = () => r();
+        });
+      }
+      if (window.caches) {
+        for (const k of await caches.keys()) {
+          if (/^wd-pr\d+-|^wdlog-pr\d+$/.test(k)) {
+            await caches.delete(k);
+          }
+        }
+      } // i starý záznam oznámení (F1-04, nahradil ho záznam událostí F0-21)
+      if (navigator.serviceWorker) {
+        for (const r of await navigator.serviceWorker.getRegistrations()) {
+          if (/\/pr-\d+\/$/.test(new URL(r.scope).pathname)) {
+            await r.unregister();
+          }
+        }
+      }
+      toast("Data testovacích verzí smazána");
+    } catch (e) {
+      toast("Nepodařilo se smazat všechno.");
+    }
+    S.testData = undefined;
+    scheduleRender();
+  }
+  /* testovací verze: nahradí svá data kopií dat vydané verze (vydaná verze se jen čte) */
+  async function copyFromMain() {
+    let src = null,
+      stopped = false;
+    try {
+      const names = indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name) : [MAIN_DB];
+      if (!names.includes(MAIN_DB)) {
+        toast("Vydaná verze v tomto telefonu zatím nemá žádná data.");
+        return;
+      }
+      toast("Kopíruji data…");
+      src = await idbOpenExisting(MAIN_DB);
+      const docs = await idbAll(src, "docs"),
+        pts = await idbAll(src, "points"),
+        phs = await idbAll(src, "photos"); // fotky u cviků (F2-05); starší databáze je nemá = []
+      src.close();
+      src = null;
+      // zastavit ukládání této verze, ať kopii nic nepřepíše; po kopii se appka znovu načte
+      Store.backend = null;
+      clearTimeout(Store._ct);
+      clearTimeout(Store._at);
+      stopped = true;
+      const db = await Idb.open();
+      await new Promise((res, rej) => {
+        const tx = db.transaction(["docs", "points", "photos"], "readwrite"),
+          d = tx.objectStore("docs"),
+          p = tx.objectStore("points"),
+          ph = tx.objectStore("photos");
+        d.clear();
+        p.clear();
+        ph.clear();
+        for (const [k, v] of phs) {
+          ph.put(v, k);
+        }
+        for (const [k, v] of docs) {
+          d.put(v, k);
+        }
+        for (const [k, v] of pts) {
+          p.put(v, k);
+        }
+        tx.oncomplete = () => res();
+        tx.onerror = tx.onabort = () => rej(Idb.err(tx.error));
+      });
+      // drobnosti z localStorage: fronta zápisů, rozdělaný trénink, nastavení zobrazení
+      const ks = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        ks.push(localStorage.key(i));
+      }
+      for (const k of ks) {
+        if (k && k.startsWith(Local.P)) {
+          localStorage.removeItem(k);
+        }
+      }
+      for (const k of ks) {
+        if (k && k.startsWith(MAIN_P)) {
+          localStorage.setItem(Local.P + k.slice(MAIN_P.length), localStorage.getItem(k));
+        }
+      }
+      location.reload();
+    } catch (e) {
+      if (src) {
+        src.close();
+      }
+      toast("Kopírování se nepovedlo: " + ((e && e.message) || "chyba"));
+      if (stopped) {
+        setTimeout(() => location.reload(), 2500);
+      }
+    }
+  }
+
+  /* ---------- vzhled ---------- */
+  function themePref() {
+    return Local.get("theme", "dark");
+  }
+  function setTheme(v) {
+    Local.set("theme", v);
+    const r = document.documentElement;
+    if (v === "auto") {
+      r.removeAttribute("data-theme");
+    } else {
+      r.setAttribute("data-theme", v);
+    }
+    // PWA: barva stavového řádku Androidu podle pozadí appky
+    const m = document.querySelector("meta[name=theme-color]");
+    if (m) {
+      m.content = TEST_PR ? "#f59f00" : getComputedStyle(r).getPropertyValue("--bg").trim() || "#0e1013";
+    }
+  }
+  /* velikost písma (F3-11): celá stupnice písma v css/app.css se násobí podle data-fs na <html>,
+     pamatuje se jen v tomto zařízení (Local fontScale), stejně jako motiv */
+  const FONT_SCALES = [
+    ["m", "Normální"],
+    ["l", "Větší"],
+    ["xl", "Největší"],
+  ];
+  function fontScalePref() {
+    const v = Local.get("fontScale", "m");
+    return FONT_SCALES.some(([k]) => k === v) ? v : "m";
+  }
+  // násobek písma pro rozměry počítané v JS (okraje grafů), podle --fs-k v css/app.css
+  function fontK() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fs-k")) || 1;
+  }
+  function setFontScale(v) {
+    Local.set("fontScale", v);
+    const r = document.documentElement;
+    if (v === "l" || v === "xl") {
+      r.setAttribute("data-fs", v);
+    } else {
+      r.removeAttribute("data-fs");
+    }
+  }
+  if (TEST_PR) {
+    document.title = "TEST #" + TEST_PR + " · Workout deník";
+  }
+  setTheme(themePref());
+  setFontScale(fontScalePref());
+
+  /* ---------- start appky ---------- */
+  render.toEx = true; // F1-11: otevřená appka s rozdělaným tréninkem ukáže naposledy změněný cvik
+  const unsavedBack = unsavedRestore(); // F3-16: rozepsaná stránka z minula
+  render();
+  if (unsavedBack) {
+    toast("Obnoveny neuložené změny");
+  }
+  (async function boot() {
+    downloads = LocalDownloads;
+    evStart(); // záznam událostí (F0-21)
+    // požádat Chrome, ať data appky nikdy sám nemaže (u nainstalované PWA obvykle povolí bez dotazu)
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+    const ok = await Store.init(IndexedDbBackend(), applyDoc, () => {
+      updSync();
+      scheduleRender();
+      autoPoint();
+      migrateEx();
+      if (Store.state === "ok") {
+        planClean(); // zmeškané plány pryč (F4-07)
+        pbOffer(); // záloha telefonu: prázdná appka nabídne obnovu (F6-03)
+      }
+    });
+    if (ok) {
+      pointsApi = LocalPoints;
+      photosLoad();
+      scheduleRender();
+      autoPoint();
+      migrateEx();
+    }
+    if (ok) {
+      // F0-19: novější kopie rozdělaného tréninku vyhrává (v Local mohla při plné schránce zůstat starší)
+      const a = await Store.fetchActive();
+      if (a && (!S.active || (a.upd || 0) > (S.active.upd || 0))) {
+        S.active = a;
+        Local.set("active", a);
+        scheduleRender();
+      }
+    }
+    if (S.restEnd > Date.now() && !S.restFired) {
+      restPost();
+    } // po znovuotevření appky znovu naplánovat oznámení (F1-04)
+  })();
+})();
