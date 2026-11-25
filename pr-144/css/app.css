@@ -1,0 +1,4470 @@
+/* Základ převzatý z obalu Claude artefaktu (okraje pro výřez displeje, reset body, [hidden]). */
+:root {
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+body {
+  margin: 0;
+  padding: 0;
+  font:
+    var(--fs-base) -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: #faf9f5;
+  color: #141413;
+}
+img {
+  max-width: 100%;
+}
+[hidden]:not([hidden="until-found" i]) {
+  display: none !important;
+}
+
+/* ---------- styl appky ---------- */
+/* ikona v textu a tlačítkách (F3-20, icon() v js/app.js): velikost podle písma, obrys v barvě textu */
+.ic {
+  flex: none;
+  width: 1.2em;
+  height: 1.2em;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.22em;
+}
+.ic.up {
+  transform: rotate(180deg);
+}
+.btn > .ic {
+  stroke-width: 2.3;
+}
+/* medaile rekordu (medal()): zlatá / stříbrná, o kousek větší kvůli čitelnosti */
+.md-ic {
+  width: 1.35em;
+  height: 1.35em;
+  vertical-align: -0.3em;
+}
+.md-ic .disc {
+  stroke-width: 1.6;
+}
+.md-ic.gold .rib {
+  stroke: var(--md-g-rib);
+}
+.md-ic.gold .disc {
+  fill: var(--md-g);
+  stroke: var(--md-g-d);
+}
+.md-ic.silver .rib {
+  stroke: var(--md-s-rib);
+}
+.md-ic.silver .disc {
+  fill: var(--md-s);
+  stroke: var(--md-s-d);
+}
+/* ikona „vázáno na fitko“ a medaile za názvem cviku (F3-22): barva textu vedle, poslední slovo názvu
+   drží ikony na stejném řádku (nameWithIcons) */
+.nowrap {
+  white-space: nowrap;
+}
+.gd-ic,
+.exc-med {
+  margin-left: 0.25em;
+}
+.ic.flame {
+  color: var(--flame);
+}
+:root {
+  color-scheme: light;
+  --bg: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f5f6f8;
+  --line: #dce0e6;
+  --line-2: #c9ced6;
+  --ink: #13161b;
+  --ink-2: #3a404b;
+  --ink-3: #545b66;
+  --accent: #cf3a31;
+  --accent-2: #b0302a;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe7e5;
+  --work: #3a4657; /* odznak pracovní série (F3-35) */
+  --work-bg: #dde3eb;
+  --warm: #a86a00;
+  --warm-bg: #fcefd4;
+  --drop: #5646bd;
+  --drop-bg: #ebe8fb;
+  --ss: #0b7a86; /* proužek supersérie (F4-05) */
+  --fail: #c0322b;
+  --fail-bg: #fbe4e2;
+  --good: #1b7a48;
+  --good-bg: #def3e7;
+  /* barvy fitek 1–12 (F0-07, F3-01), --chart = obecné grafy, které nepatří žádnému fitku */
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --s5: #e87ba4;
+  --s6: #008300;
+  --s7: #7a2fb5;
+  --s8: #8a8a14;
+  --s9: #1590b0;
+  --s10: #b86fcc;
+  --s11: #8a3b2e;
+  --s12: #424a9c;
+  --chart: #5f6b7a;
+  /* medaile rekordu (F3-20): zlatá = velký rekord, stříbrná = malý; stuhy jako velká medaile v oslavě */
+  --md-g: #f2b52a;
+  --md-g-d: #9c6400;
+  --md-g-rib: #cf3a31;
+  --md-s: #d3d9e0;
+  --md-s-d: #6f7882;
+  --md-s-rib: #2a78d6;
+  --flame: #e2601a; /* týdny v řadě (kalendář) */
+  --shadow: 0 1px 2px rgba(19, 22, 27, 0.06), 0 4px 16px rgba(19, 22, 27, 0.06);
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* nejmenší dotyková plocha (F1-18, F3-23): řádek série, přepínače, ikonová tlačítka, okraj čipů */
+  --tap: 44px;
+  /* výška všech prvků v řádku série (F3-23): odznak druhu, políčka kg / opak., RIR/RPE a ✓ */
+  --row-h: 36px;
+  /* Svislé mezery mezi bloky stránky (F3-43), jiné hodnoty mezi bloky nepoužívat:
+     --gap-in = uvnitř skupiny (nadpis sekce → obsah, blok ovládání nahoře mezi sebou i k obsahu),
+     --gap-out = mezi skupinami (sekce → sekce, samostatné velké tlačítko od okolí),
+     --gap-list = karty a řádky seznamu pod sebou, i prvky uvnitř karty (F3-44).
+     Uvnitř panelu (F3-44) stejně: bloky --gap-in, nová skupina --gap-out; --gap-lbl = popisek nad políčkem
+     nebo čipy (label.f, .lbl-f) → obsah. Drobný popis pod názvem 2 px je typografie, ne mezera mezi bloky. */
+  --gap-in: 10px;
+  --gap-out: 22px;
+  --gap-list: 8px;
+  --gap-lbl: 4px;
+  /* Stupnice písma (F3-11): jiné velikosti písma než tyto nepoužívat.
+     --fs-k = zvětšení písma z Nastavení → Vzhled (data-fs na <html>, fontScale v js/app.js). */
+  --fs-k: 1;
+  --fs-2xs: calc(11px * var(--fs-k)); /* popisky VELKÝMI písmeny, spodní lišta, osy grafů */
+  --fs-xs: calc(12px * var(--fs-k)); /* drobný text (.xs) */
+  --fs-sm: calc(13px * var(--fs-k)); /* malý text (.small), sloupec Minule, legendy */
+  --fs-md: calc(14px * var(--fs-k)); /* řádky seznamů, přepínače, hlášky */
+  --fs-base: calc(15px * var(--fs-k)); /* běžný text */
+  --fs-lg: calc(17px * var(--fs-k)); /* název cviku, hodnoty sérií, políčka pro psaní */
+  --fs-xl: calc(20px * var(--fs-k)); /* menší nadpisy a čísla */
+  --fs-2xl: calc(22px * var(--fs-k)); /* nadpis panelu, dlouhý nadpis stránky */
+  --fs-3xl: calc(26px * var(--fs-k)); /* čísla v dlaždicích, − / + v krokovači */
+  --fs-4xl: calc(30px * var(--fs-k)); /* nadpis stránky, velké číslo (pauza, krokovač, měření) */
+  --fs-clock: calc(88px * var(--fs-k)); /* odpočet na ztmavené obrazovce */
+  /* spodní lišta: větší písmo jen do šířky, která se na úzký telefon vejde (Nastavení v 1/6 displeje) */
+  --fs-tabs: min(var(--fs-2xs), 3.4vw);
+}
+:root[data-fs="l"] {
+  --fs-k: 1.15;
+}
+:root[data-fs="xl"] {
+  --fs-k: 1.3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1013;
+    --surface: #171a1f;
+    --surface-2: #1f232a;
+    --line: #2a2f37;
+    --line-2: #3a404a;
+    --ink: #eceef1;
+    --ink-2: #ccd1d8;
+    --ink-3: #b0b6bf;
+    --accent: #ee5b51;
+    --accent-2: #ff7166;
+    --accent-ink: #1a0806;
+    --accent-soft: #3a1715;
+    --work: #c9d2de;
+    --work-bg: #2e3644;
+    --warm: #f0b44a;
+    --warm-bg: #352810;
+    --drop: #a197f2;
+    --drop-bg: #26223f;
+    --ss: #4cc2cf;
+    --fail: #f0736a;
+    --fail-bg: #3a1a18;
+    --good: #52c48d;
+    --good-bg: #12301f;
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+    --s5: #d55181;
+    --s6: #008300;
+    --s7: #9a5fd6;
+    --s8: #8f9a1c;
+    --s9: #1ba0c4;
+    --s10: #bb7fd0;
+    --s11: #a3503f;
+    --s12: #5a5fb0;
+    --chart: #98a2b0;
+    --md-g: #f5c542;
+    --md-g-d: #b87a06;
+    --md-g-rib: #ee5b51;
+    --md-s: #c6ccd4;
+    --md-s-d: #8a939d;
+    --md-s-rib: #3987e5;
+    --flame: #ff8a3d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1013;
+  --surface: #171a1f;
+  --surface-2: #1f232a;
+  --line: #2a2f37;
+  --line-2: #3a404a;
+  --ink: #eceef1;
+  --ink-2: #ccd1d8;
+  --ink-3: #b0b6bf;
+  --accent: #ee5b51;
+  --accent-2: #ff7166;
+  --accent-ink: #1a0806;
+  --accent-soft: #3a1715;
+  --work: #c9d2de;
+  --work-bg: #2e3644;
+  --warm: #f0b44a;
+  --warm-bg: #352810;
+  --drop: #a197f2;
+  --drop-bg: #26223f;
+  --ss: #4cc2cf;
+  --fail: #f0736a;
+  --fail-bg: #3a1a18;
+  --good: #52c48d;
+  --good-bg: #12301f;
+  --s1: #3987e5;
+  --s2: #d95926;
+  --s3: #199e70;
+  --s4: #c98500;
+  --s5: #d55181;
+  --s6: #008300;
+  --s7: #9a5fd6;
+  --s8: #8f9a1c;
+  --s9: #1ba0c4;
+  --s10: #bb7fd0;
+  --s11: #a3503f;
+  --s12: #5a5fb0;
+  --chart: #98a2b0;
+  --md-g: #f5c542;
+  --md-g-d: #b87a06;
+  --md-g-rib: #ee5b51;
+  --md-s: #c6ccd4;
+  --md-s-d: #8a939d;
+  --md-s-rib: #3987e5;
+  --flame: #ff8a3d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  background: var(--bg);
+}
+body {
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 0 calc(96px + env(safe-area-inset-bottom, 0px));
+}
+/* místo pod stránkou, aby šel řádek posledního cviku posunout nad panel krokovače (F1-27, kkScroll) */
+.wrap {
+  margin-bottom: var(--kk-room, 0px);
+}
+/* pruh pauzy nad spodní lištou nesmí zakrýt konec stránky: místo navíc o výšku pruhu (F1-16) */
+body:has(#rest:not([hidden])) .wrap {
+  padding-bottom: calc(96px + 16px + max(38px, var(--fs-4xl)) + 8px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Nativní appka (F6-01, třída nativni na <html> z js/nativni.js): WebView kreslí stránku i pod stavový řádek
+   a navigační lištu Androidu (env(safe-area-inset-*) = jejich výška). Pruh v barvě pozadí pod stavovým řádkem,
+   aby pod ním neprosvítala posouvaná stránka (nad lištou se záložkami, pod tmavým pozadím panelu .scrim). Spodní
+   okraj už má .wrap, okraj :root by ho počítal podruhé a stránka by šla posunout, i když se vejde. */
+html.nativni {
+  padding-bottom: 0;
+}
+html.nativni body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  z-index: 40;
+}
+
+/* top bar */
+.top {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 20;
+  background: var(--bg);
+  padding-block: 14px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.top h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--fs-4xl);
+  letter-spacing: 0.01em;
+  margin: 0;
+  line-height: 1;
+  flex: 1;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+.top h1.long {
+  font-size: var(--fs-2xl);
+}
+/* pruh testovací verze PR (F0-04), oranžová = barva testovací ikony */
+.testbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline: -16px;
+  padding: 6px 16px;
+  background: #f59f00;
+  color: #1a1a1a;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+}
+.testbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.testbar a {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+}
+/* pruh ve webové appce po přesunu dat do nativní appky (F6-01, movedBar v js/app.js) */
+.movedbar {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  margin-inline: -16px;
+  padding: 8px 16px;
+  background: #c0322b; /* pevná červená v obou motivech, bílý text musí být čitelný */
+  color: #fff;
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+.top h1 small {
+  display: block;
+  font-family: var(--body);
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.sync {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.sync i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  display: inline-block;
+}
+.sync.pending i {
+  background: var(--warm);
+}
+.sync.off i {
+  background: var(--ink-3);
+}
+
+/* tab bar */
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tabs nav {
+  max-width: 560px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+.tabs button {
+  background: none;
+  border: 0;
+  padding: 9px 1px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fs-tabs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+.tabs button svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tabs button[aria-current="true"] {
+  color: var(--accent);
+}
+.tabs .dot {
+  position: absolute;
+  margin-left: 18px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* generic */
+.sec {
+  margin-top: var(--gap-out);
+}
+/* svislé mezery (F3-43): sekce, která pokračuje ve skupině nad ní (období pod filtry, obsah pod přepínačem),
+   a odsazení bloků místo ručního style="margin…" (u .chips ne: mají záporný okraj, odsazení dostane soused) */
+.sec.cont,
+.mt-in {
+  margin-top: var(--gap-in);
+}
+.mb-in {
+  margin-bottom: var(--gap-in);
+}
+/* nová skupina pod předchozím blokem: tlačítka dole na stránce, Pro coache (F3-44 krok B) */
+.mt-out {
+  margin-top: var(--gap-out);
+}
+.mb-list {
+  margin-bottom: var(--gap-list);
+}
+/* prvek pod jiným v kartě (8 px) a řádek pod nadpisem (4 px) mimo sloupec .stack (F3-47) */
+.mt-list {
+  margin-top: var(--gap-list);
+}
+.mt-lbl {
+  margin-top: var(--gap-lbl);
+}
+/* samostatný popisek .lbl-f nad obsahem mimo sloupec s mezerou (F3-44) */
+.mb-lbl {
+  margin-bottom: var(--gap-lbl);
+}
+.sec-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: var(--gap-in);
+}
+.sec-h h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--ink-2);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-in);
+}
+/* seznam karet nebo řádků pod sebou (F3-43), prvky uvnitř karty pod sebou (F3-44) */
+.stack.list,
+.stack.inner {
+  gap: var(--gap-list);
+}
+/* popisek nad přepínačem, políčkem nebo čipy a obsah pod ním (F3-44) */
+.stack.tight {
+  gap: var(--gap-lbl);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row.wrap-r {
+  flex-wrap: wrap;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.muted {
+  color: var(--ink-3);
+}
+.small {
+  font-size: var(--fs-sm);
+}
+.xs {
+  font-size: var(--fs-xs);
+}
+a.btn {
+  color: var(--ink);
+  text-decoration: none;
+}
+.btn {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+/* nebezpečná, nevratná akce (Smazat, Zahodit, Odebrat…) vždy červeným obrysem, všude stejně (F2-12, F3-23):
+   na stránce za čárou .bzone pod ostatními tlačítky, v patičce panelu vlevo; v potvrzovacím okně je potvrzení
+   plné (btn primary), protože je to akce, kvůli které se okno otevřelo */
+.btn.danger {
+  color: var(--fail);
+  border-color: var(--fail);
+  background: transparent;
+}
+.btn.block {
+  width: 100%;
+}
+.bzone {
+  border-top: 1px solid var(--line-2); /* mezeru nad i pod čarou dává sloupec tlačítek (F3-44) */
+}
+.btn.sm {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: var(--fs-sm);
+  border-radius: 8px;
+  position: relative;
+}
+/* F3-23: malé prvky (čip, .btn.sm, přepínač, přehrání zvuku) reagují na prst aspoň v pásu vysokém --tap,
+   vzhled zůstává; okraj jen nahoru a dolů (vedle sebe leží těsně), vyšší prvky ho mají menší */
+.chip::after,
+.btn.sm::after,
+.seg button::after,
+.spr-p::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, var(--tap));
+  transform: translateY(-50%);
+}
+.btn:disabled,
+.btn.off {
+  opacity: 0.45;
+}
+/* akce v nadpisu sekce jen s ikonou (icoBtn): stejný rámeček jako .btn.sm, velikost podle písma */
+.btn.sm.ico {
+  min-width: 2.6em;
+  padding: 6px 0;
+}
+.btn.ico svg {
+  width: 1.35em;
+  height: 1.35em;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.iconbtn {
+  border: 0;
+  background: transparent;
+  width: var(--tap); /* bez rámečku, větší plocha nemění vzhled (F3-23) */
+  height: var(--tap);
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+}
+.iconbtn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.iconbtn:disabled {
+  opacity: 0.3;
+}
+/* přetažení (F2-07): úchyt, zvednutá položka jede s prstem, ostatní uhýbají */
+.dnd-h {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75em;
+  height: 2.75em;
+  margin: -0.4em -0.5em -0.4em 0;
+  color: var(--ink-3);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+.dnd-h svg {
+  width: 1.4em;
+  height: 1.4em;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.dnd-act .dnd-it {
+  transition: transform 0.15s ease;
+}
+.dnd-act .dnd-it.dnd-on {
+  transition: none;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.dnd-on .dnd-h {
+  color: var(--accent);
+  cursor: grabbing;
+}
+.dnd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.dnd-row b {
+  overflow-wrap: anywhere;
+}
+.sec-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+/* rozcestník Nastavení (F3-09): řádek = skupina, oranžový = je čas zálohovat */
+.setlist {
+  padding: 0;
+  overflow: hidden;
+}
+.setrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.setrow + .setrow {
+  border-top: 1px solid var(--line);
+}
+.setrow:is(:active, .prs) {
+  background: var(--surface-2);
+}
+.setrow b {
+  display: block;
+  font-size: var(--fs-lg);
+}
+.setrow .xs {
+  display: block;
+  margin-top: 2px;
+}
+.setrow-ic {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.setrow-go {
+  flex: none;
+  display: flex;
+  color: var(--ink-3);
+}
+.setrow-ic svg,
+.setrow-go svg {
+  width: 21px;
+  height: 21px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.setrow-ic svg .fill {
+  fill: currentColor;
+}
+.setrow.warn .setrow-ic {
+  background: var(--warm-bg);
+  color: var(--warm);
+}
+.setrow.warn .xs {
+  color: var(--warm);
+}
+/* výběr barvy fitka (F3-01): pod obsazenou barvou název fitka */
+.cpick {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px 8px; /* mezi řádky 10 px od kolečka, 5 px z nich dává místo pro okraj (.cpick i) */
+}
+.cpick button {
+  border: 0;
+  background: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.cpick i {
+  width: 40px;
+  height: 40px;
+  /* místo pro okraj vybrané barvy (stín 3 + 2 px přesahuje kolečko), aby nezasahoval do popisku Barva
+     a do názvu fitka pod kolečkem; mezery se měří od okraje (F3-44) */
+  margin-block: 5px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-style: normal;
+  font-weight: 700;
+  font-size: var(--fs-base);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.cpick button[aria-checked="true"] i {
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 5px var(--ink);
+}
+.cpick small {
+  font-size: var(--fs-2xs);
+  line-height: 1.1;
+  color: var(--ink-3);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  /* místo pro neviditelný okraj čipů (F3-23): posuvný řádek by okraj mimo padding ořízl;
+     záporný okraj vrátí rozložení stránky, jak bylo */
+  padding-block: calc((var(--tap) - 34px) / 2);
+  margin-block: calc((34px - var(--tap)) / 2);
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex: none;
+  position: relative;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+/* filtr partií a vybavení (F3-41): čip se šipkou nebo křížkem, panel se zalomenými čipy, počet cviků
+   jako nadpis sekce (tlačítka vpravo se při velkém písmu zalomí pod něj) */
+.fchip .ic {
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: -2px;
+}
+.chips.fwrap {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+/* řádky čipů nad sebou: mezera 10 px, aby se dotykové plochy (--tap) nepřekrývaly */
+.chips.fwrap,
+.chips.fcol {
+  row-gap: 10px;
+}
+.mf-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-bottom: -4px;
+}
+.mf-h i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+/* čipy pod sebou (panel Vybavení) */
+.chips.fcol {
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: visible;
+}
+.cnt-h {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cnt-h h2 {
+  white-space: nowrap;
+}
+.cnt-h .sec-btns {
+  margin-left: auto;
+  gap: 8px;
+}
+.sheet-b > .cnt-h {
+  margin: 0;
+  flex: none;
+}
+.chip .sw {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.pill .sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pill.test {
+  background: #f59f00;
+  color: #1a1a1a;
+}
+label.f,
+.lbl-f {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-lbl);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.inp {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 9px;
+  padding: 9px 11px;
+  min-height: var(--tap); /* všechna políčka stejně vysoká, i v panelu s menším řádkováním (F3-23) */
+  width: 100%;
+  font-size: var(--fs-lg);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--ink);
+}
+/* číslo v políčku vždy na střed jako v sérii (F3-23) */
+.inp[data-num] {
+  text-align: center;
+}
+/* šedé předvyplnění čísla jako v sérii (BMI ve formuláři měření, F3-33) */
+.inp[data-num]::placeholder {
+  color: var(--ink-3);
+}
+/* údaj jedním řádkem (F3-23): název vlevo, úzké políčko vpravo (Tělo v Nastavení, formulář měření) */
+.frow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--fs-base);
+}
+.frow .inp {
+  flex: none;
+  width: 6.5em;
+}
+.frow .inp[type="date"] {
+  width: auto;
+}
+select.inp {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.empty {
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--ink-3);
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+}
+.banner {
+  background: var(--warm-bg);
+  color: var(--warm);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  margin-top: var(--gap-in);
+}
+/* pruh hned pod záhlavím bez mezery jako přepínač v Historii (F3-43) */
+.top + .banner {
+  margin-top: 0;
+}
+.banner.act {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.banner.act .btn {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  background: var(--warm);
+  border-color: var(--warm);
+  color: var(--bg);
+}
+.bkpt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.bkpt:first-child {
+  border-top: 0;
+}
+.steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* home */
+.startbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+/* F2-13: karta šablony jako karta v Historii – název a štítek fitka nahoře, pod ním údaje a cviky */
+.tpl.tap {
+  cursor: pointer;
+}
+.tpl.tap:is(:active, .prs) {
+  background: var(--surface-2);
+}
+/* F3-49: karta tréninku v historii cviku, klepnutí otevře stránku tréninku */
+.exh-w {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.exh-w:is(:active, .prs) {
+  background: var(--surface-2);
+}
+/* F2-06: karta fitka v Nastavení → Fitka, klepnutí otevře panel fitka */
+.gym-c {
+  cursor: pointer;
+}
+.gym-c:is(:active, .prs) {
+  background: var(--surface-2);
+}
+.tpl-h {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+/* štítek fitka a ⋯ vpravo, u dlouhého názvu zarovnané s jeho prvním řádkem */
+.tpl-r {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* s tlačítkem ⋯ (44 px) hlavička nezvětší kartu: záporné okraje, název na střed výšky tlačítka, tečky
+   zarovnané k okraji karty */
+.tpl-h.m {
+  margin: -10px -10px -10px 0;
+}
+.tpl-h.m .tpl-r {
+  min-height: var(--tap);
+}
+.tpl h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.tpl-h.m h3 {
+  padding-block: calc((var(--tap) - 1.2em) / 2);
+}
+.tpl-h .iconbtn {
+  color: var(--ink-2);
+}
+.tpl p {
+  margin: 6px 0 0;
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+.tpl p.tpl-meta {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+/* F1-11: mezera mezi připomínkou zálohy (nebo jiným pruhem) a kartami čísel na úvodní obrazovce */
+.banner + .kpis {
+  margin-top: var(--gap-in);
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.kpi b {
+  display: block;
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi span {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+/* editor */
+.ed-head {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ed-title {
+  border: 0;
+  background: transparent;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--fs-3xl);
+  padding: 0;
+  width: 100%;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+/* F1-26: název tréninku s ⋯ vpravo (iconbtn bez rámečku, okraj kvůli ploše nezvětší kartu ani mezery)
+   a řádek poznámky k tréninku pod ním (jako poznámka ke cviku, ale bez okrajů karty cviku) */
+.ed-trow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ed-trow .iconbtn {
+  flex: none;
+  margin: -6px -6px -6px 0;
+}
+.ed-head .wnote-l {
+  margin: 0;
+  width: 100%;
+}
+.ed-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ed-meta .stat b {
+  font-family: var(--display);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  display: block;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ed-meta .stat span {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+/* supersérie (F4-05): proužek vlevo uvnitř karty (rozměry karty se nemění), štítek „supersérie 1/2“,
+   karty jedné supersérie (.ssg) blíž k sobě */
+.ssg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* proužek jako vrstva nad obsahem, aby ho nepřekrylo zelené pozadí hotové série; overflow ořízne rohy */
+.ss-on {
+  position: relative;
+  overflow: hidden;
+}
+.ss-on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--ss);
+  z-index: 1;
+  pointer-events: none;
+}
+.exc {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.exc-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: var(--gap-in) 8px 8px 14px; /* F3-44: nahoře 10 (název má vlastní výšku řádku), k řádkům pod ním 8 */
+}
+/* F1-11: ikona statistik a ••• vedle sebe bez mezery */
+.exc-h .iconbtn + .iconbtn {
+  margin-left: -8px;
+}
+.exc-h h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink); /* F3-23: hlavní barva jen pro akce a výběr, klikatelnost nese ikona grafu */
+}
+.exc-h h3 button,
+.linkbtn {
+  all: unset;
+  cursor: pointer;
+}
+/* Minule jako text pod názvem cviku (F1-19): nejvýš 2 řádky, klepnutím se rozbalí */
+.exc-prev {
+  all: unset;
+  box-sizing: border-box;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0 14px 8px;
+  width: calc(100% - 28px);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.exc-prev.open {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+/* návrh progrese pod názvem cviku (F4-01), klepnutím se skryje */
+.exc-prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 8px;
+  width: calc(100% - 28px);
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--good-bg);
+  color: var(--good);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+/* ikona návrhu progrese i stagnace (F3-20: jedno pravidlo pro obě) */
+.exc-prog svg,
+.stag-ico svg {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* rozsah opakování od – do (Nastavení → Trénink, Upravit cvik) */
+.prog-rng {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.prog-rng .inp {
+  width: 3.6em;
+  text-align: center;
+}
+/* nastavení stroje (F1-07): jeden řádek pod názvem cviku, delší text končí „…“, klepnutí = úprava */
+.exc-mach {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  margin: 0 14px 8px;
+  width: calc(100% - 28px);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+/* dotyková plocha: neviditelný okraj do poloviny mezery k sousedům (F3-23) */
+.exc-mach::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.exc-mach .gd-ic {
+  display: inline-flex;
+  flex: none;
+  margin-left: 0;
+}
+.exc-mach .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* stránka cviku (Popis): nastavení stroje po fitkách (F1-07) */
+.mach-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: var(--tap);
+  width: 100%;
+  cursor: pointer;
+}
+/* pauza cviku v úpravě šablony (F2-14): stejný řádek jako Stroj, ikona hodin */
+.exc-rest {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  margin: 0 14px 8px;
+  width: calc(100% - 28px);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.exc-rest::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.exc-rest .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* šipka › vpravo u řádku pod názvem cviku, který otevírá panel nebo stránku (F2-14) */
+.exc-go {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-3);
+}
+/* stagnace (F4-06): řádek pod „Minule“ */
+.exc-stag {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: calc(100% - 28px);
+  margin: -4px 14px 8px;
+  padding: 0 0 0 10px; /* ikona pod ikonou návrhu progrese (F4-01), šipka › u pravého okraje (F2-14) */
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+/* ikona stagnace (F4-06): řádek v tréninku i sekce Bez zlepšení na stránce cviku */
+.stag-ico {
+  display: inline-flex;
+  flex: none;
+}
+/* poznámka ke cviku (F3-52): řádek jen pro čtení, výška podle textu, klepnutí = panel s úpravou */
+.exc-note {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  position: relative;
+  margin: 0 14px 8px;
+  width: calc(100% - 28px);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* dotyková plocha: neviditelný okraj do poloviny mezery k sousedům (F3-23) */
+.exc-note::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.exc-note .exc-go {
+  align-self: center;
+}
+.exc-note .nt-ic,
+.note-v .nt-ic {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-2);
+}
+.exc-note .t,
+.note-v .t {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* uložený trénink: poznámka s ikonou jen ke čtení */
+.note-v {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.sets {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed; /* F3-36: šířky sloupců z nadpisů, volné místo dostanou jen políčka (.c-in bez šířky) */
+}
+/* F3-36: poslední sloupec je políčko (šablona, úprava tréninku bez RIR/RPE): okraj vpravo místo paddingu buňky,
+   aby kg a opak. byla stejně široká; Smazat se posune o stejný kus za okraj */
+.sets.end-in {
+  width: calc(100% - 12px);
+}
+.sets th {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+  text-align: center;
+  padding: 4px 2px;
+}
+/* rozsah opakování pro návrh progrese za nadpisem Opak. (F3-22); bez místa se celý zalomí pod něj */
+.sets th .rng {
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.sets td {
+  padding: 4px 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+.sets tr.done td {
+  background: var(--good-bg);
+}
+.sets .c-type {
+  width: calc(var(--row-h) + 16px); /* odznak + padding (ve fixed layoutu šířka včetně paddingu) */
+  padding-left: 14px; /* odznak na okraji nadpisu a poznámky (F3-36) */
+}
+/* hodnoty sloupce Minule; nadpis sloupce (th) má stejné písmo jako ostatní nadpisy */
+.sets .c-prev {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.sets td.c-prev {
+  font-size: var(--fs-sm);
+}
+.sets .c-ok {
+  width: calc(50px + 16px); /* ✓ 50 px + padding */
+}
+/* F1-18: neviditelný okraj ✓ a odznaku druhu série vyplní celou buňku, klepnout jde i vedle rámečku */
+.sets td.c-ok,
+.sets td.c-type {
+  height: var(--tap);
+  position: relative;
+}
+.okb::after,
+.stype::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+/* poslední sloupec (✓ nebo RIR/RPE) končí na okraji poznámky (F3-36); políčko jako poslední viz .end-in */
+.sets th:last-child,
+.sets td:last-child {
+  padding-right: 14px;
+}
+.sets.end-in th:last-child,
+.sets.end-in td:last-child {
+  padding-right: 2px;
+}
+/* F2-03: tah doleva po řádku série odkryje tlačítko Smazat (leží za posledním sloupcem, karta ho ořízne) */
+.sets tr.sw td {
+  touch-action: pan-y;
+}
+.sets tr.sw-anim {
+  transition: transform 0.18s ease;
+}
+.sets .sw-cell {
+  position: relative;
+}
+.sw-del {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 6.5em;
+  border: 0;
+  background: var(--fail);
+  color: var(--surface);
+  font-weight: 700;
+  font-size: var(--fs-md);
+}
+/* F3-36: v .end-in je za posledním políčkem okraj 12 px, Smazat začíná až za ním */
+.end-in .sw-del {
+  left: calc(100% + 12px);
+}
+/* odznak druhu série (F3-35): každý druh má vlastní barvu (pracovní šedomodrá --work) a všechny tenký rámeček
+   jako tlačítka a ✓, aby se neztrácely na zeleném hotovém řádku a nevypadaly jako prázdné políčko */
+.stype {
+  width: var(--row-h);
+  height: var(--row-h);
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  padding: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+  background: var(--work-bg);
+  color: var(--work);
+}
+.stype-in {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.stype.w {
+  background: var(--warm-bg);
+  color: var(--warm);
+}
+.stype.d {
+  background: var(--drop-bg);
+  color: var(--drop);
+}
+.stype.f {
+  background: var(--fail-bg);
+  color: var(--fail);
+}
+.cell {
+  width: 100%;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  border-radius: 8px;
+  height: var(--row-h);
+  text-align: center;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  color: var(--ink);
+}
+.cell::placeholder {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.cell:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  outline: none;
+}
+/* F1-11: textové pole při psaní zvýrazní vlastní okraj (rámeček kolem by přečníval pod lištu a přes okraj) */
+.inp:focus-visible {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  outline: none;
+}
+.ed-title:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+tr.done .cell,
+tr.done .effb {
+  background: transparent;
+}
+/* F1-10: neplatné číslo (červený rámeček) */
+.cell.bad,
+.cell.bad:focus,
+.inp.bad {
+  border-color: var(--fail);
+  background: var(--fail-bg);
+  color: var(--fail);
+}
+.inp.bad:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--fail);
+}
+/* F2-08: název šablony, který už má jiná šablona ve stejném fitku (tlačítko Uložit šablonu pak .btn.off) */
+.ed-title.bad,
+.ed-title.bad:focus-visible {
+  color: var(--fail);
+  box-shadow: inset 0 -2px 0 var(--fail);
+}
+/* F0-09: co je špatně na hodnotě, pod polem ve formuláři (label.f) */
+.fmsg {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fail);
+}
+.fmsg:empty {
+  display: none;
+}
+/* F3-17: upozornění (stejný český název), uložit jde; odkaz na cvik se stejným názvem */
+.fmsg.warn {
+  color: var(--warm);
+}
+/* F2-06: řádek v okně Smazat fitko, u Přesunout neutrální, u Smazat varování (.warn) */
+.fmsg.gd-msg:not(.warn) {
+  color: var(--ink-2);
+}
+.fmsg .link {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.okb {
+  width: 50px;
+  height: var(--row-h); /* stejně vysoké jako políčka série (F3-23) */
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+}
+/* tlačítko stopek za políčky série na čas (F1-24): velikost jako ✓, ■ za běhu v hlavní barvě jako pásek */
+.sets .c-stw {
+  width: calc(50px + 16px); /* tlačítko 50 px + padding */
+}
+.sets td.c-stw {
+  height: var(--tap);
+  position: relative;
+}
+.stwb {
+  width: 50px;
+  height: var(--row-h);
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  padding: 0;
+}
+.stwb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.stwb svg {
+  width: 18px;
+  height: 18px;
+}
+.stwb.run {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.stwb:disabled {
+  opacity: 0.4;
+}
+.okb svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+tr.done .okb {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--surface);
+}
+/* náročnost série RIR/RPE (F4-04): úzký sloupec před ✓, hodnota jako tlačítko ve tvaru políčka série */
+.sets .c-eff {
+  width: calc(2.8em + 4px);
+}
+.sets .c-eff:last-child {
+  width: calc(2.8em + 16px); /* bez ✓ (úprava tréninku) s okrajem 14 px */
+}
+.sets td.c-eff {
+  height: var(--tap);
+  position: relative;
+}
+.effb {
+  width: 100%;
+  height: var(--row-h);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 0;
+  font-size: var(--fs-lg); /* stejně velké jako kg a opakování (F3-35) */
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.effb.on {
+  color: var(--ink);
+}
+/* série do selhání: pevně RIR 0, bez rámečku políčka */
+.effb.fix {
+  background: none;
+}
+.effb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+/* tlačítka hodnot RIR/RPE v panelu a v krokovači */
+.eff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eff small {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.eff-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.eff-row.rpe {
+  grid-template-columns: repeat(5, 1fr);
+}
+.eff-row .btn {
+  min-height: 40px;
+  padding: 0;
+  font-size: var(--fs-base);
+  font-variant-numeric: tabular-nums;
+}
+.eff-row .btn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+/* krokovač: tlačítka +/− místo klávesnice (F1-03) */
+.cell[readonly] {
+  caret-color: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+.sets tr.kk-on td {
+  background: var(--accent-soft);
+}
+.sets tr.kk-on .cell,
+.sets tr.kk-on .effb:not(.fix) {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+/* panel krokovače: hlavička, tlačítka a popisky jako ve zbytku appky (.sheet-h, .btn, .btn.sm, .ed-meta),
+   větší jsou jen tlačítka − / + a upravovaná hodnota */
+.scrim.kk {
+  background: rgba(10, 12, 15, 0.28);
+}
+.kk-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+}
+.kk-sub b {
+  color: var(--ink-2);
+}
+.kk-sub .btn {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.kk-sub .btn span {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+/* nastavení zahřívací série (F1-08): posuvník, bez tlačítek +/− šedě */
+.warm-set,
+.rest-sl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.warm-set.off {
+  opacity: 0.5;
+}
+/* volby odpočinku s vypnutým časovačem pauzy (restOn) */
+.rest-set.off {
+  opacity: 0.5;
+}
+.range {
+  width: 100%;
+  margin: 4px 0;
+  accent-color: var(--accent);
+}
+/* posuvník zahřívací série (F3-23): blíž k popisku a vyšší plocha pro prst, rozložení o 8 px nižší */
+.warm-set .range,
+.rest-sl .range {
+  height: 24px;
+  margin: -6px 0 -2px;
+}
+/* Export pro coache (F4-18): náhled textu WD-LOG v2 v panelu */
+.inp.cx-txt {
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+/* Kopírovat pro coache (F4-12): část v okně Dokončit a v Upravit trénink */
+.coach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-in);
+}
+.coach-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.coach-h .grow {
+  display: flex;
+  flex-direction: column;
+}
+.coach-ic {
+  transform: rotate(180deg);
+}
+.coach.fold .coach-ic {
+  transform: none;
+}
+.coach.fold .coach-b {
+  display: none;
+}
+.coach-b {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-in);
+}
+.coach-sl .row {
+  align-items: center;
+  min-height: 2.2em;
+}
+.coach-sl .coach-clr {
+  padding: 0 0.6em;
+}
+/* skrytý křížek drží místo, aby řádek neposkočil */
+.coach-sl .coach-clr[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+}
+/* nevyplněný posuvník: šedý, hodnota „–“ */
+.coach-sl.unset .range {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+/* odhad RIR pod 0 u série do selhání */
+.effb.est {
+  height: auto;
+  min-height: 36px;
+  line-height: 1.05;
+}
+.eff-est {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.kk-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 72px;
+  align-items: center;
+  gap: 8px;
+}
+.kk-b {
+  min-height: 52px;
+  padding: 0;
+  font-family: var(--display);
+  font-size: var(--fs-3xl);
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.kk-b:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.kk-v {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+}
+.kk-v b {
+  font-family: var(--display);
+  font-size: var(--fs-4xl);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kk-v b.ph {
+  color: var(--ink-3);
+}
+.kk-v small {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.exc-f {
+  padding: 8px 14px 14px; /* F3-44: od spodku karty stejně jako od boků (14) */
+  display: flex;
+  gap: 8px;
+}
+.exc-f .btn {
+  flex: 1;
+}
+
+/* rest timer */
+.rest {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* nad spodní lištou (její výška roste s písmem, F3-11) */
+  bottom: calc(47px + 1.4 * var(--fs-tabs) + env(safe-area-inset-bottom, 0px));
+  z-index: 25;
+  padding-inline: 12px;
+  pointer-events: none;
+}
+/* otevřená klávesnice (F1-27, třída kb na body): lišta se záložkami schovaná, pruh pauzy těsně nad klávesnicí */
+body.kb .tabs {
+  display: none;
+}
+body.kb .rest {
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.rest-in {
+  max-width: 536px;
+  margin: 0 auto;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 14px;
+  padding: 8px 8px 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+}
+.rest-in .bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+}
+/* odpočet i přečas (.over) v barvě textu pruhu: přečas je informace, ne chyba ani akce (F3-23) */
+.rest-in b {
+  font-family: var(--display);
+  font-size: var(--fs-4xl);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.3em;
+}
+/* popisek Odpočinek ustoupí tlačítkům: když se na úzký telefon nevejde celý, schová se (F3-11) */
+.rest-l {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  container-type: inline-size;
+}
+.rest-l i {
+  font-style: normal;
+}
+@container (width < 6em) {
+  .rest-l i {
+    display: none;
+  }
+}
+.rest-in button {
+  flex: none;
+  /* tlačítka se zvětšují jen do šířky, která se na úzký telefon vejde (F3-11) */
+  font-size: min(var(--fs-base), 4.2vw);
+  background: rgba(127, 127, 127, 0.22);
+  border: 0;
+  color: inherit;
+  border-radius: 9px;
+  min-height: 38px;
+  padding: 0 9px;
+  font-weight: 700;
+  position: relative;
+}
+/* F1-18: neviditelný okraj tlačítka zvětší klepací plochu k okraji pruhu (padding .rest-in)
+   a do poloviny mezery (gap) k sousednímu tlačítku */
+.rest-in button::after {
+  content: "";
+  position: absolute;
+  inset: -8px -3px;
+}
+.rest-in button:last-child::after {
+  right: -8px;
+}
+/* stopky přes celou obrazovku (F1-24): černá vrstva, jasný čas, tlačítko Stop dole standardní velikosti */
+.stwf {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 24px calc(28px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+}
+.stwf-clock {
+  font-family: var(--display);
+  font-size: var(--fs-clock);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.stwf-lab {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.stwf-ex {
+  font-size: var(--fs-lg);
+  max-width: 320px;
+  opacity: 0.75;
+}
+.stwf-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 6px;
+  background: var(--accent);
+}
+.stwf .btn {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  width: auto;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+/* tlačítko Zrušit na černé vrstvě: obrys místo bílé výplně */
+.stwf .btn:not(.primary) {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+/* ztmavení během pauzy (F1-02): černá obrazovka jen s odpočtem, po konci pauzy světlejší */
+.dim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  color: rgba(255, 255, 255, 0.32);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+  animation: dimIn 1s ease-out both;
+}
+.dim-clock {
+  font-family: var(--display);
+  font-size: var(--fs-clock);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dim-lab {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.dim-next {
+  font-size: var(--fs-base);
+  max-width: 320px;
+}
+.dim-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  font-size: var(--fs-xs);
+  opacity: 0.7;
+}
+.dim.over {
+  color: rgba(255, 255, 255, 0.85);
+}
+.dim.over .dim-clock {
+  color: #ee5b51;
+}
+@keyframes dimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dim {
+    animation: none;
+  }
+}
+
+/* history */
+.hw {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.hw h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* název cviku v uloženém tréninku jako v kartě cviku (F3-45) */
+.wex-n {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.hw .line {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.hw .exs {
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+.mhead {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: var(--gap-out) 0 var(--gap-in);
+}
+/* měsíc v Historii = nadpis skupiny, první pod filtry jen --gap-in (F3-43) */
+.chips + .mhead {
+  margin-top: var(--gap-in);
+}
+.dset {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+.dset div {
+  display: flex;
+  gap: 10px;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.dset .lbl {
+  width: 22px;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 700;
+}
+.lbl.w {
+  color: var(--warm);
+}
+.lbl.d {
+  color: var(--drop);
+}
+.lbl.f {
+  color: var(--fail);
+}
+
+/* stats */
+.chart {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+}
+/* prázdný graf: text uprostřed plochy grafu (F3-47, dřív ručně 60 px shora) */
+.chart-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.chart svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.chart text {
+  fill: var(--ink-3);
+  font-size: var(--fs-2xs);
+  font-family: var(--body);
+}
+.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.chart .axis {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  transform: translate(-50%, -100%);
+  z-index: 3;
+}
+.tip b {
+  font-weight: 700;
+}
+.tip .sw {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  margin-top: 8px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.hbar {
+  display: grid;
+  grid-template-columns: 104px 1fr 34px;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--fs-sm);
+}
+.hbar .t {
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart);
+}
+.hbar .v {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.exrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.exrow .n {
+  font-weight: 600;
+  font-size: var(--fs-base);
+}
+/* název v řádku seznamu mimo .exrow: výběr cviků, fitka, řazení (F3-45) */
+.row-n {
+  font-weight: 600;
+}
+.exrow .m {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.exrow .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-family: var(--display);
+  font-size: var(--fs-xl);
+  white-space: nowrap;
+}
+.exrow .r small {
+  display: block;
+  font-family: var(--body);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+/* Statistiky → Cviky (F3-26): změna za období pod hodnotou, zelená hodnota v bloku Největší zlepšení */
+.exrow .r .chg {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--body);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.hbar .v.gain {
+  color: var(--good);
+}
+.prt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+.prt th {
+  text-align: left;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+  padding: 6px 6px 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.prt td {
+  padding: 8px 6px 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+.prt td b {
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.tscroll {
+  overflow-x: auto;
+}
+/* přepínač bez overflow: hidden, aby neořízl neviditelný okraj tlačítek (F3-23);
+   rohy dělají krajní tlačítka */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+}
+.seg button {
+  position: relative;
+  border: 0;
+  background: var(--surface);
+  padding: 6px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  min-height: 34px;
+  color: var(--ink-2);
+}
+.seg button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+.seg button:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.seg button:only-child {
+  border-radius: 8px;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* sheet */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 15, 0.45);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  background: var(--bg);
+  width: 100%;
+  max-width: 560px;
+  max-height: 92%;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sheet-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+/* panel nad jiným panelem: šipka ← vlevo místo × (F3-46) */
+.sheet-h.bk {
+  padding-left: 4px;
+  gap: 2px;
+}
+.sheet-h h2 {
+  margin: 0;
+  flex: 1;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--fs-2xl);
+  letter-spacing: 0.01em;
+}
+/* obsah panelu (F3-44): bloky pod sebou po --gap-in, nahoře stejně, dole a po stranách okraj panelu 16 px */
+.sheet-b {
+  overflow: auto;
+  padding: var(--gap-in) 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-in);
+}
+/* odstavec v panelu bez výchozího okraje (místo style="margin:0"), vlastní okraj třídy (.desc, .hlp p) má přednost */
+:where(.sheet-b) p {
+  margin: 0;
+}
+/* popisek nad čipy přímo v panelu: k obsahu jen --gap-lbl (F3-44) */
+.sheet-b > .lbl-f {
+  margin-bottom: calc(var(--gap-lbl) - var(--gap-in));
+}
+/* informace o cviku v panelu (F3-44): postavy a partie jedna skupina, popis s odkazem a čísla nové skupiny */
+.sheet-b > .figs {
+  margin: 0;
+}
+.sheet-b > .desc,
+.sheet-b > .kpis {
+  margin: calc(var(--gap-out) - var(--gap-in)) 0 0;
+}
+/* štítek fitka nebo čipy nad dlaždicemi informací o cviku (F3-46): patří ke skupině čísel, velká mezera nad nimi */
+.sheet-b > .exi-gym {
+  display: flex;
+  margin-top: calc(var(--gap-out) - var(--gap-in));
+}
+.sheet-b > .chips.exi-gym {
+  margin-top: calc((34px - var(--tap)) / 2 + var(--gap-out) - var(--gap-in));
+}
+.sheet-b > .exi-gym + .kpis {
+  margin-top: 0;
+}
+/* dlaždice informací o cviku 2 × 2 (F3-46): hodnoty s jednotkou se 4 v řadě nevejdou */
+.kpis.exi {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.kpis.exi .kpi {
+  padding: 8px 10px;
+}
+.kpis.exi .kpi b {
+  font-size: var(--fs-xl);
+}
+.sheet-b > .chips,
+.sheet-b > .row,
+.sheet-b > .pickrow {
+  flex: none;
+}
+/* panel nápovědy sekce (F3-21): název volby a vysvětlení */
+.hlp {
+  flex: none;
+}
+.hlp b {
+  display: block;
+}
+.hlp p {
+  margin: 2px 0 0;
+  font-size: var(--fs-md);
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.sheet-b .chips {
+  min-height: 36px;
+}
+.sheet-f {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+}
+.sheet-f:has(> .full) {
+  flex-wrap: wrap;
+}
+.sheet-f > .full {
+  flex: 1 0 100%;
+}
+
+/* výběr cviků (F1-06): pevná výška, aby vyhledávací pole při psaní neposkakovalo; nadpisy sekcí seznamu;
+   panel Naplánovat (F4-07): pevná výška, aby čipy fitek při přepnutí fitka neposkakovaly */
+.scrim.picker .sheet,
+.scrim.plan .sheet,
+.scrim.fedb .sheet {
+  height: 92%;
+}
+.pick-sec {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  /* řádky seznamu mají --gap-list (F3-44), nadpis skupiny k nim těsněji: 14 px nad, 6 px pod */
+  margin: calc(14px - var(--gap-list)) 0 calc(6px - var(--gap-list));
+}
+.pick-sec:first-child {
+  margin-top: 0;
+}
+
+/* sdílení souhrnu jako obrázek (F4-08): panel má pevnou výšku, ovládání dole je vždy vidět a náhled
+   (canvas v plném rozlišení zmenšený na obrazovku) vyplní zbylé místo nad ním */
+.scrim.shr .sheet {
+  height: 92%;
+}
+.scrim.shr .sheet-b {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.shr-prev {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shr-cv {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+/* s fotkou se tahem v náhledu posouvá výřez, ne panel */
+.shr-cv.drag {
+  touch-action: none;
+  cursor: grab;
+}
+.sheet-b > .seg,
+.shr-row {
+  flex: none;
+}
+/* dva přepínače nebo tlačítka vedle sebe (Tmavý | Světlý a CZ | EN; fotka a Postava) */
+.shr-row {
+  display: flex;
+  gap: 8px;
+}
+.shr-row > * {
+  flex: 1;
+  min-width: 0;
+}
+/* Postava: zapnutá jako vybraná volba v přepínači */
+.shr-tog[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+/* celý obrázek přes obrazovku (klepnutí na náhled) */
+.shr-full-b {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+}
+.shr-full-b img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.shr-full .pv-f {
+  flex-direction: row;
+  gap: 8px;
+}
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  min-height: 52px;
+}
+.pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.pick .chk {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--line-2);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pick[aria-pressed="true"] .chk {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+/* karta cviku ve výběru (F3-46): klepnutí na kartu cvik zaškrtne, šipka › vpravo v kartě otevře Informace
+   o cviku; rámeček má celá karta, vybraný cvik ho má v barvě --accent */
+.pickrow {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.pickrow:has(.pick[aria-pressed="true"]) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.pickrow .pick,
+.pickrow .pick[aria-pressed="true"] {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.infob {
+  flex: none;
+  width: var(--tap);
+  border: 0;
+  background: transparent;
+  border-radius: 0 10px 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+}
+.infob:is(:active, .prs) {
+  background: var(--surface-2);
+}
+.infob svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pick .chk svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 3;
+}
+/* hláška „Stiskni Zpět ještě jednou…“ (F0-06) se schová sama i bez JavaScriptového časovače */
+.toast.exit {
+  animation: toastHide 0s linear 2.6s forwards;
+}
+@keyframes toastHide {
+  to {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+/* ikona před textem hlášky (např. medaile u nového rekordu) */
+.toast > .ic {
+  margin-right: 0.35em;
+}
+/* hláška s tlačítkem Vrátit (F2-03) */
+.toast.has-undo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 6px;
+}
+.toast-undo {
+  border: 1.5px solid currentColor;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font-weight: 700;
+  font-size: var(--fs-md);
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+/* pojistka dat vydané verze (F0-18): červený pruh nahoře v testovací verzi,
+   když kód PR sáhl na data vydané verze */
+.guard-stop {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 90;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+  background: var(--fail-bg);
+  color: var(--fail);
+  border-bottom: 2px solid var(--fail);
+  font-weight: 600;
+  font-size: var(--fs-md);
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: var(--fs-md);
+  z-index: 60;
+  box-shadow: var(--shadow);
+  max-width: calc(100% - 32px);
+}
+.switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-base); /* jako ostatní názvy nastavení, obyčejné písmo (F3-23) */
+}
+/* F3-23: plocha zaškrtávátka i do poloviny mezery k sousednímu (mezera 10 px), plochy se nepřekrývají */
+.switch::after {
+  content: "";
+  position: absolute;
+  inset: -5px 0;
+}
+/* volba závislá na vypínači (F3-23): zůstává na místě, s vypnutým vypínačem šedá a s atributem inert */
+.dep.off {
+  opacity: 0.5;
+}
+/* vnořená závislá volba (F4-15): šedá jen jednou, ne dvakrát slabší */
+.dep.off .dep.off {
+  opacity: 1;
+}
+.switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+/* muscle map + exercise page */
+:root {
+  --sil: #dfe3e9;
+  --m-idle: #b9c0c9;
+  --m-sec: #f0a49b;
+  --m-pri: #cf3a31;
+  --m-line: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sil: #2b313a;
+    --m-idle: #4a525e;
+    --m-sec: #9c443c;
+    --m-pri: #ee5b51;
+    --m-line: #1b1f25;
+  }
+}
+:root[data-theme="dark"] {
+  --sil: #2b313a;
+  --m-idle: #4a525e;
+  --m-sec: #9c443c;
+  --m-pri: #ee5b51;
+  --m-line: #1b1f25;
+}
+/* barvy 6 skupin partií (F3-01, MGRP v js/app.js): postava a pruhy ve Statistikách a v souhrnu */
+:root {
+  --g-chest: #e34948;
+  --g-back: #2a78d6;
+  --g-sh: #eda100;
+  --g-arms: #4a3aa7;
+  --g-legs: #1baf7a;
+  --g-core: #e87ba4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --g-chest: #e66767;
+    --g-back: #3987e5;
+    --g-sh: #c98500;
+    --g-arms: #9085e9;
+    --g-legs: #199e70;
+    --g-core: #e87ba4;
+  }
+}
+:root[data-theme="dark"] {
+  --g-chest: #e66767;
+  --g-back: #3987e5;
+  --g-sh: #c98500;
+  --g-arms: #9085e9;
+  --g-legs: #199e70;
+  --g-core: #e87ba4;
+}
+.gstack {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  gap: 2px;
+  margin: 0 0 var(--gap-list);
+}
+.gstack i {
+  min-width: 4px;
+}
+.glegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: var(--fs-sm);
+  margin-bottom: var(--gap-list);
+  color: var(--ink-2);
+}
+.glegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.glegend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.glegend b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.figs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+/* postava v kartě (Partie, souhrn tréninku): od okraje karty jen jeho 14 px, pod ní 8 px (F3-47) */
+.card > .figs {
+  margin: 0 0 var(--gap-list);
+}
+.figs figure {
+  margin: 0;
+  text-align: center;
+}
+.figs figcaption {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.figs .fig {
+  width: 132px;
+  max-width: 100%;
+}
+.figs svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.figs.sm .fig {
+  width: 108px;
+}
+/* fotky u cviku (F2-05): galerie (postava + fotky, posun prstem, tečky) */
+.gal {
+  margin: 4px 0 10px;
+}
+.gal-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.gal-track::-webkit-scrollbar {
+  display: none;
+}
+.gal-s {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  position: relative;
+  min-height: 220px;
+  border: 0;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.gal-s.fig {
+  background: transparent;
+  border-radius: 0;
+}
+.gal-s.fig .figs {
+  margin: 0;
+}
+.gal-s img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gal-tag {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(10, 12, 15, 0.72);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gal-tag .sw {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.gal-pin {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.gal-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.gal-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.gal-dots i.on {
+  background: var(--ink);
+}
+/* přidat fotku: ikona vpravo nahoře v kartě Popis, nic neposouvá (F3-51) */
+.card.exinfo {
+  position: relative;
+}
+.card.exinfo > .gal-addb {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  background: var(--surface);
+}
+/* náhledy fotek (přidání, výběr z online databáze) */
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thumbs .th {
+  position: relative;
+  width: 96px;
+  height: 72px;
+  padding: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 2px solid transparent;
+}
+.thumbs.big .th {
+  width: calc(50% - 4px);
+  height: 120px;
+}
+.thumbs .th img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.thumbs .th.sel {
+  border-color: var(--accent);
+}
+.thumbs .th.saved {
+  opacity: 0.6;
+}
+.thumbs .ck {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(10, 12, 15, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: var(--fs-md);
+}
+.thumbs .ck svg,
+.cpick i svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cpick i svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.6;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+/* náhled z online databáze (F3-50): obrázek zvětší, kroužek vybere; plocha kroužku 44 px neviditelným okrajem
+   (dolů a doleva, nahoru a doprava jen k okraji náhledu) */
+.thumbs .th-v {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.thumbs button.ck {
+  padding: 0;
+}
+.thumbs button.ck::after {
+  content: "";
+  position: absolute;
+  inset: -8px -8px -16px -16px;
+}
+.thumbs .th.sel .ck {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.thumbs .th.saved .ck {
+  display: none;
+}
+/* fotka přes celou obrazovku: vždy tmavá, fotka se celá vejde na displej */
+.pv {
+  color-scheme: dark;
+  --bg: #000;
+  --surface: #1b1e24;
+  --surface-2: #1f232a;
+  --line: #2a2f37;
+  --line-2: #3a404a;
+  --ink: #eceef1;
+  --ink-2: #ccd1d8;
+  --ink-3: #b0b6bf;
+  --fail: #f0736a;
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: #000;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+}
+.pv-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 6px;
+}
+.pv-h .iconbtn {
+  color: var(--ink);
+}
+.pv-h b {
+  flex: none;
+  font-size: var(--fs-base);
+}
+.pv-name {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-track {
+  flex: 1;
+  min-height: 0;
+  touch-action: pan-x; /* svislý tah řeší appka (tah dolů zavře) */
+}
+.pv-fig .figs {
+  width: 100%;
+  margin: 0;
+  gap: 4%;
+}
+.pv-fig .figs figure {
+  width: 44%;
+}
+.pv-fig .figs .fig {
+  width: 100%;
+}
+.pv-off {
+  visibility: hidden;
+}
+.pv-s {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv-s img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.pv-f {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-in);
+  padding: 10px 14px 16px;
+  background: #0c0d10;
+}
+.pv-f .gal-dots {
+  margin-top: 0;
+}
+.pv-gym {
+  justify-content: flex-start;
+  text-align: left;
+}
+.pv-gym .sw {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.mus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--fs-sm);
+}
+.tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.tag.p {
+  background: var(--m-pri);
+  color: #fff;
+}
+.tag.s {
+  background: var(--m-sec);
+  color: var(--ink);
+}
+.desc {
+  font-size: var(--fs-base);
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin: 10px 0 10px;
+  white-space: pre-line;
+}
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--accent-2);
+  text-decoration: none;
+}
+.cz {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  font-weight: 500;
+  line-height: 1.25;
+  margin-top: 1px;
+}
+.exc-h h3 + .cz {
+  margin-top: 2px;
+}
+.top h1 small.czsub {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-sm);
+}
+.kpis.k6 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.kpis.k4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+/* souhrn bez dlaždice Rekordy (F3-24): 3 dlaždice v řadě, písmo stejné jako u 4 */
+.kpis.k4.k3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+/* s největším písmem (F3-11) se 4 dlaždice na šířku nevejdou, jsou 2 × 2 */
+:root[data-fs="xl"] .kpis.k4:not(.k3) {
+  grid-template-columns: repeat(2, 1fr);
+}
+.kpi b {
+  font-size: var(--fs-3xl);
+}
+.seg-wide {
+  display: flex;
+  width: 100%;
+}
+.seg-wide button {
+  flex: 1;
+  padding: 6px 4px;
+}
+.subh {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin: var(--gap-list) 0;
+}
+/* nadpis sekce formuláře v panelu (F3-23): rozestupy dává mezera panelu, nad i pod --gap-in (F3-44),
+   stejně ve sloupci uvnitř panelu (Ostatní šablony v panelu Naplánovat, F3-47) */
+.sheet-b > .subh,
+.sheet-b .stack > .subh {
+  margin: 0;
+}
+.hbar .hl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hbar .hl .sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.hbar[role="button"] {
+  cursor: pointer;
+}
+.hbar {
+  grid-template-columns: minmax(90px, 38%) 1fr auto;
+}
+.reclist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rec {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: var(--fs-md);
+  line-height: 1.35;
+}
+.rec .md {
+  flex: none;
+}
+.recex {
+  font-size: var(--fs-md);
+  line-height: 1.35;
+}
+.recex .rn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+.recex .rn b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* šířky v em rostou s písmem (F3-11) */
+.recex .md {
+  flex: none;
+  width: 1.45em;
+  text-align: center;
+}
+.recex .rr {
+  padding-left: calc(1.45em + 8px);
+}
+.recex .rr .muted {
+  font-size: var(--fs-sm);
+}
+.recgrid {
+  padding: 10px 14px;
+}
+.rg-h {
+  margin-bottom: 6px;
+}
+.rg-r {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.rg-h + .rg-r,
+.recgrid > .rg-r:first-child {
+  border-top: 0;
+}
+.rg-l {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.rg-r b {
+  font-family: var(--display);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rg-s {
+  grid-column: 1/-1;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  text-align: right;
+}
+.kpi b {
+  white-space: nowrap;
+}
+.kpi b .ic {
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.1em;
+  vertical-align: -0.08em;
+}
+.kpis.k4 .kpi {
+  padding: 8px 10px;
+}
+.kpis.k4 .kpi b {
+  font-size: var(--fs-xl);
+}
+.hbars.stk .hbar {
+  grid-template-columns: 1fr auto;
+  row-gap: 3px;
+}
+.hbars.stk .hbar .hl {
+  grid-column: 1/-1;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.hbars.stk .hbar .t {
+  grid-column: 1;
+}
+.medals {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+  vertical-align: -0.2em;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--warm);
+  background: var(--warm-bg);
+  border-radius: 999px;
+  padding: 1px 7px 1px 4px;
+  white-space: nowrap;
+}
+.recbox {
+  background: var(--warm-bg);
+  border-radius: 12px;
+  padding: 12px;
+}
+.recbox h3 {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--warm);
+}
+.recbox h3 .md-ic {
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.2em;
+  vertical-align: -0.2em;
+}
+/* medaile u odznaku série: vůči vnitřku odznaku (.stype-in), okraj tlačítka vyplní buňku (F1-18) */
+.stype .medal {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  font-size: var(--fs-md);
+  line-height: 0;
+}
+/* formulář Nový / Upravit cvik na stránce (F3-14): stejné mezery jako dřív v panelu */
+.ex-form {
+  gap: var(--gap-in);
+}
+.mpick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mpick button {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  min-height: 32px;
+}
+.mpick button.p {
+  background: var(--m-pri);
+  border-color: var(--m-pri);
+  color: #fff;
+}
+.mpick button.s {
+  background: var(--m-sec);
+  border-color: var(--m-sec);
+  color: var(--ink);
+}
+/* partie ve formuláři cviku po skupinách (F3-40): vlevo skupina s barevnou tečkou, vpravo její partie */
+.mlegend {
+  display: flex;
+  gap: 14px;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.mlegend i,
+.mg-l i {
+  display: inline-block;
+  border-radius: 50%;
+  flex: none;
+}
+.mlegend i {
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: -0.05em;
+}
+.mgroups {
+  display: grid;
+  grid-template-columns: 4.6em 1fr;
+  gap: 6px 8px;
+  align-items: start;
+}
+.mg-l {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.mg-l i {
+  width: 8px;
+  height: 8px;
+}
+textarea.inp {
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.4;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet {
+    animation: up 0.18s ease-out;
+  }
+  .sheet.noanim {
+    animation: none;
+  }
+  @keyframes up {
+    from {
+      transform: translateY(24px);
+      opacity: 0.6;
+    }
+  }
+}
+@media (max-width: 380px) {
+  .sets .c-prev {
+    display: none;
+  }
+  /* šířky v em rostou s písmem (F3-11) */
+  .hbar {
+    grid-template-columns: 6.6em 1fr 2.3em;
+  }
+}
+/* hledání v databázi free-exercise-db (F0-03) */
+.fsimg {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.have {
+  color: var(--good);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ---------- souhrn tréninku (F3-03) ---------- */
+.gain {
+  color: var(--good);
+}
+.loss {
+  color: var(--fail);
+}
+.flat {
+  color: var(--ink-3);
+}
+.kpi .dl {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kpi .dl + .dl {
+  margin-top: 0;
+}
+.kpi .dl.pc {
+  padding-left: 1em;
+} /* procenta pod číslem, za trojúhelníkem */
+.tri {
+  width: 0.72em;
+  height: 0.72em;
+  fill: currentColor;
+  vertical-align: -0.02em;
+}
+.tri.tri2 {
+  width: 1.44em;
+}
+.kpi .dl.gain {
+  color: var(--good);
+}
+.kpi .dl.loss {
+  color: var(--fail);
+}
+/* stránka tréninku (F3-19): mezery mezi rámečky souhrnu jako dřív v panelu */
+.wsum {
+  gap: var(--gap-in);
+}
+.cmp {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: var(--fs-md);
+  line-height: 1.35;
+}
+.cmp .chev {
+  color: var(--ink-3);
+  width: 1.4em;
+  height: 1.4em;
+}
+/* nadpis karty na stránce tréninku: písmo názvu v kartě jako název cviku (F3-45, sjednoceno v F1-26) */
+.sumh {
+  margin: 0 0 6px;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* text poznámky k tréninku v její kartě (F1-26): celý text včetně odřádkování */
+.wnote-t {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mbars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mbar {
+  display: grid;
+  grid-template-columns: minmax(90px, 38%) 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--fs-sm);
+}
+.mbar span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mbar i {
+  display: block;
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: var(--m-pri);
+}
+.excmp {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.excmp .k {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.excmp .v {
+  font-weight: 600;
+}
+.excmp .d {
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.excmp .src {
+  grid-column: 1/-1;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+/* stránka tréninku: cvik poprvé, pod sériemi místo porovnání s minule (F3-37) */
+.exnew {
+  margin-top: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--good);
+}
+
+/* kalendář v Historii (F3-06) */
+.cal-k {
+  grid-template-columns: 1fr 1fr;
+  margin: 10px 0;
+}
+.cal {
+  padding: 8px 6px 10px;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.cal-nav .iconbtn {
+  font-size: var(--fs-4xl);
+  line-height: 1;
+  width: 44px;
+  height: 44px;
+}
+.cal-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  border: 0;
+  background: none;
+  padding: 6px 8px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--fs-xl);
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+.cal-t .ic {
+  width: 0.85em;
+  height: 0.85em;
+  color: var(--ink-3);
+}
+.cal-g {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  row-gap: 6px;
+}
+.cal-wd {
+  text-align: center;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 2px;
+}
+.cal-d {
+  border: 0;
+  background: none;
+  padding: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 50px;
+  color: var(--ink);
+}
+.cal-c {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.cal-c.on {
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.cal-c.act {
+  border: 2px dashed var(--ink-3);
+  color: var(--ink);
+}
+/* F4-07: naplánovaný den = kolečko obrysem v barvě fitka (barva v style), název šablony šedě */
+.cal-c.plan {
+  border: 2px solid var(--ink-3);
+  color: var(--ink);
+}
+.cal-d.fut.pl .cal-c {
+  opacity: 1;
+  color: var(--ink);
+}
+.cal-l.pl {
+  color: var(--ink-3);
+}
+/* F4-07: Přeplánovat – minulé dny a dny s plánem nejdou vybrat, volné budoucí dny naplno */
+.cal-d.off {
+  opacity: 0.4;
+}
+.cal.mv .cal-d.fut:not(.off) .cal-c {
+  opacity: 1;
+  color: var(--ink);
+}
+.cal-d.today .cal-c {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+.cal-d.today .cal-c:not(.on) {
+  color: var(--accent);
+}
+.cal-d.fut .cal-c {
+  color: var(--ink-3);
+  opacity: 0.55;
+}
+.cal-l {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ink-2);
+  text-align: center;
+  max-width: 100%;
+  padding: 0 1px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+.cal-b {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  vertical-align: middle;
+}
+.cal-c .cal-b {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.cal-sum {
+  margin: 10px 2px 0;
+}
+.cal-sum b {
+  color: var(--ink);
+}
+
+/* ---------- oslava rekordu (F3-02) ---------- */
+.cel {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(8, 9, 12, 0.72);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 18px calc(24px + env(safe-area-inset-bottom, 0px));
+  animation: celFade 0.25s ease-out both;
+}
+.cel.out {
+  animation: celOut 0.25s ease-in forwards;
+}
+.cel.gold {
+  --glow: rgba(255, 205, 70, 0.5);
+  --sp: #ffd75a;
+  --hd: #c98a00;
+}
+.cel.silver {
+  --glow: rgba(210, 225, 240, 0.38);
+  --sp: #e6edf5;
+  --hd: #6f7882;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cel.gold {
+    --hd: #f0b44a;
+  }
+  :root:not([data-theme="light"]) .cel.silver {
+    --hd: #c3cad3;
+  }
+}
+:root[data-theme="dark"] .cel.gold {
+  --hd: #f0b44a;
+}
+:root[data-theme="dark"] .cel.silver {
+  --hd: #c3cad3;
+}
+.cel-m {
+  position: relative;
+  width: 170px;
+  height: 204px;
+  flex: none;
+  margin-bottom: -26px;
+  z-index: 2;
+  pointer-events: none;
+}
+.cel-m svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 2;
+}
+.cel-sw {
+  transform-origin: 50% 0;
+  animation:
+    celPop 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.25) both,
+    celSwing 3.2s ease-in-out 0.9s infinite;
+}
+.cel-rays,
+.cel-glow {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  border-radius: 50%;
+  z-index: 1;
+  opacity: 0;
+}
+.cel-rays {
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  background: repeating-conic-gradient(from 0deg, var(--glow) 0deg 7deg, transparent 7deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%);
+  mask: radial-gradient(circle, #000 18%, transparent 68%);
+  animation:
+    celIn 0.6s ease-out 0.35s forwards,
+    celSpin 14s linear infinite;
+}
+.cel-glow {
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 65%);
+  animation:
+    celIn 0.5s ease-out 0.3s forwards,
+    celPulse 2.4s ease-in-out 1s infinite;
+}
+.cel-shine {
+  animation: celShine 1.1s ease-in-out 0.75s both;
+}
+.cel-sp {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  z-index: 3;
+  background: var(--sp);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  transform: rotate(var(--a)) scale(0);
+  animation: celSpark 1s cubic-bezier(0.15, 0.7, 0.3, 1) var(--dl) forwards;
+}
+.cel-c {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 16px;
+  padding: 38px 16px 14px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  animation: celRise 0.45s ease-out 0.35s both;
+}
+.cel-c h2 {
+  margin: 0;
+  flex: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--fs-4xl);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--hd);
+}
+.cel-ex {
+  flex: none;
+  margin-top: 4px;
+  font-weight: 700;
+  font-size: var(--fs-lg);
+}
+.cel-l {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin-top: 10px;
+  padding-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  scrollbar-width: none;
+}
+.cel-l::-webkit-scrollbar {
+  display: none;
+} /* posuvník by šel přes hodnoty, posun ukazuje rozmazání a „Posuň pro další“ */
+/* rozmazaný okraj tam, kam se dá seznam posunout: nahoře (.up) i dole (.more) */
+.cel-l {
+  --ft: 0px;
+  --fb: 0px;
+}
+.cel-l.up {
+  --ft: 32px;
+}
+.cel-l.more {
+  --fb: 44px;
+}
+.cel-l.up,
+.cel-l.more {
+  -webkit-mask: linear-gradient(transparent, #000 var(--ft), #000 calc(100% - var(--fb)), transparent);
+  mask: linear-gradient(transparent, #000 var(--ft), #000 calc(100% - var(--fb)), transparent);
+}
+.cel-g {
+  font-weight: 700;
+  font-size: var(--fs-md);
+  margin-top: 4px;
+}
+.cel-r {
+  display: grid;
+  grid-template-columns: 1.35em 1fr auto;
+  gap: 0 8px;
+  align-items: baseline;
+  font-size: var(--fs-md);
+}
+/* další překonaný typ pod rekordem (F3-25) */
+.cel-also {
+  padding-left: calc(1.35em + 8px);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.cel-also span {
+  color: var(--ink-3);
+}
+.cel-r b {
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.cel-r .was {
+  grid-column: 2/-1;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  text-align: right;
+}
+.cel-r .md-ic {
+  align-self: center;
+}
+.cel-more {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25em;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--hd);
+}
+.cel-ok {
+  flex: none;
+  margin-top: 10px;
+  border: 0;
+  background: var(--hd);
+  color: #16181c;
+}
+@media (max-height: 620px) {
+  .cel-m {
+    width: 130px;
+    height: 156px;
+    margin-bottom: -20px;
+  }
+  .cel-c {
+    padding-top: 30px;
+  }
+  .cel-c h2 {
+    font-size: var(--fs-3xl);
+  }
+}
+@keyframes celFade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes celOut {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes celPop {
+  0% {
+    transform: scale(0.15) rotate(-28deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.12) rotate(6deg);
+    opacity: 1;
+  }
+  78% {
+    transform: scale(0.96) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes celSwing {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30% {
+    transform: rotate(3deg);
+  }
+  70% {
+    transform: rotate(-3deg);
+  }
+}
+@keyframes celIn {
+  to {
+    opacity: 0.9;
+  }
+}
+@keyframes celSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes celPulse {
+  50% {
+    transform: scale(1.12);
+  }
+}
+@keyframes celShine {
+  from {
+    transform: translateX(-120px);
+  }
+  to {
+    transform: translateX(260px);
+  }
+}
+@keyframes celSpark {
+  0% {
+    transform: rotate(var(--a)) translateY(0) scale(0);
+    opacity: 1;
+  }
+  55% {
+    transform: rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(var(--s));
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateY(calc(-1.2 * var(--d))) scale(0);
+    opacity: 0;
+  }
+}
+@keyframes celRise {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+}
+/* Android „Odstranit animace“: medaile bez pohybu */
+@media (prefers-reduced-motion: reduce) {
+  .cel,
+  .cel * {
+    animation: none !important;
+  }
+  .cel-rays,
+  .cel-glow {
+    opacity: 0.9;
+  }
+  .cel-sp {
+    display: none;
+  }
+}
+/* výběr zvuku v Nastavení → Rekordy */
+.spick {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.spr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-right: 6px;
+}
+.spr:first-child {
+  border-top: 0;
+}
+.spr:has([aria-pressed="true"]) {
+  background: var(--accent-soft);
+}
+.spr-l {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: var(--fs-md);
+}
+.spr-l .rad {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  flex: none;
+}
+.spr-l[aria-pressed="true"] .rad {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface);
+  background: var(--accent);
+}
+.spr-p {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 8px;
+  width: 44px;
+  height: 34px;
+  font-size: var(--fs-sm);
+}
+/* ---------- místo v zařízení (F0-19) ----------
+   .kv = řádek název vlevo, hodnota vpravo (bez políčka); .lsbar = pruh zaplnění schránky: tahle verze, ostatní */
+.kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.kv b {
+  font-weight: 600;
+  text-align: right;
+}
+.lsbar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.lsbar i {
+  display: block;
+  height: 100%;
+  background: var(--chart);
+}
+.lsbar i.o {
+  background: var(--ink-3);
+  opacity: 0.55;
+}
+
+/* STISK TLAČÍTEK (F3-53): odezva ve chvíli, kdy prst sáhne na ovládací prvek. Stisk = :active nebo třída .prs
+   z js/app.js (sekce STISK TLAČÍTEK): Chrome při rychlém klepnutí :active skoro neukáže a appka tlačítko hned
+   překreslí, proto ho .prs drží aspoň PRESS_MIN (160 ms) a akci o zbytek odloží (delší stisk bez zdržení).
+   Tlačítka ztmavnou (--press) a nepatrně se zmenší: malá 4 %, přes celou šířku 2 %, ikony a záložky 8 %.
+   Hlavní tlačítko tmavším odstínem --accent-2 (v tmavém motivu světlejší), nebezpečné vyplní --fail-bg,
+   vybraný čip a dílek přepínače zesvětlá (--press-on). Karty a řádky seznamu jen ztmavnou na --surface-2,
+   bez zmenšení. Zmenšení je jen kresba (transform), rozměry, mezery ani dotyková plocha se nemění.
+   „Odstranit animace“ v Androidu: jen barva. Sekce je na konci souboru, aby stisk přebil barvy prvků
+   (druh série .stype.w, vybraný čip…) se stejnou váhou pravidla. Klávesa číselníku (.kk-b) má vlastní barvu
+   stisku. Zaškrtávátko (.switch) se zmenší, čtvereček ve výběru cviků (.pick .chk) se zmenší se šedým okrajem.
+   Nový ovládací prvek = přidat ho sem i do PRESS_SEL v js/app.js; prvek s vlastní barvou pozadí potřebuje
+   vlastní pravidlo stisku (test stisk.js ho najde). */
+:root {
+  --press: color-mix(in srgb, var(--ink) 10%, var(--surface));
+  --press-on: color-mix(in srgb, var(--ink) 78%, var(--surface));
+}
+.btn,
+.iconbtn,
+.okb,
+.stype,
+.chip,
+.seg button,
+.tabs button {
+  transition:
+    transform 0.12s ease,
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.btn:is(:active, .prs),
+.okb:is(:active, .prs),
+.stype:is(:active, .prs),
+.chip:is(:active, .prs) {
+  background: var(--press);
+  transform: scale(0.96);
+}
+.btn.block:is(:active, .prs) {
+  transform: scale(0.98);
+}
+.btn.primary:is(:active, .prs) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.btn.danger:is(:active, .prs) {
+  background: var(--fail-bg);
+}
+tr.done .okb:is(:active, .prs) {
+  background: var(--good);
+  opacity: 0.8;
+}
+.iconbtn:is(:active, .prs) {
+  background: var(--press);
+  transform: scale(0.92);
+}
+.seg button:is(:active, .prs) {
+  background: var(--press);
+}
+.chip[aria-pressed="true"]:is(:active, .prs),
+.seg button[aria-pressed="true"]:is(:active, .prs) {
+  background: var(--press-on);
+}
+.tabs button:is(:active, .prs) {
+  transform: scale(0.92);
+  color: var(--ink);
+}
+.tabs button[aria-current="true"]:is(:active, .prs) {
+  color: var(--accent);
+}
+.kk-b:is(:active, .prs) {
+  background: var(--accent-soft);
+}
+.hw:is(:active, .prs),
+.exrow:is(:active, .prs),
+.pickrow:has(.pick:is(:active, .prs)) {
+  background: var(--surface-2);
+}
+/* tlačítka s vlastní barvou pozadí, která by stisk přebila (najde je test stisk.js) */
+.card.exinfo > .gal-addb:is(:active, .prs) {
+  background: var(--press);
+}
+.banner.act .btn:is(:active, .prs) {
+  background: color-mix(in srgb, var(--warm) 82%, var(--ink));
+  border-color: color-mix(in srgb, var(--warm) 82%, var(--ink));
+}
+/* zaškrtávátko: stisk má celý řádek .switch (klepnout jde i na text), políčko se jen zmenší; šedý podklad
+   za políčkem uživatel zamítl (pod červeným políčkem vypadal špatně) */
+.switch input {
+  transition: transform 0.12s ease;
+}
+.switch:is(:active, .prs) input {
+  transform: scale(0.88);
+}
+/* čtvereček ve výběru cviků: řádek ztmavne (výš), čtvereček se zmenší a dostane šedý okraj */
+.pick .chk {
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.pick:is(:active, .prs) .chk {
+  transform: scale(0.88);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--ink) 16%, var(--surface));
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn:is(:active, .prs),
+  .btn.block:is(:active, .prs),
+  .iconbtn:is(:active, .prs),
+  .okb:is(:active, .prs),
+  .stype:is(:active, .prs),
+  .chip:is(:active, .prs),
+  .tabs button:is(:active, .prs),
+  .switch:is(:active, .prs) input,
+  .pick:is(:active, .prs) .chk {
+    transform: none;
+  }
+}
+
+/* záznam událostí (F0-21): dlouhá adresa nebo chyba se zalomí kdekoli, ať panel nejde do šířky */
+.evlog > div {
+  overflow-wrap: anywhere;
+}
